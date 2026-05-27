@@ -15,6 +15,7 @@ class IdempotencyRecord(Base):
     __table_args__ = (
         UniqueConstraint("idempotency_key", name="uq_idempotency_records_key"),
         Index("ix_idempotency_records_status", "status"),
+        Index("ix_idempotency_records_locked_until", "locked_until"),
         Index("ix_idempotency_records_expires_at", "expires_at"),
     )
 
@@ -25,7 +26,20 @@ class IdempotencyRecord(Base):
     response_body: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

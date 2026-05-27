@@ -21,12 +21,20 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("account_no", sa.String(length=64), nullable=False),
         sa.Column("balance", sa.BigInteger(), nullable=False, server_default="0"),
-        sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+            "status", sa.String(length=20), nullable=False, server_default="ACTIVE"
         ),
         sa.Column(
-            "updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
         sa.UniqueConstraint("account_no", name="uq_accounts_account_no"),
     )
@@ -39,10 +47,22 @@ def upgrade() -> None:
         sa.Column("account_id", sa.BigInteger(), nullable=False),
         sa.Column("event_type", sa.String(length=20), nullable=False),
         sa.Column("amount", sa.BigInteger(), nullable=False),
-        sa.Column("status", sa.String(length=30), nullable=False),
-        sa.Column("occurred_at", sa.DateTime(), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+            "currency", sa.String(length=10), nullable=False, server_default="KRW"
+        ),
+        sa.Column("status", sa.String(length=30), nullable=False),
+        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
         sa.ForeignKeyConstraint(["account_id"], ["accounts.id"]),
         sa.UniqueConstraint(
@@ -75,7 +95,10 @@ def upgrade() -> None:
         sa.Column("amount", sa.BigInteger(), nullable=False),
         sa.Column("balance_after", sa.BigInteger(), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
         sa.ForeignKeyConstraint(["transaction_event_id"], ["transaction_events.id"]),
         sa.ForeignKeyConstraint(["account_id"], ["accounts.id"]),
@@ -95,13 +118,28 @@ def upgrade() -> None:
         sa.Column("response_body", postgresql.JSONB(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column(
-            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
-        sa.Column("completed_at", sa.DateTime(), nullable=True),
-        sa.Column("expires_at", sa.DateTime(), nullable=True),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("locked_until", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint("idempotency_key", name="uq_idempotency_records_key"),
     )
     op.create_index("ix_idempotency_records_status", "idempotency_records", ["status"])
+    op.create_index(
+        "ix_idempotency_records_locked_until",
+        "idempotency_records",
+        ["locked_until"],
+    )
     op.create_index(
         "ix_idempotency_records_expires_at",
         "idempotency_records",
@@ -116,7 +154,10 @@ def upgrade() -> None:
         sa.Column("new_status", sa.String(length=30), nullable=False),
         sa.Column("reason", sa.String(length=255), nullable=True),
         sa.Column(
-            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
         sa.ForeignKeyConstraint(["transaction_event_id"], ["transaction_events.id"]),
     )
@@ -142,6 +183,9 @@ def downgrade() -> None:
     )
     op.drop_table("event_state_histories")
     op.drop_index("ix_idempotency_records_expires_at", table_name="idempotency_records")
+    op.drop_index(
+        "ix_idempotency_records_locked_until", table_name="idempotency_records"
+    )
     op.drop_index("ix_idempotency_records_status", table_name="idempotency_records")
     op.drop_table("idempotency_records")
     op.drop_index("ix_ledger_entries_created_at", table_name="ledger_entries")

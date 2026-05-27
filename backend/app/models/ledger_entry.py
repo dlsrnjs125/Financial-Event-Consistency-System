@@ -37,7 +37,7 @@ class LedgerEntry(Base):
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     transaction_event = relationship("TransactionEvent", back_populates="ledger_entry")

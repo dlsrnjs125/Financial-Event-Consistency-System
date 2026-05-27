@@ -36,10 +36,21 @@ class TransactionEvent(Base):
     )
     event_type: Mapped[str] = mapped_column(String(20), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="KRW"
+    )
     status: Mapped[str] = mapped_column(String(30), nullable=False)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     account = relationship("Account", back_populates="transaction_events")

@@ -22,6 +22,20 @@ def index_names(model_table):
     return {index.name for index in model_table.indexes}
 
 
+def assert_timezone_aware(column):
+    assert column.type.timezone is True
+
+
+def test_base_metadata_uses_stable_naming_convention():
+    assert {
+        "ix": "ix_%(column_0_label)s",
+        "uq": "uq_%(table_name)s_%(column_0_name)s",
+        "ck": "ck_%(table_name)s_%(constraint_name)s",
+        "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+        "pk": "pk_%(table_name)s",
+    }.items() <= Base.metadata.naming_convention.items()
+
+
 def test_phase2_tables_are_registered_for_alembic_metadata():
     assert {
         "accounts",
@@ -42,6 +56,9 @@ def test_accounts_model_matches_data_model_spec():
     assert "account_no" in unique_column_names(accounts)
     assert isinstance(accounts.c.balance.type, BigInteger)
     assert accounts.c.status.type.length == 20
+    assert accounts.c.status.server_default.arg == "ACTIVE"
+    assert_timezone_aware(accounts.c.created_at)
+    assert_timezone_aware(accounts.c.updated_at)
 
 
 def test_transaction_events_model_matches_data_model_spec():
@@ -52,7 +69,13 @@ def test_transaction_events_model_matches_data_model_spec():
     assert events.c.idempotency_key.type.length == 128
     assert events.c.event_type.type.length == 20
     assert isinstance(events.c.amount.type, BigInteger)
+    assert events.c.currency.type.length == 10
+    assert events.c.currency.server_default.arg == "KRW"
     assert events.c.status.type.length == 30
+    assert "updated_at" in events.c
+    assert_timezone_aware(events.c.occurred_at)
+    assert_timezone_aware(events.c.created_at)
+    assert_timezone_aware(events.c.updated_at)
     assert events.c.account_id.foreign_keys
     assert "ix_transaction_events_account_id" in index_names(events)
     assert "ix_transaction_events_status" in index_names(events)
@@ -67,6 +90,7 @@ def test_ledger_entries_model_matches_data_model_spec():
     assert ledger_entries.c.entry_type.type.length == 20
     assert isinstance(ledger_entries.c.amount.type, BigInteger)
     assert isinstance(ledger_entries.c.balance_after.type, BigInteger)
+    assert_timezone_aware(ledger_entries.c.created_at)
     assert "ix_ledger_entries_account_id" in index_names(ledger_entries)
 
 
@@ -78,7 +102,15 @@ def test_idempotency_records_model_matches_data_model_spec():
     assert idempotency_records.c.request_hash.type.length == 64
     assert idempotency_records.c.status.type.length == 30
     assert isinstance(idempotency_records.c.response_body.type, JSONB)
+    assert "updated_at" in idempotency_records.c
+    assert "locked_until" in idempotency_records.c
     assert "expires_at" in idempotency_records.c
+    assert_timezone_aware(idempotency_records.c.created_at)
+    assert_timezone_aware(idempotency_records.c.updated_at)
+    assert_timezone_aware(idempotency_records.c.completed_at)
+    assert_timezone_aware(idempotency_records.c.locked_until)
+    assert_timezone_aware(idempotency_records.c.expires_at)
+    assert "ix_idempotency_records_locked_until" in index_names(idempotency_records)
 
 
 def test_event_state_histories_model_matches_data_model_spec():
@@ -90,4 +122,5 @@ def test_event_state_histories_model_matches_data_model_spec():
     assert histories.c.new_status.nullable is False
     assert histories.c.new_status.type.length == 30
     assert histories.c.reason.type.length == 255
+    assert_timezone_aware(histories.c.created_at)
     assert "ix_event_state_histories_transaction_event_id" in index_names(histories)
