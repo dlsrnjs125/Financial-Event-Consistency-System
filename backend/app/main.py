@@ -31,18 +31,18 @@ http_request_duration_seconds = Histogram(
     buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 2.0]
 )
 
-transaction_events_received_total = Counter(
-    'transaction_events_received_total',
+financial_events_received_total = Counter(
+    'financial_events_received_total',
     'Total transaction events received'
 )
 
-transaction_events_processed_total = Counter(
-    'transaction_events_processed_total',
+financial_events_processed_total = Counter(
+    'financial_events_processed_total',
     'Total transaction events processed'
 )
 
-transaction_events_duplicated_total = Counter(
-    'transaction_events_duplicated_total',
+financial_events_duplicate_total = Counter(
+    'financial_events_duplicate_total',
     'Total duplicate transaction events detected'
 )
 
@@ -170,7 +170,7 @@ async def create_transaction_event(request: Request):
         - Implement database persistence
         - Implement Redis caching
     """
-    transaction_events_received_total.inc()
+    financial_events_received_total.inc()
     
     return {
         "status": "not_implemented",

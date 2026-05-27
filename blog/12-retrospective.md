@@ -90,8 +90,8 @@ k6로 실제 시나리오를 재현했을 때
 
 ### 모니터링의 중요성
 ```
-- transaction_events_duplicated_total = 0 확인
-- invalid_state_transition_total = 0 확인
+- financial_events_duplicate_total = 0 확인
+- financial_invalid_state_transition_total = 0 확인
 - idempotency_cache_hit_ratio 모니터링
 → 이 지표들로 시스템 건강도 판단
 ```

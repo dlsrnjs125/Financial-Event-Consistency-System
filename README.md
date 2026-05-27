@@ -283,7 +283,7 @@ docker-compose ps redis
 docker-compose restart redis
 
 # 검증: 정합성은 유지되는가?
-curl http://localhost:8000/metrics | grep transaction_events_duplicated_total
+curl http://localhost:8000/metrics | grep financial_events_duplicate_total
 ```
 
 ### PostgreSQL 연결 문제

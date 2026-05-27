@@ -21,13 +21,13 @@ http_requests_failed_total{method, endpoint}
 
 ### 도메인 메트릭
 ```
-transaction_events_received_total
-transaction_events_processed_total
-transaction_events_duplicated_total
-transaction_events_failed_total
-invalid_state_transition_total
-idempotency_hit_total
-idempotency_miss_total
+financial_events_received_total
+financial_events_processed_total
+financial_events_duplicate_total
+financial_events_failed_total
+financial_invalid_state_transition_total
+financial_idempotency_hit_total
+financial_idempotency_conflict_total
 ```
 
 ### DB 메트릭
@@ -56,18 +56,18 @@ redis_lock_acquire_failed_total
 from prometheus_client import Counter, Histogram, Gauge
 
 # Counter: 누적 개수
-transaction_events_received = Counter(
-    'transaction_events_received_total',
+financial_events_received = Counter(
+    'financial_events_received_total',
     'Total transaction events received'
 )
 
-transaction_events_duplicated = Counter(
-    'transaction_events_duplicated_total',
+financial_events_duplicate = Counter(
+    'financial_events_duplicate_total',
     'Total duplicate transaction events detected'
 )
 
 invalid_state_transition = Counter(
-    'invalid_state_transition_total',
+    'financial_invalid_state_transition_total',
     'Total invalid state transitions attempted'
 )
 
@@ -142,13 +142,13 @@ groups:
   - name: financial_events
     rules:
       - alert: DuplicateEventsDetected
-        expr: rate(transaction_events_duplicated_total[1m]) > 0
+        expr: rate(financial_events_duplicate_total[1m]) > 0
         for: 1m
         annotations:
           summary: "Duplicate events detected"
       
       - alert: InvalidStateTransition
-        expr: rate(invalid_state_transition_total[1m]) > 0
+        expr: rate(financial_invalid_state_transition_total[1m]) > 0
         for: 1m
         annotations:
           summary: "Invalid state transition attempted"

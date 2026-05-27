@@ -4,7 +4,7 @@ groups:
     rules:
       # Duplicate event detection
       - alert: DuplicateEventsDetected
-        expr: rate(transaction_events_duplicated_total[5m]) > 0
+        expr: rate(financial_events_duplicate_total[5m]) > 0
         for: 1m
         labels:
           severity: critical
@@ -14,7 +14,7 @@ groups:
 
       # Invalid state transition detection
       - alert: InvalidStateTransitionAttempted
-        expr: rate(invalid_state_transition_total[5m]) > 0
+        expr: rate(financial_invalid_state_transition_total[5m]) > 0
         for: 1m
         labels:
           severity: critical

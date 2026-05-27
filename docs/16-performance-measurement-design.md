@@ -200,7 +200,7 @@ Phase 1 선택:
 측정 지표:
 
 - p95 latency
-- `invalid_state_transition_total`
+- `financial_invalid_state_transition_total`
 - test coverage
 
 판단 기준:
