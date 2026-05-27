@@ -1,0 +1,223 @@
+name: CI - Consistency & Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort
+      
+      - name: Lint with flake8
+        run: |
+          flake8 backend/app --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 backend/app --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      
+      - name: Check code format with black
+        run: black --check backend/app
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    name: Unit Tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      
+      - name: Run unit tests
+        run: |
+          pytest backend/tests/unit -v --cov=backend/app --cov-report=xml
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+
+  consistency-tests:
+    runs-on: ubuntu-latest
+    name: Consistency Tests
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: financial_events
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      
+      - name: Run consistency tests
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/financial_events
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest backend/tests/consistency -v --tb=short
+
+  migration-tests:
+    runs-on: ubuntu-latest
+    name: Migration Tests
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: financial_events
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/financial_events
+        run: |
+          alembic upgrade head
+
+  docker-build:
+    runs-on: ubuntu-latest
+    name: Docker Build Test
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          push: false
+          tags: financial-events:test
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    name: Secret Scan
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug
+
+  gate-check:
+    runs-on: ubuntu-latest
+    name: Deployment Gate Check
+    needs: [lint, unit-tests, consistency-tests, migration-tests, docker-build, secret-scan]
+    if: always()
+    
+    steps:
+      - name: Check all tests passed
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "❌ Lint failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then
+            echo "❌ Unit tests failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.consistency-tests.result }}" != "success" ]]; then
+            echo "❌ Consistency tests failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.migration-tests.result }}" != "success" ]]; then
+            echo "❌ Migration tests failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.docker-build.result }}" != "success" ]]; then
+            echo "❌ Docker build failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.secret-scan.result }}" != "success" ]]; then
+            echo "❌ Secret scan failed"
+            exit 1
+          fi
+          
+          echo "✅ All deployment gates passed!"

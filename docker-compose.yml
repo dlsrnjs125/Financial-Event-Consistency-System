@@ -1,0 +1,182 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: financial-postgres
+    environment:
+      POSTGRES_DB: financial_events
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - financial-network
+
+  # Redis Cache & Lock
+  redis:
+    image: redis:7-alpine
+    container_name: financial-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - financial-network
+
+  # Main API Server (Blue)
+  api-blue:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: financial-api-blue
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/financial_events
+      REDIS_URL: redis://redis:6379/0
+      API_PORT: 8000
+      API_WORKERS: 4
+      API_ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  # API Server (Green - for Blue-Green Deployment)
+  api-green:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: financial-api-green
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/financial_events
+      REDIS_URL: redis://redis:6379/0
+      API_PORT: 8001
+      API_WORKERS: 4
+      API_ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+    networks:
+      - financial-network
+    restart: unless-stopped
+    profiles:
+      - green-deployment
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: financial-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - api-blue
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  # Prometheus Metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: financial-prometheus
+    environment:
+      - TZ=Asia/Seoul
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: financial-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+      TZ: Asia/Seoul
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  # AlertManager (Optional)
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: financial-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - financial-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+
+networks:
+  financial-network:
+    driver: bridge
