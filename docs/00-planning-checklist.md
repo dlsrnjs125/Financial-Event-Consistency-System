@@ -53,4 +53,5 @@
 | 상태 머신 초안 | 완료 | [03-consistency-rules.md](03-consistency-rules.md), [../blog/02-domain-modeling-state-machine.md](../blog/02-domain-modeling-state-machine.md) |
 | 개발 Phase 정리 | 완료 | [04-development-roadmap.md](04-development-roadmap.md) |
 | 블로그 12편 목적/산출물 매핑 | 완료 | [04-development-roadmap.md](04-development-roadmap.md) |
+| Architecture Decision Record | 완료 | [05-architecture-decision-record.md](05-architecture-decision-record.md) |
 | README 초안 목차 | 완료 | [../README.md](../README.md) |
