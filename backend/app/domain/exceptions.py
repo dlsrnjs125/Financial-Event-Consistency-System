@@ -47,3 +47,33 @@ class InvalidIdempotencyState(Exception):
             f"Cannot mark idempotency record from {current_status} "
             f"to {attempted_status}."
         )
+
+
+class InvalidTransactionEvent(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class AccountNotFound(Exception):
+    def __init__(self) -> None:
+        super().__init__("Account not found")
+
+
+class InsufficientBalance(Exception):
+    def __init__(self) -> None:
+        super().__init__("Insufficient account balance")
+
+
+class OriginalTransactionNotFound(Exception):
+    def __init__(self) -> None:
+        super().__init__("Original transaction event not found")
+
+
+class TransactionAlreadyCancelled(Exception):
+    def __init__(self) -> None:
+        super().__init__("Original transaction event is already cancelled")
+
+
+class TransactionAlreadySettled(Exception):
+    def __init__(self) -> None:
+        super().__init__("Settled transaction event cannot be cancelled")

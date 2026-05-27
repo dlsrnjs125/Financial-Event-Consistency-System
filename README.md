@@ -117,9 +117,13 @@ make local-stop    # Docker Compose 스택 중지
 GET /health        서버 상태
 GET /ready         PostgreSQL, Redis readiness 확인
 GET /metrics       Prometheus 메트릭
+POST /api/v1/transaction-events
+GET /api/v1/transaction-events/{event_id}
+GET /api/v1/accounts/{account_no}/balance
 ```
 
-거래 이벤트 수신, 계좌 잔액 조회, Idempotency, Ledger 처리는 후속 Phase에서 구현한다.
+Phase 5 기준으로 거래 이벤트 수신, 계좌 잔액 조회, Idempotency 응답 재사용, Ledger 기반 balance 반영이 구현되어 있다.
+Redis Lock/Cache, HMAC 인증, k6 부하 테스트, 도메인 메트릭 본격화는 후속 Phase에서 구현한다.
 
 ---
 
@@ -197,13 +201,22 @@ pytest backend/tests/unit/test_idempotency_service.py
 pytest backend/tests/unit/test_idempotency_dependency.py
 ```
 
+Transaction/Ledger 관련 테스트만 실행하려면 다음 명령을 사용한다.
+
+```bash
+pytest backend/tests/unit/test_ledger_service.py
+pytest backend/tests/unit/test_transaction_event_service.py
+pytest backend/tests/integration/test_transaction_event_processing.py
+pytest backend/tests/integration/test_transaction_event_api.py
+```
+
 ### Integration Test
 ```bash
 make test-integration
 ```
 
-현재 Repository integration test는 빠른 회귀 검증을 위해 SQLite in-memory 기반으로 실행한다.
-PostgreSQL 고유 동작(JSONB, timestamptz, concurrent unique conflict)은 Phase 5 이후 Docker Compose 기반 integration test에서 별도로 검증한다.
+현재 Repository/Transaction integration test는 빠른 회귀 검증을 위해 SQLite in-memory 기반으로 실행한다.
+PostgreSQL 고유 동작(JSONB, timestamptz, SELECT FOR UPDATE, concurrent unique conflict)은 Phase 6 이후 Docker Compose 기반 integration test에서 별도로 검증한다.
 
 ### Consistency Test (필수!)
 ```bash

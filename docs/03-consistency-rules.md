@@ -42,6 +42,15 @@ HAVING COUNT(*) > 1;
 -- 결과가 0이면 ✅ 합격
 ```
 
+Phase 5에서는 동일 `external_event_id`를 순차 재요청했을 때 다음 조건을 integration test로 검증한다.
+
+- `transaction_events` row는 1건이다.
+- `ledger_entries` row는 1건이다.
+- `account.balance` 변경은 1회만 발생한다.
+- 두 번째 응답은 `duplicated=true`다.
+
+동시 100회 요청 검증은 PostgreSQL row lock과 concurrent unique conflict를 정확히 확인해야 하므로 Docker Compose 기반 PostgreSQL integration test에서 보강한다.
+
 **테스트**:
 ```python
 def test_same_external_event_processed_only_once():
@@ -240,6 +249,21 @@ def test_ledger_based_balance_is_consistent():
     
     # 검증
     assert account_balance == calculated_balance
+```
+
+Phase 5의 LedgerEntry `amount`는 signed amount로 저장한다.
+
+- DEPOSIT: 양수
+- WITHDRAW: 음수
+- CANCEL of DEPOSIT: 음수
+- CANCEL of WITHDRAW: 양수
+
+따라서 원화 정수 기준에서는 다음 식으로 검증한다.
+
+```sql
+SELECT COALESCE(SUM(amount), 0)
+FROM ledger_entries
+WHERE account_id = :account_id;
 ```
 
 **제약조건**:

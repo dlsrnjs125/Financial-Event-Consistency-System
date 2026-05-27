@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -12,7 +12,11 @@ class Account(Base):
     __tablename__ = "accounts"
     __table_args__ = (UniqueConstraint("account_no", name="uq_accounts_account_no"),)
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     account_no: Mapped[str] = mapped_column(String(64), nullable=False)
     balance: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     status: Mapped[str] = mapped_column(
