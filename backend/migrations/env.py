@@ -1,15 +1,21 @@
-from logging.config import fileConfig
 import os
+import sys
+from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.db.base import Base  # noqa: E402
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def get_url() -> str:
