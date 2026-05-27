@@ -6,7 +6,9 @@
 
 도메인 문서와 ERD가 엔티티의 의미와 관계를 설명한다면, 이 문서는 실제 구현에서 사용할 테이블, 컬럼, 제약조건, 타입을 고정한다.
 
-금액은 부동소수점 오차를 피하기 위해 정수 단위로 저장한다. Phase 1에서는 KRW 기준 최소 통화 단위를 원으로 보고 `bigint`를 사용한다.
+금액은 부동소수점 오차를 피하기 위해 정수 단위로 저장한다. Phase 2에서는 KRW 기준 최소 통화 단위를 원으로 보고 `bigint`를 사용한다.
+
+모든 시각 컬럼은 외부 금융 시스템 발생 시각과 내부 처리 시각을 비교할 수 있도록 timezone-aware timestamp로 저장한다.
 
 ---
 
@@ -19,9 +21,9 @@
 | `id` | bigint | PK | 내부 계좌 ID |
 | `account_no` | varchar(64) | UNIQUE, NOT NULL | 마스킹 대상 계좌번호 |
 | `balance` | bigint | NOT NULL, default 0 | 현재 잔액 |
-| `status` | varchar(20) | NOT NULL | ACTIVE, LOCKED, CLOSED |
-| `created_at` | timestamp | NOT NULL | 생성 시각 |
-| `updated_at` | timestamp | NOT NULL | 수정 시각 |
+| `status` | varchar(20) | NOT NULL, default ACTIVE | ACTIVE, LOCKED, CLOSED |
+| `created_at` | timestamptz | NOT NULL | 생성 시각 |
+| `updated_at` | timestamptz | NOT NULL | 수정 시각 |
 
 ### 제약조건
 
@@ -44,14 +46,17 @@
 | `account_id` | bigint | FK, NOT NULL | 대상 계좌 |
 | `event_type` | varchar(20) | NOT NULL | DEPOSIT, WITHDRAW, CANCEL |
 | `amount` | bigint | NOT NULL | 거래 금액 |
+| `currency` | varchar(10) | NOT NULL, default KRW | 통화 코드 |
 | `status` | varchar(30) | NOT NULL | 이벤트 상태 |
-| `occurred_at` | timestamp | NOT NULL | 외부 시스템 발생 시각 |
-| `created_at` | timestamp | NOT NULL | 수신 시각 |
+| `occurred_at` | timestamptz | NOT NULL | 외부 시스템 발생 시각 |
+| `created_at` | timestamptz | NOT NULL | 수신 시각 |
+| `updated_at` | timestamptz | NOT NULL | 수정 시각 |
 
 ### 제약조건
 
 - `external_event_id`는 동일 이벤트 중복 수신을 막는 최종 방어선이다.
 - `idempotency_key`는 요청 재시도와 충돌 요청을 구분하는 기준이다.
+- Phase 2에서는 `currency = KRW`를 기본값으로 사용하되, 외부 API 요청의 통화 코드를 명시적으로 보관한다.
 - 동일 `idempotency_key`에 다른 요청 Body가 들어오면 `409 Conflict`로 처리한다.
 - `status` 값은 [13-state-transition-table.md](13-state-transition-table.md)의 상태 전이표를 따른다.
 
@@ -69,7 +74,7 @@
 | `entry_type` | varchar(20) | NOT NULL | CREDIT, DEBIT |
 | `amount` | bigint | NOT NULL | 원장 반영 금액 |
 | `balance_after` | bigint | NOT NULL | 반영 후 잔액 |
-| `created_at` | timestamp | NOT NULL | 생성 시각 |
+| `created_at` | timestamptz | NOT NULL | 생성 시각 |
 
 ### 제약조건
 
@@ -92,15 +97,19 @@ Idempotency-Key 기반 요청 처리 결과를 저장한다.
 | `status` | varchar(30) | NOT NULL | PROCESSING, COMPLETED, FAILED |
 | `response_body` | jsonb | nullable | 완료된 요청의 응답 Body |
 | `error_message` | text | nullable | 실패 사유 |
-| `created_at` | timestamp | NOT NULL | 생성 시각 |
-| `completed_at` | timestamp | nullable | 완료 시각 |
-| `expires_at` | timestamp | nullable | 보관 만료 시각 |
+| `created_at` | timestamptz | NOT NULL | 생성 시각 |
+| `updated_at` | timestamptz | NOT NULL | 수정 시각 |
+| `completed_at` | timestamptz | nullable | 완료 시각 |
+| `locked_until` | timestamptz | nullable | 처리 중 재요청 제어를 위한 잠금 만료 시각 |
+| `expires_at` | timestamptz | nullable | 보관 만료 시각 |
 
 ### 제약조건
 
 - 같은 `idempotency_key`와 같은 `request_hash`는 기존 응답을 반환한다.
 - 같은 `idempotency_key`와 다른 `request_hash`는 충돌로 처리한다.
 - PROCESSING 상태 요청이 다시 들어오면 `202 Accepted`를 반환한다.
+- `updated_at`은 PROCESSING, COMPLETED, FAILED 상태 변경 추적에 사용한다.
+- `locked_until`은 DB 기반 처리 중 상태 확인 또는 Redis Lock 장애 시 보조 판단 기준으로 사용할 수 있다.
 
 ---
 
@@ -115,7 +124,7 @@ Idempotency-Key 기반 요청 처리 결과를 저장한다.
 | `old_status` | varchar(30) | nullable | 이전 상태 |
 | `new_status` | varchar(30) | NOT NULL | 변경 후 상태 |
 | `reason` | varchar(255) | nullable | 상태 변경 사유 |
-| `created_at` | timestamp | NOT NULL | 생성 시각 |
+| `created_at` | timestamptz | NOT NULL | 생성 시각 |
 
 ### 제약조건
 
