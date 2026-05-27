@@ -149,17 +149,17 @@ GET  /metrics                          Prometheus 메트릭
 
 ### Unit Test
 ```bash
-pytest tests/unit -v
+pytest backend/tests/unit -v
 ```
 
 ### Integration Test
 ```bash
-pytest tests/integration -v
+pytest backend/tests/integration -v
 ```
 
 ### Consistency Test (필수!)
 ```bash
-pytest tests/consistency -v
+pytest backend/tests/consistency -v
 ```
 
 ### 부하 테스트 (k6)
@@ -292,10 +292,11 @@ docker-compose exec nginx bash -c "sed -i 's/api-blue:8000/api-green:8000/g' /et
 
 ## 📖 문서
 
+- [기획 체크리스트](./docs/00-planning-checklist.md)
 - [문제 정의](./docs/01-problem-definition.md)
 - [도메인 범위](./docs/02-domain-scope.md)
 - [정합성 규칙](./docs/03-consistency-rules.md)
-- [아키텍처](./docs/04-development-roadmap.md)
+- [개발 로드맵과 블로그 산출물 매핑](./docs/04-development-roadmap.md)
 
 ---
 
