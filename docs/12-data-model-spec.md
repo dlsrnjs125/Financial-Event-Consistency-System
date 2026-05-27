@@ -95,6 +95,7 @@ Idempotency-Key 기반 요청 처리 결과를 저장한다.
 | `idempotency_key` | varchar(128) | UNIQUE, NOT NULL | 멱등성 키 |
 | `request_hash` | varchar(64) | NOT NULL | 정규화된 요청 Body의 SHA256 hash |
 | `status` | varchar(30) | NOT NULL | PROCESSING, COMPLETED, FAILED |
+| `response_code` | integer | nullable | 완료 또는 실패 응답의 HTTP status code |
 | `response_body` | jsonb | nullable | 완료된 요청의 응답 Body |
 | `error_message` | text | nullable | 실패 사유 |
 | `created_at` | timestamptz | NOT NULL | 생성 시각 |
@@ -108,8 +109,13 @@ Idempotency-Key 기반 요청 처리 결과를 저장한다.
 - 같은 `idempotency_key`와 같은 `request_hash`는 기존 응답을 반환한다.
 - 같은 `idempotency_key`와 다른 `request_hash`는 충돌로 처리한다.
 - PROCESSING 상태 요청이 다시 들어오면 `202 Accepted`를 반환한다.
+- `response_code`와 `response_body`는 동일 Idempotency-Key 재요청 시 기존 응답을 재사용하기 위한 값이다.
 - `updated_at`은 PROCESSING, COMPLETED, FAILED 상태 변경 추적에 사용한다.
 - `locked_until`은 DB 기반 처리 중 상태 확인 또는 Redis Lock 장애 시 보조 판단 기준으로 사용할 수 있다.
+- Phase 4에서 `expires_at`은 보관 정책 기준이며, 요청 처리 중 자동 무효화 기준으로 사용하지 않는다.
+- `PROCESSING -> COMPLETED`, `PROCESSING -> FAILED`만 결과 저장 전이로 허용한다.
+- 이미 `COMPLETED` 또는 `FAILED`인 record에 같은 결과 저장이 다시 호출되면 기존 값을 유지한다.
+- 만료 삭제 대상은 `COMPLETED`, `FAILED` record로 제한한다. `PROCESSING` 만료 record는 후속 복구/실패 처리 정책 없이 삭제하지 않는다.
 
 ---
 

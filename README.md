@@ -189,10 +189,21 @@ GET /metrics       Prometheus 메트릭
 make test-unit
 ```
 
+Idempotency 관련 단위 테스트만 실행하려면 다음 명령을 사용한다.
+
+```bash
+pytest backend/tests/unit/test_idempotency_hash.py
+pytest backend/tests/unit/test_idempotency_service.py
+pytest backend/tests/unit/test_idempotency_dependency.py
+```
+
 ### Integration Test
 ```bash
 make test-integration
 ```
+
+현재 Repository integration test는 빠른 회귀 검증을 위해 SQLite in-memory 기반으로 실행한다.
+PostgreSQL 고유 동작(JSONB, timestamptz, concurrent unique conflict)은 Phase 5 이후 Docker Compose 기반 integration test에서 별도로 검증한다.
 
 ### Consistency Test (필수!)
 ```bash

@@ -4,6 +4,9 @@ from sqlalchemy import BigInteger, String
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.base import Base
+from app.models import import_all_models
+
+import_all_models()
 
 
 def table(name):
@@ -101,6 +104,7 @@ def test_idempotency_records_model_matches_data_model_spec():
     assert "idempotency_key" in unique_column_names(idempotency_records)
     assert idempotency_records.c.request_hash.type.length == 64
     assert idempotency_records.c.status.type.length == 30
+    assert "response_code" in idempotency_records.c
     assert isinstance(idempotency_records.c.response_body.type, JSONB)
     assert "updated_at" in idempotency_records.c
     assert "locked_until" in idempotency_records.c
