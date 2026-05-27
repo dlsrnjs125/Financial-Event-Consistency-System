@@ -63,10 +63,12 @@ class IdempotencyRecordRepository:
         failed_at: datetime,
         response_code: int | None = None,
         response_body: Any | None = None,
+        error_message: str | None = None,
     ) -> IdempotencyRecord:
         record.status = IdempotencyStatus.FAILED.value
         record.response_code = response_code
         record.response_body = response_body
+        record.error_message = error_message
         record.updated_at = failed_at
         record.locked_until = None
         self.session.flush()

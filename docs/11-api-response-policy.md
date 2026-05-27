@@ -57,6 +57,8 @@ Phase 4에서는 실제 거래 처리 API가 아니라 Idempotency 판단 기반
 | 같은 Key + 다른 Body | `409 Conflict`로 매핑 |
 
 FAILED 재처리 허용 여부는 후속 ADR에서 별도 검토한다.
+`expires_at`은 Phase 4에서 보관 정책 기준으로만 사용하며, 요청 처리 중 기존 Idempotency-Key를 자동으로 무효화하지 않는다.
+만료 삭제는 별도 운영 작업 또는 배치에서 수행한다.
 
 ---
 

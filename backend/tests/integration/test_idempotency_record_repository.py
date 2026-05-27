@@ -9,8 +9,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 from app.domain.idempotency_status import IdempotencyStatus
+from app.models import import_all_models
 from app.models.idempotency_record import IdempotencyRecord
 from app.repositories.idempotency_record_repository import IdempotencyRecordRepository
+
+import_all_models()
 
 
 @pytest.fixture()
@@ -74,11 +77,18 @@ def test_mark_failed_updates_status_and_response(db_session):
     )
     failed_at = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
 
-    repository.mark_failed(record, failed_at, 422, {"error": "invalid"})
+    repository.mark_failed(
+        record,
+        failed_at,
+        422,
+        {"error": "invalid"},
+        error_message="invalid request body",
+    )
 
     assert record.status == IdempotencyStatus.FAILED.value
     assert record.response_code == 422
     assert record.response_body == {"error": "invalid"}
+    assert record.error_message == "invalid request body"
     assert record.updated_at == failed_at
     assert record.locked_until is None
 

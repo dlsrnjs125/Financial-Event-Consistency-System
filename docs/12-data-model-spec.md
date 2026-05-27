@@ -109,8 +109,10 @@ Idempotency-Key 기반 요청 처리 결과를 저장한다.
 - 같은 `idempotency_key`와 같은 `request_hash`는 기존 응답을 반환한다.
 - 같은 `idempotency_key`와 다른 `request_hash`는 충돌로 처리한다.
 - PROCESSING 상태 요청이 다시 들어오면 `202 Accepted`를 반환한다.
+- `response_code`와 `response_body`는 동일 Idempotency-Key 재요청 시 기존 응답을 재사용하기 위한 값이다.
 - `updated_at`은 PROCESSING, COMPLETED, FAILED 상태 변경 추적에 사용한다.
 - `locked_until`은 DB 기반 처리 중 상태 확인 또는 Redis Lock 장애 시 보조 판단 기준으로 사용할 수 있다.
+- Phase 4에서 `expires_at`은 보관 정책 기준이며, 요청 처리 중 자동 무효화 기준으로 사용하지 않는다.
 
 ---
 

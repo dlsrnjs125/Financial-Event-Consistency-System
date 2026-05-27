@@ -34,6 +34,7 @@ class FakeIdempotencyRecordRepository:
             status=IdempotencyStatus.PROCESSING.value,
             response_code=None,
             response_body=None,
+            error_message=None,
             completed_at=None,
             updated_at=None,
             expires_at=expires_at,
@@ -64,10 +65,12 @@ class FakeIdempotencyRecordRepository:
         failed_at: datetime,
         response_code: int | None = None,
         response_body: Any | None = None,
+        error_message: str | None = None,
     ):
         record.status = IdempotencyStatus.FAILED.value
         record.response_code = response_code
         record.response_body = response_body
+        record.error_message = error_message
         record.updated_at = failed_at
         record.locked_until = None
         return record
@@ -113,7 +116,7 @@ def test_same_key_same_body_completed_replays_saved_response():
     service, _ = make_service()
     payload = {"amount": 1000}
     service.check_or_start("idem-001", payload, now=now)
-    service.complete("idem-001", 200, {"ok": True}, now=now)
+    service.complete("idem-001", 200, {"ok": True}, payload=payload, now=now)
 
     result = service.check_or_start("idem-001", payload, now=now)
 
@@ -127,7 +130,7 @@ def test_same_key_same_body_failed_replays_failed_response():
     service, _ = make_service()
     payload = {"amount": 1000}
     service.check_or_start("idem-001", payload, now=now)
-    service.fail("idem-001", 422, {"error": "invalid amount"}, now=now)
+    service.fail("idem-001", 422, {"error": "invalid amount"}, payload=payload, now=now)
 
     result = service.check_or_start("idem-001", payload, now=now)
 
@@ -150,7 +153,9 @@ def test_complete_sets_completed_status_and_response_data():
     service, repository = make_service()
     service.check_or_start("idem-001", {"amount": 1000}, now=now)
 
-    record = service.complete("idem-001", 200, {"ok": True}, now=now)
+    record = service.complete(
+        "idem-001", 200, {"ok": True}, payload={"amount": 1000}, now=now
+    )
 
     assert record is repository.get_by_key("idem-001")
     assert record.status == IdempotencyStatus.COMPLETED.value
@@ -165,14 +170,85 @@ def test_fail_sets_failed_status_and_response_data():
     service, repository = make_service()
     service.check_or_start("idem-001", {"amount": 1000}, now=now)
 
-    record = service.fail("idem-001", 422, {"error": "invalid amount"}, now=now)
+    record = service.fail(
+        "idem-001",
+        422,
+        {"error": "invalid amount"},
+        error_message="invalid amount",
+        payload={"amount": 1000},
+        now=now,
+    )
 
     assert record is repository.get_by_key("idem-001")
     assert record.status == IdempotencyStatus.FAILED.value
     assert record.response_code == 422
     assert record.response_body == {"error": "invalid amount"}
+    assert record.error_message == "invalid amount"
     assert record.updated_at == now
     assert record.locked_until is None
+
+
+def test_complete_rejects_different_payload_for_existing_key():
+    now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
+    service, _ = make_service()
+    service.check_or_start("idem-001", {"amount": 1000}, now=now)
+
+    with pytest.raises(IdempotencyConflict):
+        service.complete(
+            "idem-001",
+            200,
+            {"ok": True},
+            payload={"amount": 2000},
+            now=now,
+        )
+
+
+def test_fail_rejects_different_request_hash_for_existing_key():
+    now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
+    service, _ = make_service()
+    service.check_or_start("idem-001", {"amount": 1000}, now=now)
+
+    with pytest.raises(IdempotencyConflict):
+        service.fail(
+            "idem-001",
+            422,
+            {"error": "invalid amount"},
+            request_hash=generate_request_hash({"amount": 2000}),
+            now=now,
+        )
+
+
+def test_completion_rejects_payload_and_request_hash_together():
+    now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
+    service, _ = make_service()
+    payload = {"amount": 1000}
+    service.check_or_start("idem-001", payload, now=now)
+
+    with pytest.raises(ValueError):
+        service.complete(
+            "idem-001",
+            200,
+            {"ok": True},
+            payload=payload,
+            request_hash=generate_request_hash(payload),
+            now=now,
+        )
+
+
+def test_expired_record_is_still_reused_until_retention_cleanup_deletes_it():
+    now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
+    service, repository = make_service()
+    payload = {"amount": 1000}
+    record = repository.create_processing(
+        "idem-001",
+        generate_request_hash(payload),
+        expires_at=datetime(2026, 5, 27, tzinfo=UTC),
+    )
+
+    result = service.check_or_start("idem-001", payload, now=now)
+
+    assert result.decision == IdempotencyDecision.ALREADY_PROCESSING
+    assert result.record_id == record.id
 
 
 def test_existing_same_body_compares_generated_request_hash():

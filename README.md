@@ -202,6 +202,9 @@ pytest backend/tests/unit/test_idempotency_dependency.py
 make test-integration
 ```
 
+현재 Repository integration test는 빠른 회귀 검증을 위해 SQLite in-memory 기반으로 실행한다.
+PostgreSQL 고유 동작(JSONB, timestamptz, concurrent unique conflict)은 Phase 5 이후 Docker Compose 기반 integration test에서 별도로 검증한다.
+
 ### Consistency Test (필수!)
 ```bash
 make test-consistency

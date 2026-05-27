@@ -37,9 +37,3 @@ class IdempotencyConflict(Exception):
         super().__init__(
             "Idempotency-Key was already used with a different request body"
         )
-
-
-class IdempotencyAlreadyProcessing(Exception):
-    def __init__(self, idempotency_key: str) -> None:
-        self.idempotency_key = idempotency_key
-        super().__init__("The same idempotent request is still processing")

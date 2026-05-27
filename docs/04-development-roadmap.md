@@ -303,6 +303,8 @@ FastAPI 기반 백엔드 애플리케이션의 기본 구조를 만든다.
 - 같은 Key + 다른 Body 409 처리
 - PROCESSING 상태 재요청 202 처리
 - 완료 요청 재전송 시 기존 응답 반환
+- 완료/실패 저장 시 원 요청 hash와 응답 저장 대상 key 일치 여부 검증
+- 실패 응답 저장 시 운영 추적용 error_message 저장
 
 **검증 기준**
 
@@ -310,6 +312,7 @@ FastAPI 기반 백엔드 애플리케이션의 기본 구조를 만든다.
 - 같은 Idempotency-Key와 다른 Body는 409 Conflict를 반환한다.
 - 처리 중 동일 요청은 202 Accepted를 반환한다.
 - 완료된 동일 요청은 거래를 다시 반영하지 않는다.
+- `expires_at`은 Phase 4에서 보관 정책 기준으로만 사용하고, 요청 시점 자동 무효화는 수행하지 않는다.
 
 **측정 지표**
 
@@ -327,6 +330,8 @@ FastAPI 기반 백엔드 애플리케이션의 기본 구조를 만든다.
 - [x] 충돌 요청 409 처리
 - [x] 처리 중 요청 202 처리
 - [x] 완료 응답 재사용 처리
+- [x] 완료/실패 저장 시 request_hash 검증
+- [x] 실패 사유 error_message 저장
 - [x] Idempotency 테스트 작성
 
 **연결 문서**
@@ -335,6 +340,11 @@ FastAPI 기반 백엔드 애플리케이션의 기본 구조를 만든다.
 - [11-api-response-policy.md](11-api-response-policy.md)
 - [15-api-contract.md](15-api-contract.md)
 - [16-performance-measurement-design.md](16-performance-measurement-design.md)
+
+**테스트 한계**
+
+현재 Repository integration test는 빠른 회귀 검증을 위해 SQLite in-memory 기반으로 수행한다.
+PostgreSQL 고유 동작(JSONB, timestamptz, concurrent unique conflict)은 Phase 5 이후 Docker Compose 기반 integration test에서 검증한다.
 
 **연결 블로그**
 
