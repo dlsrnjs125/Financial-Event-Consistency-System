@@ -81,6 +81,35 @@ def test_repository_appends_state_history(db_session):
     assert history.reason == "basic validation succeeded"
 
 
+def test_repository_returns_latest_state_history(db_session):
+    create_event(db_session)
+    repository = EventStateHistoryRepository(db_session)
+    repository.add(
+        transaction_event_id=1,
+        old_status=TransactionStatus.RECEIVED,
+        new_status=TransactionStatus.VALIDATED,
+        reason="basic validation succeeded",
+    )
+    latest = repository.add(
+        transaction_event_id=1,
+        old_status=TransactionStatus.VALIDATED,
+        new_status=TransactionStatus.PROCESSING,
+        reason="processing started",
+    )
+    db_session.flush()
+
+    found = repository.get_latest_by_transaction_event_id(1)
+
+    assert found == latest
+    assert found.new_status == "PROCESSING"
+
+
+def test_repository_returns_none_when_latest_state_history_does_not_exist(db_session):
+    repository = EventStateHistoryRepository(db_session)
+
+    assert repository.get_latest_by_transaction_event_id(999) is None
+
+
 def test_transaction_state_service_changes_status_and_records_history(db_session):
     event = create_event(db_session)
     service = TransactionStateService(db_session)

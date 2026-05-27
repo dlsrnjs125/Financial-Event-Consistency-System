@@ -36,6 +36,16 @@ class EventStateHistoryRepository:
             .all()
         )
 
+    def get_latest_by_transaction_event_id(
+        self, transaction_event_id: int
+    ) -> EventStateHistory | None:
+        return (
+            self.session.query(EventStateHistory)
+            .filter(EventStateHistory.transaction_event_id == transaction_event_id)
+            .order_by(EventStateHistory.created_at.desc(), EventStateHistory.id.desc())
+            .first()
+        )
+
     @staticmethod
     def _value(status: TransactionStatus | str) -> str:
         return status.value if isinstance(status, TransactionStatus) else status

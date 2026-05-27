@@ -74,3 +74,7 @@ class TransactionStateMachine:
     @classmethod
     def validate_cancel_allowed(cls, current_status: TransactionStatus | str) -> None:
         cls.validate_transition(current_status, TransactionStatus.CANCELLED)
+
+    @classmethod
+    def is_terminal_status(cls, status: TransactionStatus | str) -> bool:
+        return len(cls.allowed_next_statuses(status)) == 0

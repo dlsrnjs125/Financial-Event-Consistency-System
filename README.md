@@ -106,6 +106,7 @@ make help          # 사용 가능한 명령 확인
 make local-check   # 로컬 개발 환경 확인
 make dev           # FastAPI reload 서버 실행
 make check         # format-check, lint, test 실행
+make final-check   # PR 전 format, lint, compile, test 전체 실행
 make local-bg      # Docker Compose 스택 백그라운드 실행
 make local-stop    # Docker Compose 스택 중지
 ```
@@ -202,6 +203,13 @@ make test-consistency
 ```bash
 make check
 ```
+
+### 개발 마무리 점검
+```bash
+make final-check
+```
+
+모든 개발 작업은 PR 생성 전 `make final-check`로 포맷팅, 린트, Python 컴파일, 테스트를 확인한다.
 
 ### 부하 테스트 (k6)
 ```bash
