@@ -11,6 +11,7 @@ UVICORN ?= .venv/bin/uvicorn
 BLACK ?= .venv/bin/black
 ISORT ?= .venv/bin/isort
 FLAKE8 ?= .venv/bin/flake8
+RUFF ?= .venv/bin/ruff
 
 # Docker
 DOCKER ?= docker
@@ -21,6 +22,7 @@ BACKEND_DIR ?= backend
 TEST_DIR ?= backend/tests
 FORMAT_PATHS ?= backend/app backend/tests/unit/test_phase1_app.py
 LINT_PATHS ?= backend/app backend/tests/unit/test_phase1_app.py
+QUALITY_PATHS ?= backend/app backend/tests
 
 .PHONY: help
 help: ## Show this help message
@@ -31,6 +33,7 @@ help: ## Show this help message
 	@echo "  make local-check       # Check local tools and app structure"
 	@echo "  make dev               # Run FastAPI locally with reload"
 	@echo "  make check             # Run format-check, lint, and tests"
+	@echo "  make final-check       # Format, lint, compile, and test before PR"
 	@echo "  make local-bg          # Run Docker Compose stack in background"
 
 # Local development
@@ -144,21 +147,39 @@ test-consistency: ## Run consistency tests
 	$(PYTHON) -m pytest backend/tests/consistency -v
 
 .PHONY: format
-format: ## Format Phase 1 backend code
-	$(ISORT) --profile black -p app $(FORMAT_PATHS)
-	$(BLACK) $(FORMAT_PATHS)
+format: ## Format backend code and tests
+	$(ISORT) --profile black -p app $(QUALITY_PATHS)
+	$(BLACK) $(QUALITY_PATHS)
+	$(RUFF) format $(BACKEND_DIR)
 
 .PHONY: format-check
-format-check: ## Check Phase 1 backend formatting
-	$(ISORT) --profile black -p app --check-only $(FORMAT_PATHS)
-	$(BLACK) --check $(FORMAT_PATHS)
+format-check: ## Check backend formatting
+	$(ISORT) --profile black -p app --check-only $(QUALITY_PATHS)
+	$(BLACK) --check $(QUALITY_PATHS)
+	$(RUFF) format --check $(BACKEND_DIR)
 
 .PHONY: lint
-lint: ## Run flake8 for Phase 1 backend code
-	$(FLAKE8) --max-line-length=88 --extend-ignore=E203,W503 $(LINT_PATHS)
+lint: ## Run lint checks for backend code and tests
+	$(FLAKE8) --max-line-length=88 --extend-ignore=E203,W503 $(QUALITY_PATHS)
+	$(RUFF) check $(BACKEND_DIR)
+
+.PHONY: ruff-format
+ruff-format: ## Format backend with Ruff
+	$(RUFF) format $(BACKEND_DIR)
+
+.PHONY: ruff-check
+ruff-check: ## Check backend with Ruff
+	$(RUFF) check $(BACKEND_DIR)
+
+.PHONY: compile
+compile: ## Compile backend Python files
+	cd $(BACKEND_DIR) && ../$(PYTHON) -m compileall app tests
 
 .PHONY: check
 check: format-check lint test ## Run format-check, lint, and tests
+
+.PHONY: final-check
+final-check: format lint compile test ## Format, lint, compile, and test before PR
 
 # Health checks
 .PHONY: health
