@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ USER appuser
 
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+    CMD python -c "import os, requests; requests.get(f\"http://localhost:{os.getenv('API_PORT', '8000')}/health\")" || exit 1
 
 # Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT:-8000} --workers ${API_WORKERS:-4}"]

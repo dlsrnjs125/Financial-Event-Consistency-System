@@ -49,9 +49,13 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/financial_events
       REDIS_URL: redis://redis:6379/0
+      APP_NAME: financial-event-api
+      APP_ENV: development
+      DEBUG: "true"
+      API_PREFIX: /api/v1
+      METRICS_ENABLED: "true"
       API_PORT: 8000
       API_WORKERS: 4
-      API_ENVIRONMENT: development
       LOG_LEVEL: INFO
     ports:
       - "8000:8000"
@@ -75,9 +79,13 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/financial_events
       REDIS_URL: redis://redis:6379/0
+      APP_NAME: financial-event-api
+      APP_ENV: development
+      DEBUG: "true"
+      API_PREFIX: /api/v1
+      METRICS_ENABLED: "true"
       API_PORT: 8001
       API_WORKERS: 4
-      API_ENVIRONMENT: development
       LOG_LEVEL: INFO
     ports:
       - "8001:8001"
