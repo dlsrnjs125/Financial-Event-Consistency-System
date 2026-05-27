@@ -115,6 +115,7 @@ def upgrade() -> None:
         sa.Column("idempotency_key", sa.String(length=128), nullable=False),
         sa.Column("request_hash", sa.String(length=64), nullable=False),
         sa.Column("status", sa.String(length=30), nullable=False),
+        sa.Column("response_code", sa.Integer(), nullable=True),
         sa.Column("response_body", postgresql.JSONB(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column(

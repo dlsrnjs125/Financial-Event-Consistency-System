@@ -189,6 +189,14 @@ GET /metrics       Prometheus 메트릭
 make test-unit
 ```
 
+Idempotency 관련 단위 테스트만 실행하려면 다음 명령을 사용한다.
+
+```bash
+pytest backend/tests/unit/test_idempotency_hash.py
+pytest backend/tests/unit/test_idempotency_service.py
+pytest backend/tests/unit/test_idempotency_dependency.py
+```
+
 ### Integration Test
 ```bash
 make test-integration

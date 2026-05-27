@@ -19,3 +19,27 @@ class InvalidStateTransition(Exception):
             or f"Cannot transition from {current_status.value} to {next_status.value}."
         )
         super().__init__(detail)
+
+
+class MissingIdempotencyKey(Exception):
+    def __init__(self) -> None:
+        super().__init__("Idempotency-Key header is required")
+
+
+class InvalidIdempotencyKey(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class IdempotencyConflict(Exception):
+    def __init__(self, idempotency_key: str) -> None:
+        self.idempotency_key = idempotency_key
+        super().__init__(
+            "Idempotency-Key was already used with a different request body"
+        )
+
+
+class IdempotencyAlreadyProcessing(Exception):
+    def __init__(self, idempotency_key: str) -> None:
+        self.idempotency_key = idempotency_key
+        super().__init__("The same idempotent request is still processing")

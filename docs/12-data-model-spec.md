@@ -95,6 +95,7 @@ Idempotency-Key 기반 요청 처리 결과를 저장한다.
 | `idempotency_key` | varchar(128) | UNIQUE, NOT NULL | 멱등성 키 |
 | `request_hash` | varchar(64) | NOT NULL | 정규화된 요청 Body의 SHA256 hash |
 | `status` | varchar(30) | NOT NULL | PROCESSING, COMPLETED, FAILED |
+| `response_code` | integer | nullable | 완료 또는 실패 응답의 HTTP status code |
 | `response_body` | jsonb | nullable | 완료된 요청의 응답 Body |
 | `error_message` | text | nullable | 실패 사유 |
 | `created_at` | timestamptz | NOT NULL | 생성 시각 |
