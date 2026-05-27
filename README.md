@@ -124,6 +124,7 @@ GET /api/v1/accounts/{account_no}/balance
 
 Phase 5 기준으로 거래 이벤트 수신, 계좌 잔액 조회, Idempotency 응답 재사용, Ledger 기반 balance 반영이 구현되어 있다.
 Redis Lock/Cache, HMAC 인증, k6 부하 테스트, 도메인 메트릭 본격화는 후속 Phase에서 구현한다.
+금액은 Phase 5 기준 KRW 정수 원 단위로 처리한다.
 
 ---
 

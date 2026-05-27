@@ -33,6 +33,16 @@ class TransactionEventRepository:
     ) -> TransactionEvent | None:
         return self.get_by_external_event_id(original_external_event_id)
 
+    def get_original_for_cancel_for_update(
+        self, original_external_event_id: str
+    ) -> TransactionEvent | None:
+        return (
+            self.session.query(TransactionEvent)
+            .filter(TransactionEvent.external_event_id == original_external_event_id)
+            .with_for_update()
+            .one_or_none()
+        )
+
     def create_received(
         self,
         external_event_id: str,

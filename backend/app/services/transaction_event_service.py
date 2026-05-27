@@ -1,5 +1,6 @@
 """Service for processing transaction events atomically."""
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -45,6 +46,7 @@ class TransactionEventService:
         self.account_repository = account_repository
         self.ledger_service = ledger_service
         self.transaction_state_service = transaction_state_service
+        self._active_event: TransactionEvent | None = None
 
     def process(
         self,
@@ -94,6 +96,7 @@ class TransactionEventService:
         payload: dict[str, Any],
     ) -> TransactionProcessingResult:
         try:
+            self._active_event = None
             result = self._apply_started_request(idempotency_key, request)
             self.idempotency_service.complete(
                 idempotency_key,
@@ -103,6 +106,8 @@ class TransactionEventService:
             )
             return result
         except Exception as exc:
+            if self._is_domain_failure(exc):
+                self._mark_active_event_failed(exc)
             response_body = self._error_body(exc)
             status_code = self._status_code_for_exception(exc)
             self.idempotency_service.fail(
@@ -120,6 +125,8 @@ class TransactionEventService:
                     duplicated=False,
                 )
             raise
+        finally:
+            self._active_event = None
 
     def _apply_started_request(
         self,
@@ -136,6 +143,7 @@ class TransactionEventService:
             request.external_event_id
         )
         if existing_event is not None:
+            self._ensure_duplicate_matches_request(existing_event, request, account.id)
             return self._duplicate_result(existing_event)
 
         original_event = self._get_original_event_for_cancel(request)
@@ -148,6 +156,7 @@ class TransactionEventService:
             currency=request.currency,
             occurred_at=request.occurred_at,
         )
+        self._active_event = event
         try:
             self.transaction_state_service.change_status(
                 event, TransactionStatus.VALIDATED, "basic validation succeeded"
@@ -178,12 +187,46 @@ class TransactionEventService:
             return None
         if request.original_external_event_id is None:
             raise InvalidTransactionEvent("CANCEL requires original_external_event_id")
-        original_event = self.transaction_event_repository.get_original_for_cancel(
-            request.original_external_event_id
+        original_event = (
+            self.transaction_event_repository.get_original_for_cancel_for_update(
+                request.original_external_event_id
+            )
         )
         if original_event is None:
             raise OriginalTransactionNotFound()
         return original_event
+
+    def _ensure_duplicate_matches_request(
+        self,
+        existing_event: TransactionEvent,
+        request: TransactionEventCreateRequest,
+        account_id: int,
+    ) -> None:
+        if existing_event.account_id != account_id:
+            raise InvalidTransactionEvent(
+                "external_event_id already exists with different account"
+            )
+        if existing_event.event_type != request.event_type.value:
+            raise InvalidTransactionEvent(
+                "external_event_id already exists with different event_type"
+            )
+        if existing_event.amount != request.amount:
+            raise InvalidTransactionEvent(
+                "external_event_id already exists with different amount"
+            )
+        if existing_event.currency != request.currency:
+            raise InvalidTransactionEvent(
+                "external_event_id already exists with different currency"
+            )
+        if not self._datetimes_match(existing_event.occurred_at, request.occurred_at):
+            raise InvalidTransactionEvent(
+                "external_event_id already exists with different occurred_at"
+            )
+
+    def _datetimes_match(self, existing: datetime, incoming: datetime) -> bool:
+        if existing.tzinfo is not None and incoming.tzinfo is not None:
+            return existing.timestamp() == incoming.timestamp()
+        return existing.replace(tzinfo=None) == incoming.replace(tzinfo=None)
 
     def _duplicate_result(self, event: TransactionEvent) -> TransactionProcessingResult:
         ledger = self.ledger_entry_repository.get_by_transaction_event_id(event.id)
@@ -239,6 +282,22 @@ class TransactionEventService:
         if isinstance(exc, (InsufficientBalance, InvalidTransactionEvent)):
             return 422
         return 500
+
+    def _mark_active_event_failed(self, exc: Exception) -> None:
+        if self._active_event is None:
+            return
+        if self._active_event.status == TransactionStatus.FAILED.value:
+            return
+        try:
+            self.transaction_state_service.change_status(
+                self._active_event,
+                TransactionStatus.FAILED,
+                reason=str(exc),
+            )
+        except Exception:
+            # If the state machine cannot move the active event to FAILED, keep the
+            # original domain failure visible to the caller and idempotency record.
+            return
 
     def _is_domain_failure(self, exc: Exception) -> bool:
         return isinstance(

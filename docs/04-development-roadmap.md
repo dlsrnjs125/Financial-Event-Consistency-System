@@ -378,10 +378,11 @@ PostgreSQL 고유 동작(JSONB, timestamptz, concurrent unique conflict)은 Phas
 
 - 동일 `external_event_id`는 한 번만 저장된다.
 - 동일 이벤트로 `ledger_entries`가 두 번 생성되지 않는다.
+- 동일 `external_event_id`가 다른 거래 내용으로 재요청되면 duplicate가 아니라 도메인 실패로 처리한다.
 - DEPOSIT은 balance를 증가시킨다.
 - WITHDRAW는 balance를 감소시킨다.
 - CANCEL은 원거래 반대 방향 LedgerEntry를 생성한다.
-- Transaction 실패 시 부분 반영이 없어야 한다.
+- Transaction 실패 시 LedgerEntry와 Account balance는 반영하지 않고, 생성된 TransactionEvent는 `FAILED` 상태로 마감한다.
 - 동일 Idempotency-Key와 같은 Body는 저장된 응답을 반환한다.
 - 동일 Idempotency-Key와 다른 Body는 409로 매핑 가능하다.
 
@@ -404,12 +405,21 @@ PostgreSQL 고유 동작(JSONB, timestamptz, concurrent unique conflict)은 Phas
 - [x] Unique Constraint 충돌 처리 기반 유지
 - [x] Transaction 처리 integration test 작성
 - [x] 동일 이벤트 순차 재요청 Ledger 1건 테스트 작성
+- [x] 동일 external_event_id 다른 Body 방어 테스트 작성
+- [x] 실패 이벤트 FAILED 상태 마감 테스트 작성
 - [x] 거래 이벤트 API 테스트 작성
 
 **테스트 한계**
 
 현재 Phase 5 integration test는 빠른 회귀 검증을 위해 SQLite in-memory 기반으로 수행한다.
 SQLite에서는 `SELECT FOR UPDATE`와 concurrent unique conflict 검증이 제한되므로, 동일 이벤트 100회 동시 요청과 PostgreSQL row lock 검증은 Phase 6 이후 Docker Compose 기반 integration test에서 보강한다.
+
+**구현 정책**
+
+거래 처리 중 발생한 도메인 실패는 Idempotency failed response 재사용을 위해 TransactionEventService에서 표준 실패 body로 변환한다.
+요청 검증, Header 누락, 조회성 API 오류는 공통 exception handler가 HTTP 응답으로 변환한다.
+Phase 5는 KRW 정수 원 단위를 기준으로 `amount`와 `balance`를 `bigint`/`int`로 관리한다.
+소수 통화 또는 외화 소수점 처리는 후속 데이터 모델 확장에서 검토한다.
 
 **연결 문서**
 

@@ -109,8 +109,14 @@ def test_withdraw_insufficient_balance_fails(db_session):
     )
 
     db_session.refresh(account)
+    event = (
+        db_session.query(TransactionEvent)
+        .filter(TransactionEvent.external_event_id == "ext-001")
+        .one()
+    )
     assert result.status_code == 422
     assert account.balance == 500
+    assert event.status == TransactionStatus.FAILED.value
     assert db_session.query(LedgerEntry).count() == 0
 
 
@@ -125,6 +131,23 @@ def test_same_external_event_id_is_processed_once(db_session):
     db_session.refresh(account)
     assert first.body["duplicated"] is False
     assert second.body["duplicated"] is True
+    assert db_session.query(TransactionEvent).count() == 1
+    assert db_session.query(LedgerEntry).count() == 1
+    assert account.balance == 11000
+
+
+def test_same_external_event_id_with_different_body_is_rejected(db_session):
+    account = create_account(db_session)
+    service = build_service(db_session)
+    first = service.process("idem-001", make_request("ext-001", EventType.DEPOSIT))
+    second = service.process(
+        "idem-002", make_request("ext-001", EventType.DEPOSIT, amount=2000)
+    )
+
+    db_session.refresh(account)
+    assert first.status_code == 200
+    assert second.status_code == 422
+    assert second.body["code"] == "InvalidTransactionEvent"
     assert db_session.query(TransactionEvent).count() == 1
     assert db_session.query(LedgerEntry).count() == 1
     assert account.balance == 11000
@@ -217,7 +240,13 @@ def test_settled_original_cannot_be_cancelled(db_session):
         ),
     )
 
+    cancel_event = (
+        db_session.query(TransactionEvent)
+        .filter(TransactionEvent.external_event_id == "ext-cancel-001")
+        .one()
+    )
     assert result.status_code == 409
+    assert cancel_event.status == TransactionStatus.FAILED.value
 
 
 def test_already_cancelled_original_cannot_be_cancelled_again(db_session):

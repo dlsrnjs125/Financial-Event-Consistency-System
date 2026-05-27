@@ -181,7 +181,12 @@ def test_duplicate_external_event_returns_duplicate_response():
     )
     event_repository.existing = SimpleNamespace(
         id=10,
+        account_id=1,
         external_event_id="ext-001",
+        event_type="DEPOSIT",
+        amount=1000,
+        currency="KRW",
+        occurred_at=datetime(2026, 5, 28, 10, 0, tzinfo=UTC),
         status=TransactionStatus.COMPLETED.value,
     )
 

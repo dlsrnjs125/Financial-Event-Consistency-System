@@ -48,6 +48,7 @@ Phase 5에서는 동일 `external_event_id`를 순차 재요청했을 때 다음
 - `ledger_entries` row는 1건이다.
 - `account.balance` 변경은 1회만 발생한다.
 - 두 번째 응답은 `duplicated=true`다.
+- 같은 `external_event_id`가 다른 account, event_type, amount, currency, occurred_at으로 들어오면 duplicate가 아니라 도메인 실패로 처리한다.
 
 동시 100회 요청 검증은 PostgreSQL row lock과 concurrent unique conflict를 정확히 확인해야 하므로 Docker Compose 기반 PostgreSQL integration test에서 보강한다.
 
@@ -265,6 +266,9 @@ SELECT COALESCE(SUM(amount), 0)
 FROM ledger_entries
 WHERE account_id = :account_id;
 ```
+
+Phase 5는 KRW 정수 원 단위를 기준으로 `amount`와 `balance`를 `bigint`/`int`로 관리한다.
+소수 단위 통화 지원이 필요해지면 후속 migration에서 `Numeric`/`Decimal` 기반 모델로 확장한다.
 
 **제약조건**:
 ```sql
