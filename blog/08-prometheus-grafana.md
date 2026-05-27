@@ -123,6 +123,16 @@ db_connections_active = Gauge(
 - Lock Acquisition Failure Rate
 ```
 
+### 대시보드에서 확인할 운영 지표
+
+- p95/p99 latency
+- duplicate event count
+- invalid state transition count
+- idempotency hit ratio
+- DB connection usage
+- Redis cache hit ratio
+- reconciliation failure count
+
 ---
 
 ## 알람 설정

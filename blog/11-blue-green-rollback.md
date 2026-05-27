@@ -131,6 +131,23 @@ echo "✅ Rollback completed"
 
 ---
 
+## Blue/Green 전환 전후 지표 비교
+
+| Metric | Blue | Green | 판단 |
+|--------|------|-------|------|
+| p95 latency | TBD | TBD |  |
+| 5xx rate | TBD | TBD |  |
+| invalid transition | 0 | 0 |  |
+| reconciliation failure | 0 | 0 |  |
+
+판단 기준:
+
+- Green 전환 후 5분 이내 5xx rate가 5%를 초과하면 rollback한다.
+- invalid transition 또는 reconciliation failure가 1건 이상 발생하면 rollback한다.
+- p95 latency가 기존 Blue 대비 의미 있게 악화되면 원인을 분석하고 전환을 보류한다.
+
+---
+
 ## 다음 편에서
 
 12편에서는 프로젝트 전체 회고와 배운 점을 정리합니다.

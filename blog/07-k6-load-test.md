@@ -93,6 +93,15 @@ ledger_entries_for_event: 1
 balance_increment: 1회만
 ```
 
+### 시나리오별 결과 기록표
+
+| Scenario | VUs | p50 | p95 | p99 | error rate | duplicate rate |
+|----------|-----|-----|-----|-----|------------|----------------|
+| smoke | 10 | TBD | TBD | TBD | TBD | 0% |
+| normal | 50 | TBD | TBD | TBD | TBD | 0% |
+| peak | 300 | TBD | TBD | TBD | TBD | 0% |
+| duplicate storm | 100 | TBD | TBD | TBD | TBD | 0% |
+
 ---
 
 ## DB 검증

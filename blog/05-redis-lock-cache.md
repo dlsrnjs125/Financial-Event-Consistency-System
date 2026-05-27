@@ -335,6 +335,30 @@ def test_result_retrieval_when_redis_cache_misses():
 
 ---
 
+## Redis 도입 전후 비교
+
+비교 대상:
+
+1. PostgreSQL Unique Constraint only
+2. Redis Lock + PostgreSQL Unique Constraint
+3. Redis Cache + PostgreSQL Unique Constraint
+
+측정 지표:
+
+- p95 latency
+- p99 latency
+- DB transaction count
+- cache hit ratio
+- `financial_redis_lock_acquire_failed_total`
+- duplicate processing rate
+
+해석 기준:
+
+Redis Lock과 Cache는 DB 부하와 중복 요청 응답시간을 줄이는 데 기여해야 한다.
+하지만 Redis가 없어도 duplicate processing rate는 0%여야 한다.
+
+---
+
 ## 다음 편에서
 
 6편에서는 상태 전이를 자동화된 테스트로 고정하는 방법을 다룹니다.

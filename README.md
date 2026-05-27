@@ -135,13 +135,29 @@ GET  /metrics                          Prometheus 메트릭
 
 ### 성능 지표
 
-| 지표 | 목표 | 측정 |
-|-----|------|------|
-| p50 응답시간 | 50ms 이하 | k6 |
-| p95 응답시간 | 300ms 이하 | k6 |
-| p99 응답시간 | 1000ms 이하 | k6 |
-| 에러율 | 1% 이하 | k6 |
-| 캐시 히트율 | 80% 이상 | Prometheus |
+| 지표 | 메트릭 이름 | 목표 | 측정 |
+|------|-------------|------|------|
+| p50 응답시간 | `http_request_duration_seconds` p50 | 50ms 이하 | k6, Prometheus |
+| p95 응답시간 | `http_request_duration_seconds` p95 | 300ms 이하 | k6, Prometheus |
+| p99 응답시간 | `http_request_duration_seconds` p99 | 1000ms 이하 | k6, Prometheus |
+| 에러율 | `http_req_failed`, `http_5xx_total` | 1% 이하 | k6, Prometheus |
+| 캐시 히트율 | `redis_keyspace_hits_total` / misses | 80% 이상 | Prometheus |
+
+### 성능 측정과 설계 비교 계획
+
+이 프로젝트에서는 단순히 최종 성능 수치만 기록하지 않고, 주요 설계 선택 전후의 수치를 비교한다.
+
+| 실험 | 비교 대상 | 주요 지표 | 목적 |
+|------|-----------|-----------|------|
+| Redis Cache 비교 | DB 직접 조회 vs Redis Cache | p95, p99, DB query count, cache hit ratio | Idempotency 응답 최적화 효과 확인 |
+| Redis Lock 비교 | DB Unique only vs Redis Lock + DB Unique | DB transaction count, duplicate rate, p95 | 중복 요청 폭주 완화 효과 확인 |
+| DB Pool 비교 | pool size 5/10/20 | p95, p99, 503 rate, connection wait | 적정 pool size 탐색 |
+| Transaction 범위 비교 | 긴 transaction vs 짧은 transaction | transaction duration, lock wait, p99 | Lock 경합 감소 |
+| 배포 전후 비교 | Blue vs Green | 5xx, p95, invalid transition, reconciliation failure | 배포 안정성 검증 |
+
+성능 개선은 응답시간만으로 판단하지 않는다.
+
+중복 반영률, 잘못된 상태 전이 수, reconciliation 실패 수가 0을 유지하는지 함께 확인한다.
 
 ---
 
@@ -308,6 +324,9 @@ docker-compose exec nginx bash -c "sed -i 's/api-blue:8000/api-green:8000/g' /et
 - [상태 전이표](./docs/13-state-transition-table.md)
 - [테스트 케이스 매트릭스](./docs/14-test-case-matrix.md)
 - [API Contract](./docs/15-api-contract.md)
+- [성능 측정 설계](./docs/16-performance-measurement-design.md)
+- [실험 기록 템플릿](./docs/17-experiment-log-template.md)
+- [성능 트러블슈팅 가이드](./docs/18-performance-troubleshooting-guide.md)
 
 ---
 

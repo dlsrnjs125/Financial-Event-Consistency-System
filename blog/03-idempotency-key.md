@@ -260,6 +260,27 @@ def test_same_key_different_body_returns_conflict():
 
 ---
 
+## Idempotency 처리 방식별 비교
+
+비교 대상:
+
+1. IdempotencyRecord를 DB에서 매번 조회
+2. Redis Cache에 완료 응답 저장 후 반환
+
+측정 지표:
+
+- p50/p95/p99 latency
+- `financial_idempotency_hit_total`
+- DB query count
+- cache hit ratio
+- duplicate processing rate
+
+해석 기준:
+
+Redis Cache를 사용해 p95 latency와 DB query count가 줄어들더라도, Redis 장애 시 duplicate processing rate는 0%를 유지해야 한다.
+
+---
+
 ## 다음 편에서
 
 4편에서는 PostgreSQL Transaction과 Unique Constraint로 정합성을 최종 보장하는 방법을 다룹니다.
