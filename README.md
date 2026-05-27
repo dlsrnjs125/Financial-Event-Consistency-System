@@ -90,6 +90,16 @@ docker-compose exec api alembic upgrade head
 curl http://localhost:8000/health
 ```
 
+### Makefile 사용
+
+```bash
+make help
+make dev
+make test
+make docker-up
+make docker-down
+```
+
 ### 주요 엔드포인트
 
 ```
