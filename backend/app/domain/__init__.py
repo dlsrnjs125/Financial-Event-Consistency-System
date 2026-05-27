@@ -3,6 +3,7 @@
 from app.domain.exceptions import (
     IdempotencyConflict,
     InvalidIdempotencyKey,
+    InvalidIdempotencyState,
     InvalidStateTransition,
     MissingIdempotencyKey,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "IdempotencyConflict",
     "IdempotencyDecision",
     "IdempotencyStatus",
+    "InvalidIdempotencyState",
     "InvalidIdempotencyKey",
     "InvalidStateTransition",
     "MissingIdempotencyKey",

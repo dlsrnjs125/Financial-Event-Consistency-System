@@ -304,6 +304,7 @@ FastAPI 기반 백엔드 애플리케이션의 기본 구조를 만든다.
 - PROCESSING 상태 재요청 202 처리
 - 완료 요청 재전송 시 기존 응답 반환
 - 완료/실패 저장 시 원 요청 hash와 응답 저장 대상 key 일치 여부 검증
+- 완료/실패 저장 시 `PROCESSING` 상태에서만 terminal 상태로 변경
 - 실패 응답 저장 시 운영 추적용 error_message 저장
 
 **검증 기준**
@@ -313,6 +314,8 @@ FastAPI 기반 백엔드 애플리케이션의 기본 구조를 만든다.
 - 처리 중 동일 요청은 202 Accepted를 반환한다.
 - 완료된 동일 요청은 거래를 다시 반영하지 않는다.
 - `expires_at`은 Phase 4에서 보관 정책 기준으로만 사용하고, 요청 시점 자동 무효화는 수행하지 않는다.
+- `COMPLETED -> FAILED`, `FAILED -> COMPLETED` 전환은 차단한다.
+- 만료 삭제는 `COMPLETED`, `FAILED` record만 대상으로 한다.
 
 **측정 지표**
 
@@ -331,6 +334,7 @@ FastAPI 기반 백엔드 애플리케이션의 기본 구조를 만든다.
 - [x] 처리 중 요청 202 처리
 - [x] 완료 응답 재사용 처리
 - [x] 완료/실패 저장 시 request_hash 검증
+- [x] 완료/실패 저장 시 terminal 상태 전환 guard 적용
 - [x] 실패 사유 error_message 저장
 - [x] Idempotency 테스트 작성
 

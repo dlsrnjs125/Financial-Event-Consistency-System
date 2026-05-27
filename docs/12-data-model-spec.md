@@ -113,6 +113,9 @@ Idempotency-Key 기반 요청 처리 결과를 저장한다.
 - `updated_at`은 PROCESSING, COMPLETED, FAILED 상태 변경 추적에 사용한다.
 - `locked_until`은 DB 기반 처리 중 상태 확인 또는 Redis Lock 장애 시 보조 판단 기준으로 사용할 수 있다.
 - Phase 4에서 `expires_at`은 보관 정책 기준이며, 요청 처리 중 자동 무효화 기준으로 사용하지 않는다.
+- `PROCESSING -> COMPLETED`, `PROCESSING -> FAILED`만 결과 저장 전이로 허용한다.
+- 이미 `COMPLETED` 또는 `FAILED`인 record에 같은 결과 저장이 다시 호출되면 기존 값을 유지한다.
+- 만료 삭제 대상은 `COMPLETED`, `FAILED` record로 제한한다. `PROCESSING` 만료 record는 후속 복구/실패 처리 정책 없이 삭제하지 않는다.
 
 ---
 

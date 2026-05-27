@@ -96,12 +96,17 @@ def test_mark_failed_updates_status_and_response(db_session):
 def test_list_and_delete_expired_records(db_session):
     repository = IdempotencyRecordRepository(db_session)
     now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
-    expired = repository.create_processing(
+    expired_completed = repository.create_processing(
         "idem-expired", "a" * 64, now - timedelta(seconds=1)
+    )
+    repository.mark_completed(expired_completed, 200, {"ok": True}, now)
+    expired_processing = repository.create_processing(
+        "idem-processing", "c" * 64, now - timedelta(seconds=1)
     )
     repository.create_processing("idem-active", "b" * 64, now + timedelta(days=1))
 
-    assert repository.list_expired(now) == [expired]
+    assert repository.list_expired(now) == [expired_completed]
     assert repository.delete_expired(now) == 1
     assert repository.get_by_key("idem-expired") is None
+    assert repository.get_by_key("idem-processing") == expired_processing
     assert repository.get_by_key("idem-active") is not None

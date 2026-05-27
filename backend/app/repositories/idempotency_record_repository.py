@@ -79,6 +79,14 @@ class IdempotencyRecordRepository:
             self.session.query(IdempotencyRecord)
             .filter(IdempotencyRecord.expires_at.is_not(None))
             .filter(IdempotencyRecord.expires_at <= now)
+            .filter(
+                IdempotencyRecord.status.in_(
+                    [
+                        IdempotencyStatus.COMPLETED.value,
+                        IdempotencyStatus.FAILED.value,
+                    ]
+                )
+            )
             .order_by(IdempotencyRecord.expires_at.asc(), IdempotencyRecord.id.asc())
             .all()
         )

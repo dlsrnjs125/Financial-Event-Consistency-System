@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.domain.exceptions import IdempotencyConflict
+from app.domain.exceptions import IdempotencyConflict, InvalidIdempotencyState
 from app.domain.idempotency import IdempotencyDecision, generate_request_hash
 from app.domain.idempotency_status import IdempotencyStatus
 from app.services.idempotency_service import IdempotencyService
@@ -186,6 +186,94 @@ def test_fail_sets_failed_status_and_response_data():
     assert record.error_message == "invalid amount"
     assert record.updated_at == now
     assert record.locked_until is None
+
+
+def test_completed_record_cannot_be_marked_failed():
+    now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
+    service, _ = make_service()
+    payload = {"amount": 1000}
+    service.check_or_start("idem-001", payload, now=now)
+    service.complete("idem-001", 200, {"ok": True}, payload=payload, now=now)
+
+    with pytest.raises(InvalidIdempotencyState):
+        service.fail(
+            "idem-001",
+            500,
+            {"error": "late failure"},
+            payload=payload,
+            now=now,
+        )
+
+
+def test_failed_record_cannot_be_marked_completed():
+    now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
+    service, _ = make_service()
+    payload = {"amount": 1000}
+    service.check_or_start("idem-001", payload, now=now)
+    service.fail("idem-001", 422, {"error": "invalid"}, payload=payload, now=now)
+
+    with pytest.raises(InvalidIdempotencyState):
+        service.complete("idem-001", 200, {"ok": True}, payload=payload, now=now)
+
+
+def test_completed_record_complete_is_noop_and_keeps_original_response():
+    now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
+    service, _ = make_service()
+    payload = {"amount": 1000}
+    service.check_or_start("idem-001", payload, now=now)
+    first = service.complete("idem-001", 200, {"ok": True}, payload=payload, now=now)
+
+    second = service.complete(
+        "idem-001",
+        201,
+        {"ok": "changed"},
+        payload=payload,
+        now=datetime(2026, 5, 28, 10, 1, tzinfo=UTC),
+    )
+
+    assert second is first
+    assert second.response_code == 200
+    assert second.response_body == {"ok": True}
+    assert second.completed_at == now
+
+
+def test_failed_record_fail_is_noop_and_keeps_original_response():
+    now = datetime(2026, 5, 28, 10, 0, tzinfo=UTC)
+    service, _ = make_service()
+    payload = {"amount": 1000}
+    service.check_or_start("idem-001", payload, now=now)
+    first = service.fail(
+        "idem-001",
+        422,
+        {"error": "invalid"},
+        error_message="invalid",
+        payload=payload,
+        now=now,
+    )
+
+    second = service.fail(
+        "idem-001",
+        500,
+        {"error": "changed"},
+        error_message="changed",
+        payload=payload,
+        now=datetime(2026, 5, 28, 10, 1, tzinfo=UTC),
+    )
+
+    assert second is first
+    assert second.response_code == 422
+    assert second.response_body == {"error": "invalid"}
+    assert second.error_message == "invalid"
+    assert second.updated_at == now
+
+
+def test_missing_record_error_does_not_include_full_idempotency_key():
+    service, _ = make_service()
+
+    with pytest.raises(KeyError) as exc_info:
+        service.complete("idem-secret-001", 200, {"ok": True})
+
+    assert "idem-secret-001" not in str(exc_info.value)
 
 
 def test_complete_rejects_different_payload_for_existing_key():

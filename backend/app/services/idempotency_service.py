@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app.domain.exceptions import IdempotencyConflict
+from app.domain.exceptions import IdempotencyConflict, InvalidIdempotencyState
 from app.domain.idempotency import (
     IdempotencyCheckResult,
     IdempotencyDecision,
@@ -84,6 +84,9 @@ class IdempotencyService:
     ) -> IdempotencyRecord:
         record = self._get_existing_record(idempotency_key)
         self._ensure_completion_matches_request(record, payload, request_hash)
+        if self._is_terminal_noop(record, IdempotencyStatus.COMPLETED):
+            return record
+        self._ensure_can_close_processing(record, IdempotencyStatus.COMPLETED)
         completed_at = now or datetime.now(UTC)
         return self.repository.mark_completed(
             record=record,
@@ -104,6 +107,9 @@ class IdempotencyService:
     ) -> IdempotencyRecord:
         record = self._get_existing_record(idempotency_key)
         self._ensure_completion_matches_request(record, payload, request_hash)
+        if self._is_terminal_noop(record, IdempotencyStatus.FAILED):
+            return record
+        self._ensure_can_close_processing(record, IdempotencyStatus.FAILED)
         failed_at = now or datetime.now(UTC)
         return self.repository.mark_failed(
             record=record,
@@ -133,8 +139,25 @@ class IdempotencyService:
         elif request_hash is not None:
             self._ensure_same_request_hash(record, request_hash)
 
+    def _is_terminal_noop(
+        self, record: IdempotencyRecord, attempted_status: IdempotencyStatus
+    ) -> bool:
+        return IdempotencyStatus(record.status) == attempted_status
+
+    def _ensure_can_close_processing(
+        self, record: IdempotencyRecord, attempted_status: IdempotencyStatus
+    ) -> None:
+        current_status = IdempotencyStatus(record.status)
+        if current_status == IdempotencyStatus.PROCESSING:
+            return
+
+        raise InvalidIdempotencyState(
+            current_status=current_status.value,
+            attempted_status=attempted_status.value,
+        )
+
     def _get_existing_record(self, idempotency_key: str) -> IdempotencyRecord:
         record = self.repository.get_by_key(idempotency_key)
         if record is None:
-            raise KeyError(f"IdempotencyRecord not found for key: {idempotency_key}")
+            raise KeyError("IdempotencyRecord not found")
         return record
