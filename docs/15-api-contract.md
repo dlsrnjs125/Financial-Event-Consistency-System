@@ -34,6 +34,21 @@
 }
 ```
 
+CANCEL 요청은 원거래 식별을 위해 `original_external_event_id`가 필수다.
+DEPOSIT/WITHDRAW 요청에서는 이 필드를 사용하지 않는다.
+
+```json
+{
+  "external_event_id": "BANK-A-20260527-CANCEL-0001",
+  "account_no": "1234567890",
+  "event_type": "CANCEL",
+  "amount": 10000,
+  "currency": "KRW",
+  "occurred_at": "2026-05-27T10:10:00+09:00",
+  "original_external_event_id": "BANK-A-20260527-0001"
+}
+```
+
 ### Success Response
 
 ```json
@@ -142,3 +157,7 @@
 API Contract는 외부 시스템의 재시도 전략과 서버의 정합성 처리 방식을 연결하는 기준이다.
 
 요청 Header, Body, 응답 구조, HTTP Status를 구현 전에 고정해두면 API 구현, 테스트, OpenAPI 문서가 같은 기준을 공유할 수 있다.
+
+Phase 5에서는 HMAC 관련 Header(`X-Client-Id`, `X-Timestamp`, `X-Signature`)를 아직 검증하지 않고, `Idempotency-Key`만 필수로 검증한다.
+Phase 5는 KRW 정수 원 단위를 기준으로 `amount`와 `balance_after`를 JSON number로 반환한다.
+거래 처리 중 도메인 실패가 발생하면 Idempotency 실패 응답 재사용을 위해 TransactionEventService가 표준 실패 body를 저장하고 해당 HTTP status로 반환한다.

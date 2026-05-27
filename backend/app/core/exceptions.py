@@ -5,6 +5,19 @@ import logging
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from app.domain.exceptions import (
+    AccountNotFound,
+    IdempotencyConflict,
+    InsufficientBalance,
+    InvalidIdempotencyKey,
+    InvalidIdempotencyState,
+    InvalidStateTransition,
+    InvalidTransactionEvent,
+    MissingIdempotencyKey,
+    OriginalTransactionNotFound,
+    TransactionAlreadyCancelled,
+    TransactionAlreadySettled,
+)
 from app.schemas.common import ErrorDetail, ErrorResponse
 
 logger = logging.getLogger(__name__)
@@ -53,6 +66,58 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
+async def domain_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = type(exc).__name__
+
+    if isinstance(exc, MissingIdempotencyKey):
+        status_code = status.HTTP_400_BAD_REQUEST
+        code = "MISSING_IDEMPOTENCY_KEY"
+    elif isinstance(exc, InvalidIdempotencyKey):
+        status_code = status.HTTP_400_BAD_REQUEST
+        code = "INVALID_IDEMPOTENCY_KEY"
+    elif isinstance(exc, (AccountNotFound, OriginalTransactionNotFound)):
+        status_code = status.HTTP_404_NOT_FOUND
+    elif isinstance(
+        exc,
+        (
+            IdempotencyConflict,
+            TransactionAlreadyCancelled,
+            TransactionAlreadySettled,
+        ),
+    ):
+        status_code = status.HTTP_409_CONFLICT
+    elif isinstance(
+        exc,
+        (
+            InsufficientBalance,
+            InvalidIdempotencyState,
+            InvalidStateTransition,
+            InvalidTransactionEvent,
+        ),
+    ):
+        status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    return JSONResponse(
+        status_code=status_code,
+        content=error_response(code, str(exc), _request_id(request)),
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
+    for exception_type in (
+        AccountNotFound,
+        IdempotencyConflict,
+        InsufficientBalance,
+        InvalidIdempotencyKey,
+        InvalidIdempotencyState,
+        InvalidStateTransition,
+        InvalidTransactionEvent,
+        MissingIdempotencyKey,
+        OriginalTransactionNotFound,
+        TransactionAlreadyCancelled,
+        TransactionAlreadySettled,
+    ):
+        app.add_exception_handler(exception_type, domain_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

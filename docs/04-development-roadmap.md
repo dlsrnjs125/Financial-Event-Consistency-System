@@ -2,12 +2,12 @@
 
 ## 현재 진행 상태
 
-- 현재 위치: **Phase 4 Idempotency 처리 기반 구현 완료**
+- 현재 위치: **Phase 5 Transaction과 Ledger 처리 구현 완료**
 - GitHub 초기 Push: **완료**
-- 다음 단계: **Phase 5 Transaction과 Ledger 처리 구현**
+- 다음 단계: **Phase 6 Redis Lock/Cache 적용**
 
-Phase 4 완료 범위에는 Idempotency-Key Header 검증 dependency, request_hash 생성, IdempotencyRecord Repository, Idempotency 판단 Service, 응답 재사용 기반, 충돌/처리중/완료/실패 판단 테스트가 포함된다.
-실제 거래 이벤트 수신 API, Account balance 변경, Ledger 생성, Redis Lock/Cache는 다음 Phase에서 순차적으로 구현한다.
+Phase 5 완료 범위에는 거래 이벤트 수신 API, TransactionEvent 저장, Account balance 변경, LedgerEntry 생성, Idempotency 완료 처리, DEPOSIT/WITHDRAW/CANCEL 처리, 동일 external_event_id 중복 방어 테스트가 포함된다.
+Redis Lock/Cache, HMAC 인증, 도메인 메트릭 본격화, k6 부하 테스트는 다음 Phase에서 순차적으로 구현한다.
 
 ## 개발 Phase
 
@@ -18,8 +18,8 @@ Phase 4 완료 범위에는 Idempotency-Key Header 검증 dependency, request_ha
 | 완료 | 2. 데이터 모델과 Migration 구현 | 정합성 기준 DB 모델 구현 | ORM 모델, Alembic Migration, Unique/Index | Migration 성공, 제약조건 테스트 통과 |
 | 완료 | 3. 상태 머신 구현 | 허용/금지 상태 전이 구현 | 상태 enum, 전이표, 이력 저장 | 상태 머신 Unit Test 통과 |
 | 완료 | 4. Idempotency 처리 구현 | 재시도/충돌 요청 구분 | request_hash, IdempotencyRecord, 응답 재사용 | 같은 Key/Body 재요청 기존 응답 반환 |
-| 다음 | 5. Transaction과 Ledger 처리 구현 | 거래 반영 원자성 보장 | TransactionEventService, LedgerService, Row Lock | 동일 이벤트 100회 요청 시 Ledger 1건 |
-| 대기 | 6. Redis Lock/Cache 적용 | 중복 요청 DB 부하 완화 | Redis Lock, Idempotency Cache, fallback | Redis Down 상태에서도 정합성 유지 |
+| 완료 | 5. Transaction과 Ledger 처리 구현 | 거래 반영 원자성 보장 | TransactionEventService, LedgerService, Row Lock | 동일 이벤트 재요청 시 Ledger 1건 |
+| 다음 | 6. Redis Lock/Cache 적용 | 중복 요청 DB 부하 완화 | Redis Lock, Idempotency Cache, fallback | Redis Down 상태에서도 정합성 유지 |
 | 대기 | 7. 보안 처리 구현 | 외부 시스템 인증/변조 검증 | HMAC, Timestamp, Secret 관리, 로그 마스킹 | 잘못된 Signature/Timestamp 차단 |
 | 대기 | 8. Metrics, Logging, Observability 구현 | 도메인 관측성 확보 | Prometheus metrics, trace_id, Grafana | 주요 도메인 메트릭 노출 |
 | 대기 | 9. k6 부하 테스트와 성능 비교 | 설계 선택 수치 검증 | k6 시나리오, 실험 기록, 비교표 | p95/p99/error/duplicate rate 기록 |
@@ -370,15 +370,21 @@ PostgreSQL 고유 동작(JSONB, timestamptz, concurrent unique conflict)은 Phas
 - DEPOSIT 처리
 - WITHDRAW 처리
 - CANCEL 보정 거래 처리
+- `POST /api/v1/transaction-events` 구현
+- `GET /api/v1/transaction-events/{event_id}` 구현
+- `GET /api/v1/accounts/{account_no}/balance` 구현
 
 **검증 기준**
 
 - 동일 `external_event_id`는 한 번만 저장된다.
 - 동일 이벤트로 `ledger_entries`가 두 번 생성되지 않는다.
+- 동일 `external_event_id`가 다른 거래 내용으로 재요청되면 duplicate가 아니라 도메인 실패로 처리한다.
 - DEPOSIT은 balance를 증가시킨다.
 - WITHDRAW는 balance를 감소시킨다.
 - CANCEL은 원거래 반대 방향 LedgerEntry를 생성한다.
-- Transaction 실패 시 부분 반영이 없어야 한다.
+- Transaction 실패 시 LedgerEntry와 Account balance는 반영하지 않고, 생성된 TransactionEvent는 `FAILED` 상태로 마감한다.
+- 동일 Idempotency-Key와 같은 Body는 저장된 응답을 반환한다.
+- 동일 Idempotency-Key와 다른 Body는 409로 매핑 가능하다.
 
 **측정 지표**
 
@@ -390,15 +396,30 @@ PostgreSQL 고유 동작(JSONB, timestamptz, concurrent unique conflict)은 Phas
 
 **완료 체크리스트**
 
-- [ ] TransactionEventService 작성
-- [ ] LedgerService 작성
-- [ ] Account row lock 적용
-- [ ] DEPOSIT 처리 구현
-- [ ] WITHDRAW 처리 구현
-- [ ] CANCEL 처리 구현
-- [ ] Unique Constraint 충돌 처리
-- [ ] Transaction rollback 테스트 작성
-- [ ] 동일 이벤트 100회 요청 테스트 작성
+- [x] TransactionEventService 작성
+- [x] LedgerService 작성
+- [x] Account row lock 적용
+- [x] DEPOSIT 처리 구현
+- [x] WITHDRAW 처리 구현
+- [x] CANCEL 처리 구현
+- [x] Unique Constraint 충돌 처리 기반 유지
+- [x] Transaction 처리 integration test 작성
+- [x] 동일 이벤트 순차 재요청 Ledger 1건 테스트 작성
+- [x] 동일 external_event_id 다른 Body 방어 테스트 작성
+- [x] 실패 이벤트 FAILED 상태 마감 테스트 작성
+- [x] 거래 이벤트 API 테스트 작성
+
+**테스트 한계**
+
+현재 Phase 5 integration test는 빠른 회귀 검증을 위해 SQLite in-memory 기반으로 수행한다.
+SQLite에서는 `SELECT FOR UPDATE`와 concurrent unique conflict 검증이 제한되므로, 동일 이벤트 100회 동시 요청과 PostgreSQL row lock 검증은 Phase 6 이후 Docker Compose 기반 integration test에서 보강한다.
+
+**구현 정책**
+
+거래 처리 중 발생한 도메인 실패는 Idempotency failed response 재사용을 위해 TransactionEventService에서 표준 실패 body로 변환한다.
+요청 검증, Header 누락, 조회성 API 오류는 공통 exception handler가 HTTP 응답으로 변환한다.
+Phase 5는 KRW 정수 원 단위를 기준으로 `amount`와 `balance`를 `bigint`/`int`로 관리한다.
+소수 통화 또는 외화 소수점 처리는 후속 데이터 모델 확장에서 검토한다.
 
 **연결 문서**
 

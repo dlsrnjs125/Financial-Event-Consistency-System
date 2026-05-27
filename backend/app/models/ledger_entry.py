@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
     func,
@@ -26,7 +27,11 @@ class LedgerEntry(Base):
         Index("ix_ledger_entries_created_at", "created_at"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     transaction_event_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("transaction_events.id"), nullable=False
     )

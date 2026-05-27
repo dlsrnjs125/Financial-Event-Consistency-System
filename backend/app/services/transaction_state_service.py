@@ -17,6 +17,7 @@ class TransactionStateService:
     """
 
     def __init__(self, session: Session) -> None:
+        self.session = session
         self.history_repository = EventStateHistoryRepository(session)
 
     def change_status(
@@ -39,4 +40,5 @@ class TransactionStateService:
             reason=reason,
         )
         transaction_event.status = normalized_next_status.value
+        self.session.flush()
         return history
