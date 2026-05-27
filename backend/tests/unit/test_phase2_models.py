@@ -4,6 +4,9 @@ from sqlalchemy import BigInteger, String
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.base import Base
+from app.models import import_all_models
+
+import_all_models()
 
 
 def table(name):
