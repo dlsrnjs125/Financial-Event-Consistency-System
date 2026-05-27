@@ -80,35 +80,45 @@ cd Financial-Event-Consistency-System
 # 2. 환경 설정
 cp .env.example .env
 
-# 3. 서비스 시작
-docker-compose up -d
+# 3. 로컬 환경 확인
+make local-check
 
-# 4. 데이터베이스 마이그레이션
-docker-compose exec api alembic upgrade head
+# 4. FastAPI 개발 서버 실행
+make dev
 
 # 5. API 확인
-curl http://localhost:8000/health
+make health
 ```
 
-### Makefile 사용
+Docker Compose 기반 전체 로컬 스택은 다음 명령으로 실행한다.
 
 ```bash
-make help
-make dev
-make test
-make docker-up
-make docker-down
+make local-bg
+make local-status
+make local-logs
+make local-stop
+```
+
+### Makefile 주요 명령
+
+```bash
+make help          # 사용 가능한 명령 확인
+make local-check   # 로컬 개발 환경 확인
+make dev           # FastAPI reload 서버 실행
+make check         # format-check, lint, test 실행
+make local-bg      # Docker Compose 스택 백그라운드 실행
+make local-stop    # Docker Compose 스택 중지
 ```
 
 ### 주요 엔드포인트
 
 ```
-POST /api/v1/transaction-events        거래 이벤트 수신
-GET  /api/v1/transaction-events/{id}   이벤트 상태 조회
-GET  /api/v1/accounts/{id}/balance     계좌 잔액 조회
-GET  /health                           서버 상태
-GET  /metrics                          Prometheus 메트릭
+GET /health        서버 상태
+GET /ready         PostgreSQL, Redis readiness 확인
+GET /metrics       Prometheus 메트릭
 ```
+
+거래 이벤트 수신, 계좌 잔액 조회, Idempotency, Ledger 처리는 후속 Phase에서 구현한다.
 
 ---
 
@@ -175,17 +185,22 @@ GET  /metrics                          Prometheus 메트릭
 
 ### Unit Test
 ```bash
-pytest backend/tests/unit -v
+make test-unit
 ```
 
 ### Integration Test
 ```bash
-pytest backend/tests/integration -v
+make test-integration
 ```
 
 ### Consistency Test (필수!)
 ```bash
-pytest backend/tests/consistency -v
+make test-consistency
+```
+
+### 전체 검증
+```bash
+make check
 ```
 
 ### 부하 테스트 (k6)
@@ -204,7 +219,7 @@ docker-compose unpause redis
 
 # DB Connection Pool 고갈
 export DB_POOL_SIZE=5
-docker-compose restart api
+docker-compose restart api-blue
 k6 run tests/k6/peak-load.js
 ```
 
@@ -252,21 +267,34 @@ Password: admin
 ```
 backend/
 ├── app/
-│   ├── main.py                    # FastAPI 애플리케이션
-│   ├── models.py                  # ORM 모델
-│   ├── schemas.py                 # Pydantic 스키마
+│   ├── main.py                    # FastAPI 애플리케이션 조립
+│   ├── api/
+│   │   ├── router.py
+│   │   └── v1/
+│   │       ├── router.py
+│   │       └── health.py           # /health, /ready
+│   ├── core/
+│   │   ├── config.py               # 환경변수 설정
+│   │   ├── exceptions.py           # 공통 예외 응답
+│   │   └── logging.py              # 구조화 로그
+│   ├── db/
+│   │   ├── base.py                 # SQLAlchemy Declarative Base
+│   │   └── session.py              # DB session, readiness check
+│   ├── redis/
+│   │   └── client.py               # Redis client, readiness check
+│   ├── metrics/
+│   │   └── prometheus.py           # /metrics, HTTP metrics
+│   ├── schemas/
+│   │   └── common.py               # 공통 응답 스키마
 │   ├── services/
-│   │   ├── transaction_service.py  # 거래 처리 로직
-│   │   ├── idempotency_service.py  # 멱등성 관리
-│   │   └── state_machine.py        # 상태 머신
-│   └── api/
-│       └── routes/
-│           └── transaction_events.py
+│   ├── repositories/
+│   └── domain/
 ├── tests/
 │   ├── unit/                      # 단위 테스트
 │   ├── integration/               # 통합 테스트
 │   └── consistency/               # 정합성 테스트
-└── migrations/                    # Alembic DB 마이그레이션
+├── Dockerfile
+└── requirements.txt
 ```
 
 ### 새로운 기능 추가 체크리스트
@@ -287,7 +315,7 @@ backend/
 ### Redis 장애
 ```bash
 # 상태 확인
-docker-compose ps redis
+make local-status
 
 # 재시작
 docker-compose restart redis
