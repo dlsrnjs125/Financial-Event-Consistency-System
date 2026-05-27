@@ -304,6 +304,10 @@ docker-compose exec nginx bash -c "sed -i 's/api-blue:8000/api-green:8000/g' /et
 - [배포 전략](./docs/09-deployment-strategy.md)
 - [CANCEL 이벤트 정책](./docs/10-cancel-event-policy.md)
 - [API 응답/재시도 정책](./docs/11-api-response-policy.md)
+- [데이터 모델 명세](./docs/12-data-model-spec.md)
+- [상태 전이표](./docs/13-state-transition-table.md)
+- [테스트 케이스 매트릭스](./docs/14-test-case-matrix.md)
+- [API Contract](./docs/15-api-contract.md)
 
 ---
 

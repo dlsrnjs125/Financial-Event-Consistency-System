@@ -60,4 +60,8 @@
 | 배포 전략 | 완료 | [09-deployment-strategy.md](09-deployment-strategy.md) |
 | CANCEL 이벤트 정책 | 완료 | [10-cancel-event-policy.md](10-cancel-event-policy.md) |
 | API 응답/재시도 정책 | 완료 | [11-api-response-policy.md](11-api-response-policy.md) |
+| 데이터 모델 명세 | 완료 | [12-data-model-spec.md](12-data-model-spec.md) |
+| 상태 전이표 | 완료 | [13-state-transition-table.md](13-state-transition-table.md) |
+| 테스트 케이스 매트릭스 | 완료 | [14-test-case-matrix.md](14-test-case-matrix.md) |
+| API Contract | 완료 | [15-api-contract.md](15-api-contract.md) |
 | README 초안 목차 | 완료 | [../README.md](../README.md) |

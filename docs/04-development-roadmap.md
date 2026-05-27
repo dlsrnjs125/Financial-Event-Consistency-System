@@ -32,6 +32,7 @@
 | ADR 문서 작성 | 완료 | 주요 기술 선택, 대안, trade-off, 보완 전략 정리 |
 | 보안/관측성/장애/배포 설계 문서 작성 | 완료 | Security, Observability, Failure Scenario, Deployment Strategy 정리 |
 | 도메인 보완 정책 문서 작성 | 완료 | CANCEL 정책, API 응답/재시도 정책 정리 |
+| 구현 기준 문서 작성 | 완료 | 데이터 모델 명세, 상태 전이표, 테스트 매트릭스, API Contract 정리 |
 | README 초안 작성 | 완료 | 프로젝트 목표, 실행 방법, 검증 기준 정리 |
 | Docker Compose 기반 인프라 골격 | 완료 | PostgreSQL, Redis, API, Nginx, Prometheus, Grafana 구성 |
 | FastAPI 기본 엔트리포인트 | 완료 | Health, Ready, Metrics, placeholder API 구성 |
@@ -79,3 +80,4 @@
 - Phase 2에서는 `backend/app` 하위에 ORM 모델, 상태 머신, DB 세션, 요청/응답 스키마를 분리한다.
 - Phase 2 완료 후 상태 머신 Unit Test를 실제 앱 코드 기준으로 통과시키고, 이 문서의 Phase 2 상태를 `완료`로 변경한다.
 - 설계 결정은 [05-architecture-decision-record.md](05-architecture-decision-record.md)에 ADR 형식으로 기록하고, 새로운 기술 선택이 생길 때 같은 구조로 추가한다.
+- 구현 단계에서는 [12-data-model-spec.md](12-data-model-spec.md), [13-state-transition-table.md](13-state-transition-table.md), [14-test-case-matrix.md](14-test-case-matrix.md), [15-api-contract.md](15-api-contract.md)를 기준으로 모델, 상태 머신, 테스트, API 스키마를 작성한다.

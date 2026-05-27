@@ -472,3 +472,7 @@ actual_balance = account.balance
 - **배포 전략** → [docs/09-deployment-strategy.md](09-deployment-strategy.md)
 - **CANCEL 정책** → [docs/10-cancel-event-policy.md](10-cancel-event-policy.md)
 - **API 응답 정책** → [docs/11-api-response-policy.md](11-api-response-policy.md)
+- **데이터 모델 명세** → [docs/12-data-model-spec.md](12-data-model-spec.md)
+- **상태 전이표** → [docs/13-state-transition-table.md](13-state-transition-table.md)
+- **테스트 케이스 매트릭스** → [docs/14-test-case-matrix.md](14-test-case-matrix.md)
+- **API Contract** → [docs/15-api-contract.md](15-api-contract.md)
