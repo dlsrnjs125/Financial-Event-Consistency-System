@@ -425,9 +425,50 @@ SELECT COUNT(*) FROM transaction_events WHERE external_event_id = 'TEST-001'
 
 ---
 
+## 보완 도메인 정책
+
+### CANCEL 이벤트 정책 요약
+
+CANCEL 이벤트는 원거래를 삭제하지 않는다.
+
+거래 취소는 원거래의 반대 방향 LedgerEntry를 생성하고, 원거래 상태를 `CANCELLED`로 변경하는 보정 거래로 처리한다.
+
+상세 정책은 [10-cancel-event-policy.md](10-cancel-event-policy.md)에 정리한다.
+
+### Balance와 Ledger 신뢰 기준
+
+`account.balance`는 빠른 조회를 위한 현재 상태이고, `ledger_entries`는 잔액 변경의 근거 데이터다.
+
+따라서 실시간 조회는 `account.balance`를 사용하되, 정합성 검증과 감사, 장애 분석은 Ledger 기준으로 수행한다.
+
+### Reconciliation 전략
+
+Reconciliation은 `account.balance`와 `ledger_entries` 누적 합계를 비교한다.
+
+```text
+expected_balance = initial_balance + sum(ledger_entries.amount)
+actual_balance = account.balance
+```
+
+두 값이 다르면 불일치로 판단하고 다음 조치를 수행한다.
+
+1. `financial_reconciliation_failed_total` 메트릭 증가
+2. 구조화 로그 기록
+3. 운영자 확인 대상 이벤트로 분리
+4. Phase 1에서는 자동 보정하지 않음
+
+---
+
 ## 문서 내용 정리
 
 - **문제 정의** → [docs/01-problem-definition.md](01-problem-definition.md)
 - **도메인 범위** → [docs/02-domain-scope.md](02-domain-scope.md)
 - **정합성 규칙** ✅ 현재 문서
 - **개발 로드맵** → [docs/04-development-roadmap.md](04-development-roadmap.md)
+- **ADR** → [docs/05-architecture-decision-record.md](05-architecture-decision-record.md)
+- **보안 설계** → [docs/06-security-design.md](06-security-design.md)
+- **관측성 설계** → [docs/07-observability-design.md](07-observability-design.md)
+- **장애 시나리오** → [docs/08-failure-scenarios.md](08-failure-scenarios.md)
+- **배포 전략** → [docs/09-deployment-strategy.md](09-deployment-strategy.md)
+- **CANCEL 정책** → [docs/10-cancel-event-policy.md](10-cancel-event-policy.md)
+- **API 응답 정책** → [docs/11-api-response-policy.md](11-api-response-policy.md)

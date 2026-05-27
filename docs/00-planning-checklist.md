@@ -54,4 +54,10 @@
 | 개발 Phase 정리 | 완료 | [04-development-roadmap.md](04-development-roadmap.md) |
 | 블로그 12편 목적/산출물 매핑 | 완료 | [04-development-roadmap.md](04-development-roadmap.md) |
 | Architecture Decision Record | 완료 | [05-architecture-decision-record.md](05-architecture-decision-record.md) |
+| 보안 설계 | 완료 | [06-security-design.md](06-security-design.md) |
+| 관측성 설계 | 완료 | [07-observability-design.md](07-observability-design.md) |
+| 장애 시나리오 | 완료 | [08-failure-scenarios.md](08-failure-scenarios.md) |
+| 배포 전략 | 완료 | [09-deployment-strategy.md](09-deployment-strategy.md) |
+| CANCEL 이벤트 정책 | 완료 | [10-cancel-event-policy.md](10-cancel-event-policy.md) |
+| API 응답/재시도 정책 | 완료 | [11-api-response-policy.md](11-api-response-policy.md) |
 | README 초안 목차 | 완료 | [../README.md](../README.md) |

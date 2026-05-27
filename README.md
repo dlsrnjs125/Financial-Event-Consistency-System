@@ -297,6 +297,13 @@ docker-compose exec nginx bash -c "sed -i 's/api-blue:8000/api-green:8000/g' /et
 - [도메인 범위](./docs/02-domain-scope.md)
 - [정합성 규칙](./docs/03-consistency-rules.md)
 - [개발 로드맵과 블로그 산출물 매핑](./docs/04-development-roadmap.md)
+- [Architecture Decision Record](./docs/05-architecture-decision-record.md)
+- [보안 설계](./docs/06-security-design.md)
+- [관측성 설계](./docs/07-observability-design.md)
+- [장애 시나리오](./docs/08-failure-scenarios.md)
+- [배포 전략](./docs/09-deployment-strategy.md)
+- [CANCEL 이벤트 정책](./docs/10-cancel-event-policy.md)
+- [API 응답/재시도 정책](./docs/11-api-response-policy.md)
 
 ---
 

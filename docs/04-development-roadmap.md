@@ -30,6 +30,8 @@
 |------|------|------|
 | 기획 문서 작성 | 완료 | 문제 정의, 도메인 범위, 정합성 규칙 정리 |
 | ADR 문서 작성 | 완료 | 주요 기술 선택, 대안, trade-off, 보완 전략 정리 |
+| 보안/관측성/장애/배포 설계 문서 작성 | 완료 | Security, Observability, Failure Scenario, Deployment Strategy 정리 |
+| 도메인 보완 정책 문서 작성 | 완료 | CANCEL 정책, API 응답/재시도 정책 정리 |
 | README 초안 작성 | 완료 | 프로젝트 목표, 실행 방법, 검증 기준 정리 |
 | Docker Compose 기반 인프라 골격 | 완료 | PostgreSQL, Redis, API, Nginx, Prometheus, Grafana 구성 |
 | FastAPI 기본 엔트리포인트 | 완료 | Health, Ready, Metrics, placeholder API 구성 |
