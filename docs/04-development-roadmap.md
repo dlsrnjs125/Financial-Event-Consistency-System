@@ -1,19 +1,40 @@
 # 개발 로드맵과 블로그 산출물 매핑
 
+## 현재 진행 상태
+
+- 현재 위치: **Phase 1 기획/설계 및 초기 세팅 완료**
+- GitHub 초기 Push: **완료**
+- 다음 단계: **Phase 2 도메인 모델링 구현**
+
+초기 세팅에는 문서 구조, README, Docker Compose, FastAPI 기본 엔트리포인트, 마이그레이션 초안, 테스트/부하 테스트/배포 스크립트 골격 구성이 포함된다.
+실제 거래 이벤트 처리 로직, ORM 모델 분리, DB 연동 서비스, Redis Lock/Cache는 다음 Phase에서 순차적으로 구현한다.
+
 ## 개발 Phase
 
-| Phase | 목표 | 주요 산출물 | 완료 기준 |
-|-------|------|-------------|-----------|
-| 1. 기획/설계 | 문제와 범위 확정 | 문제 정의, 도메인 범위, 정합성 규칙, ERD, 상태 머신 초안 | 기획 체크리스트의 모든 질문에 답변 가능 |
-| 2. 도메인 모델링 | 핵심 엔티티와 상태 전이 구현 | ORM 모델, 상태 머신, 기본 마이그레이션 | 상태 머신 Unit Test 통과 |
-| 3. 기본 API | 거래 이벤트 수신 API 구현 | FastAPI 라우트, 요청/응답 스키마, Health/Ready API | API smoke test 통과 |
-| 4. 정합성 핵심 로직 | 중복 이벤트와 멱등성 방어 | IdempotencyRecord, request_hash, DB transaction, unique constraint | 동일 이벤트 100회 동시 요청 시 1회만 반영 |
-| 5. Redis 적용 | Lock/Cache로 중복 요청 완화 | Redis lock, response cache, DB fallback | Redis Down 상태에서도 최종 정합성 유지 |
-| 6. 테스트 자동화 | 정합성 회귀 방지 | Unit/Integration/Consistency Test | CI에서 정합성 테스트 실패 시 배포 차단 |
-| 7. 부하/장애 재현 | 운영 리스크 검증 | k6 시나리오, Redis Down, DB Pool 고갈, API 재시작 실험 | 장애 상황별 결과 기록 |
-| 8. 모니터링 | 운영 관측 가능성 확보 | Prometheus metrics, Grafana dashboard, alert rule | 중복 이벤트, 에러율, 지연, DB/Redis 상태 관측 |
-| 9. 배포/롤백 | 안전한 릴리스 흐름 구성 | Docker Compose, Nginx Blue-Green, deploy/rollback script | Green 검증 후 전환, 문제 시 Blue 복귀 |
-| 10. 문서/회고 | 포트폴리오 완성 | README, 블로그 12편, 회고 | 산출물 링크와 실험 결과 정리 |
+| 상태 | Phase | 목표 | 주요 산출물 | 완료 기준 |
+|------|-------|------|-------------|-----------|
+| 완료 | 1. 기획/설계 | 문제와 범위 확정 | 문제 정의, 도메인 범위, 정합성 규칙, ERD, 상태 머신 초안 | 기획 체크리스트의 모든 질문에 답변 가능 |
+| 다음 | 2. 도메인 모델링 | 핵심 엔티티와 상태 전이 구현 | ORM 모델, 상태 머신, 기본 마이그레이션 | 상태 머신 Unit Test 통과 |
+| 대기 | 3. 기본 API | 거래 이벤트 수신 API 구현 | FastAPI 라우트, 요청/응답 스키마, Health/Ready API | API smoke test 통과 |
+| 대기 | 4. 정합성 핵심 로직 | 중복 이벤트와 멱등성 방어 | IdempotencyRecord, request_hash, DB transaction, unique constraint | 동일 이벤트 100회 동시 요청 시 1회만 반영 |
+| 대기 | 5. Redis 적용 | Lock/Cache로 중복 요청 완화 | Redis lock, response cache, DB fallback | Redis Down 상태에서도 최종 정합성 유지 |
+| 대기 | 6. 테스트 자동화 | 정합성 회귀 방지 | Unit/Integration/Consistency Test | CI에서 정합성 테스트 실패 시 배포 차단 |
+| 대기 | 7. 부하/장애 재현 | 운영 리스크 검증 | k6 시나리오, Redis Down, DB Pool 고갈, API 재시작 실험 | 장애 상황별 결과 기록 |
+| 대기 | 8. 모니터링 | 운영 관측 가능성 확보 | Prometheus metrics, Grafana dashboard, alert rule | 중복 이벤트, 에러율, 지연, DB/Redis 상태 관측 |
+| 대기 | 9. 배포/롤백 | 안전한 릴리스 흐름 구성 | Docker Compose, Nginx Blue-Green, deploy/rollback script | Green 검증 후 전환, 문제 시 Blue 복귀 |
+| 대기 | 10. 문서/회고 | 포트폴리오 완성 | README, 블로그 12편, 회고 | 산출물 링크와 실험 결과 정리 |
+
+## 완료 체크 기록
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| 기획 문서 작성 | 완료 | 문제 정의, 도메인 범위, 정합성 규칙 정리 |
+| README 초안 작성 | 완료 | 프로젝트 목표, 실행 방법, 검증 기준 정리 |
+| Docker Compose 기반 인프라 골격 | 완료 | PostgreSQL, Redis, API, Nginx, Prometheus, Grafana 구성 |
+| FastAPI 기본 엔트리포인트 | 완료 | Health, Ready, Metrics, placeholder API 구성 |
+| 테스트/부하 테스트 골격 | 완료 | Unit Test, Consistency Test skeleton, k6 시나리오 초안 |
+| 배포/롤백 스크립트 골격 | 완료 | Blue-Green 전환과 rollback 스크립트 초안 |
+| GitHub 초기 Push | 완료 | `main` 브랜치가 원격 저장소 `origin/main`을 추적 |
 
 ## 블로그 산출물 매핑
 
@@ -50,6 +71,7 @@
 
 ## 남은 구현 메모
 
-- 현재 백엔드는 기획/초기 세팅 단계이므로 거래 이벤트 API의 실제 DB 처리 로직은 이후 Phase에서 구현한다.
+- 현재 백엔드는 기획/초기 세팅 완료 상태이므로 거래 이벤트 API의 실제 DB 처리 로직은 Phase 2 이후 구현한다.
 - Consistency Test 파일은 테스트 시나리오 골격을 먼저 잡은 상태이며, DB 연동 구현 후 skip을 제거한다.
-- Alembic 마이그레이션 디렉터리는 DB 모델 구현 Phase에서 추가한다.
+- Phase 2에서는 `backend/app` 하위에 ORM 모델, 상태 머신, DB 세션, 요청/응답 스키마를 분리한다.
+- Phase 2 완료 후 상태 머신 Unit Test를 실제 앱 코드 기준으로 통과시키고, 이 문서의 Phase 2 상태를 `완료`로 변경한다.
