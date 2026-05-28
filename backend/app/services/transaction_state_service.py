@@ -6,6 +6,7 @@ from app.domain.transaction_state_machine import TransactionStateMachine
 from app.domain.transaction_status import TransactionStatus
 from app.models.event_state_history import EventStateHistory
 from app.models.transaction_event import TransactionEvent
+from app.observability.metrics import record_state_transition
 from app.repositories.event_state_history_repository import EventStateHistoryRepository
 
 
@@ -29,9 +30,17 @@ class TransactionStateService:
         current_status = TransactionStatus(transaction_event.status)
         normalized_next_status = TransactionStatus(next_status)
 
-        TransactionStateMachine.validate_transition(
-            current_status, normalized_next_status
-        )
+        try:
+            TransactionStateMachine.validate_transition(
+                current_status, normalized_next_status
+            )
+        except Exception:
+            record_state_transition(
+                current_status.value,
+                normalized_next_status.value,
+                "rejected",
+            )
+            raise
 
         history = self.history_repository.add(
             transaction_event_id=transaction_event.id,
@@ -41,4 +50,9 @@ class TransactionStateService:
         )
         transaction_event.status = normalized_next_status.value
         self.session.flush()
+        record_state_transition(
+            current_status.value,
+            normalized_next_status.value,
+            "allowed",
+        )
         return history

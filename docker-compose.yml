@@ -1,15 +1,13 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: financial-postgres
+    command: postgres -c shared_buffers=256MB -c max_connections=200
     environment:
       POSTGRES_DB: financial_events
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
     ports:
       - "5432:5432"
     volumes:
@@ -128,7 +126,7 @@ services:
       - "9090:9090"
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./infra/grafana/alerts/financial-event-alert-rules.yml:/etc/prometheus/financial-event-alert-rules.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'

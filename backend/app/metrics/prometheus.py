@@ -12,6 +12,7 @@ from prometheus_client import (
 )
 
 from app.core.config import settings
+from app.observability.metrics import record_http_request
 
 router = APIRouter(tags=["Monitoring"])
 
@@ -41,25 +42,36 @@ def metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-async def metrics_middleware(request: Request, call_next):
-    start = perf_counter()
-    response = await call_next(request)
-    duration = perf_counter() - start
+async def metrics_middleware(request: Request, call_next, start: float | None = None):
+    start = start or perf_counter()
+    status_code = 500
+    response = None
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        duration = perf_counter() - start
+        endpoint = (
+            request.scope.get("route").path
+            if request.scope.get("route")
+            else request.url.path
+        )
+        http_requests_total.labels(
+            method=request.method,
+            endpoint=endpoint,
+            status=str(status_code),
+        ).inc()
+        http_request_duration_seconds.labels(
+            method=request.method,
+            endpoint=endpoint,
+        ).observe(duration)
+        record_http_request(
+            method=request.method,
+            route=endpoint,
+            status_code=status_code,
+            duration_seconds=duration,
+        )
 
-    endpoint = (
-        request.scope.get("route").path
-        if request.scope.get("route")
-        else request.url.path
-    )
-    http_requests_total.labels(
-        method=request.method,
-        endpoint=endpoint,
-        status=str(response.status_code),
-    ).inc()
-    http_request_duration_seconds.labels(
-        method=request.method,
-        endpoint=endpoint,
-    ).observe(duration)
-
-    response.headers["X-Process-Time"] = f"{duration:.6f}"
-    return response
+        if response is not None:
+            response.headers["X-Process-Time"] = f"{duration:.6f}"

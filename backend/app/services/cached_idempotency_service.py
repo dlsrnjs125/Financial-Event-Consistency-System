@@ -10,6 +10,7 @@ from app.domain.idempotency import (
     generate_request_hash,
 )
 from app.models.idempotency_record import IdempotencyRecord
+from app.observability.metrics import record_idempotency_decision
 from app.services.idempotency_service import IdempotencyService
 
 
@@ -31,6 +32,7 @@ class CachedIdempotencyService:
         request_hash = generate_request_hash(payload)
         cached = self.response_cache.get(idempotency_key)
         if cached is not None and cached.request_hash == request_hash:
+            record_idempotency_decision(IdempotencyDecision.REPLAY_COMPLETED, "cache")
             return IdempotencyCheckResult(
                 decision=IdempotencyDecision.REPLAY_COMPLETED,
                 record_id=None,

@@ -8,6 +8,12 @@ from enum import Enum
 from typing import Any
 
 from app.cache.redis_keys import idempotency_cache_key
+from app.observability.metrics import (
+    record_idempotency_cache_hit,
+    record_idempotency_cache_miss,
+    record_idempotency_cache_set_failure,
+    record_redis_operation,
+)
 
 
 @dataclass(frozen=True)
@@ -26,18 +32,22 @@ class IdempotencyResponseCache:
         try:
             cached = self.redis_client.get(idempotency_cache_key(idempotency_key))
         except Exception:
+            record_redis_operation("cache_get", "unavailable")
             return None
         if cached is None:
+            record_idempotency_cache_miss()
             return None
 
         try:
             data = json.loads(cached)
+            record_idempotency_cache_hit()
             return CachedIdempotencyResponse(
                 request_hash=data["request_hash"],
                 response_code=int(data["response_code"]),
                 response_body=data.get("response_body"),
             )
         except (TypeError, ValueError, KeyError):
+            record_idempotency_cache_miss()
             return None
 
     def set_completed(
@@ -64,14 +74,17 @@ class IdempotencyResponseCache:
                     default=_json_default,
                 ),
             )
+            record_redis_operation("cache_set", "success")
         except Exception:
-            # TODO(Phase 8): emit cache-set failure metric/log with masked key.
+            record_idempotency_cache_set_failure()
             return
 
     def delete(self, idempotency_key: str) -> None:
         try:
             self.redis_client.delete(idempotency_cache_key(idempotency_key))
+            record_redis_operation("cache_delete", "success")
         except Exception:
+            record_redis_operation("cache_delete", "unavailable")
             return
 
 

@@ -219,6 +219,7 @@ Backend responsibilities:
 - Do not log a full `idempotency_key`.
 - Do not log a full `account_no`.
 - Mask personal or identifying values.
+- Domain logs should go through the observability `log_event()` helper so masking and trace context are applied consistently.
 - Generate `request_hash` using canonical JSON.
 - JSON bodies with different key order but the same meaning must produce the same hash.
 - Validate status transitions through `TransactionStateMachine`.

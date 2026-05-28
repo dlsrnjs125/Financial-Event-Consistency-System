@@ -1,0 +1,133 @@
+{
+  "title": "Financial Event Consistency System",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["financial-events", "phase-8", "observability"],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {
+          "text": "Prometheus",
+          "value": "Prometheus"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "HTTP Request Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(financial_http_requests_total[5m])) by (route, status_class)",
+          "legendFormat": "{{route}} {{status_class}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP p95/p99 Latency",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(financial_http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "legendFormat": "p95 {{route}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(financial_http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "legendFormat": "p99 {{route}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Transaction Events by Result",
+      "targets": [
+        {
+          "expr": "sum(rate(financial_transaction_events_total[5m])) by (event_type, result)",
+          "legendFormat": "{{event_type}} {{result}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Idempotency Decisions",
+      "targets": [
+        {
+          "expr": "sum(rate(financial_idempotency_decisions_total[5m])) by (decision, source)",
+          "legendFormat": "{{decision}} {{source}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Redis Cache Hit/Miss",
+      "targets": [
+        {
+          "expr": "rate(financial_idempotency_cache_hit_total[5m])",
+          "legendFormat": "hit"
+        },
+        {
+          "expr": "rate(financial_idempotency_cache_miss_total[5m])",
+          "legendFormat": "miss"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Redis Lock Acquired/Rejected",
+      "targets": [
+        {
+          "expr": "rate(financial_redis_lock_acquired_total[5m])",
+          "legendFormat": "acquired"
+        },
+        {
+          "expr": "rate(financial_redis_lock_rejected_total[5m])",
+          "legendFormat": "rejected"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "HMAC Auth Failures by Reason",
+      "targets": [
+        {
+          "expr": "sum(rate(financial_hmac_auth_failures_total[5m])) by (reason)",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Invalid State Transitions",
+      "targets": [
+        {
+          "expr": "sum(rate(financial_invalid_state_transition_total[5m])) by (from_status, to_status)",
+          "legendFormat": "{{from_status}} -> {{to_status}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Reconciliation Failures",
+      "targets": [
+        {
+          "expr": "rate(financial_reconciliation_failures_total[5m])",
+          "legendFormat": "failures"
+        }
+      ]
+    }
+  ]
+}

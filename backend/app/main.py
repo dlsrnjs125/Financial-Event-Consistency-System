@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
-from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
@@ -10,8 +9,8 @@ from app.api.v1.router import router as v1_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
-from app.metrics.prometheus import metrics_middleware
 from app.metrics.prometheus import router as metrics_router
+from app.observability.middleware import request_context_middleware
 
 setup_logging()
 
@@ -38,13 +37,7 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def request_context_middleware(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID", f"req-{uuid4().hex}")
-    request.state.request_id = request_id
-    response = await metrics_middleware(request, call_next)
-    response.headers["X-Request-ID"] = request_id
-    return response
+app.middleware("http")(request_context_middleware)
 
 
 api_router.include_router(v1_router)

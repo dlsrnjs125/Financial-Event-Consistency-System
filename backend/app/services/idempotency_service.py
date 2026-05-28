@@ -11,6 +11,10 @@ from app.domain.idempotency import (
 )
 from app.domain.idempotency_status import IdempotencyStatus
 from app.models.idempotency_record import IdempotencyRecord
+from app.observability.metrics import (
+    record_idempotency_conflict,
+    record_idempotency_decision,
+)
 from app.repositories.idempotency_record_repository import IdempotencyRecordRepository
 
 
@@ -43,6 +47,7 @@ class IdempotencyService:
                 locked_until=checked_at
                 + timedelta(seconds=self.processing_lock_seconds),
             )
+            record_idempotency_decision(IdempotencyDecision.STARTED, "db")
             return IdempotencyCheckResult(
                 decision=IdempotencyDecision.STARTED,
                 record_id=new_record.id,
@@ -50,15 +55,21 @@ class IdempotencyService:
 
         # expires_at is a retention hint, not a request-time invalidation rule
         # in Phase 4. Expired key deletion is handled by a separate operation.
-        self._ensure_same_request_hash(record, request_hash)
+        try:
+            self._ensure_same_request_hash(record, request_hash)
+        except IdempotencyConflict:
+            record_idempotency_conflict("db")
+            raise
         status = IdempotencyStatus(record.status)
 
         if status == IdempotencyStatus.PROCESSING:
+            record_idempotency_decision(IdempotencyDecision.ALREADY_PROCESSING, "db")
             return IdempotencyCheckResult(
                 decision=IdempotencyDecision.ALREADY_PROCESSING,
                 record_id=record.id,
             )
         if status == IdempotencyStatus.COMPLETED:
+            record_idempotency_decision(IdempotencyDecision.REPLAY_COMPLETED, "db")
             return IdempotencyCheckResult(
                 decision=IdempotencyDecision.REPLAY_COMPLETED,
                 record_id=record.id,
@@ -66,6 +77,7 @@ class IdempotencyService:
                 response_body=record.response_body,
             )
 
+        record_idempotency_decision(IdempotencyDecision.REPLAY_FAILED, "db")
         return IdempotencyCheckResult(
             decision=IdempotencyDecision.REPLAY_FAILED,
             record_id=record.id,
