@@ -1,68 +1,63 @@
 import http from 'k6/http';
-import { check, sleep, Counter } from 'k6';
+import { check, sleep } from 'k6';
+import {
+  API_PATH,
+  buildHeaders,
+  buildPayload,
+  encodeBody,
+  isDuplicateScenarioAllowed,
+  recordTransactionResult,
+  summaryTrendStats,
+  thresholds,
+  transactionUrl,
+} from './helpers/common.js';
 
-// Configuration
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:80';
-const DUPLICATE_KEY = 'idem-duplicate-storm-001';
-const DUPLICATE_EVENT_ID = 'BANK-DUPLICATE-STORM-001';
-
-// Counters
-const duplicateCounter = new Counter('duplicate_requests');
-const successCounter = new Counter('success_requests');
-const conflictCounter = new Counter('conflict_requests');
+const STORM_ID = __ENV.STORM_ID || `${Date.now()}`;
+const DUPLICATE_KEY = __ENV.DUPLICATE_KEY || `idem-duplicate-storm-${STORM_ID}`;
+const DUPLICATE_EVENT_ID = __ENV.DUPLICATE_EVENT_ID || `BANK-DUPLICATE-STORM-${STORM_ID}`;
+const DUPLICATE_OCCURRED_AT = new Date().toISOString();
+const DUPLICATE_BODY = encodeBody(
+  buildPayload({
+    external_event_id: DUPLICATE_EVENT_ID,
+    amount: Number(__ENV.DUPLICATE_AMOUNT || 10000),
+    occurred_at: DUPLICATE_OCCURRED_AT,
+  }),
+);
 
 export const options = {
-  vus: 100,
-  duration: '30s',
+  vus: Number(__ENV.VUS || 50),
+  duration: __ENV.DURATION || '15s',
+  summaryTrendStats,
   thresholds: {
-    http_req_duration: ['p(95)<1000'],
-    http_req_failed: ['rate<0.05'],
+    ...thresholds.duplicate,
+    unexpected_response_rate: ['rate==0'],
+    server_error_rate: ['rate==0'],
   },
   tags: {
-    name: 'duplicate-storm-test',
-  }
+    scenario: 'phase9-duplicate-storm',
+  },
 };
 
-export default function() {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Idempotency-Key': DUPLICATE_KEY  // All VUs use same key
-  };
+export default function () {
+  const headers = buildHeaders(DUPLICATE_BODY, DUPLICATE_KEY, API_PATH);
+  const res = http.post(transactionUrl(), DUPLICATE_BODY, { headers });
 
-  const payload = JSON.stringify({
-    external_event_id: DUPLICATE_EVENT_ID,  // All VUs use same event_id
-    account_id: 'ACC-001',
-    event_type: 'DEPOSIT',
-    amount: 10000,
-    currency: 'KRW',
-    occurred_at: new Date().toISOString()
-  });
-
-  const res = http.post(`${BASE_URL}/api/v1/transaction-events`, payload, { headers });
-
-  if (res.status === 200) {
-    successCounter.add(1);
-  } else if (res.status === 409) {
-    conflictCounter.add(1);
-  } else {
-    duplicateCounter.add(1);
-  }
+  recordTransactionResult(res, [200, 202, 409]);
+  const duplicated = safeDuplicatedFlag(res);
 
   check(res, {
-    'status is 200 or 409': (r) => r.status === 200 || r.status === 409,
-    'no 500 errors': (r) => r.status !== 500,
+    'status is 200/202/409': (r) => isDuplicateScenarioAllowed(r.status),
+    'no 5xx': (r) => r.status < 500,
+    '200 response is original or replay': (r) => r.status !== 200 || duplicated === true || duplicated === false,
   });
 
-  sleep(0.1);
+  sleep(Number(__ENV.SLEEP_SECONDS || 0.05));
 }
 
-export function teardown(data) {
-  console.log(`
-    ===== Duplicate Storm Test Results =====
-    Success (200): ${successCounter.value()}
-    Conflict (409): ${conflictCounter.value()}
-    Errors: ${duplicateCounter.value()}
-    Total: ${successCounter.value() + conflictCounter.value() + duplicateCounter.value()}
-    =====================================
-  `);
+function safeDuplicatedFlag(res) {
+  try {
+    return res.json('duplicated');
+  } catch (_) {
+    return undefined;
+  }
 }

@@ -14,6 +14,9 @@
 6. 배포 이후 에러율과 응답시간이 악화되지 않았는가?
 7. 특정 거래 이벤트의 처리 흐름을 trace_id로 추적할 수 있는가?
 
+현재 구현 범위의 trace는 `X-Trace-ID`/`X-Request-ID`와 구조화 로그를 연결하는 상관관계 추적이다.
+W3C `traceparent`/`tracestate` 전파와 OpenTelemetry SDK 기반 분산 추적은 아직 구현하지 않았으며, 후속 고도화 항목으로 둔다.
+
 ---
 
 ## 2. 일반 인프라 메트릭과 도메인 메트릭 구분
@@ -61,6 +64,7 @@ financial_reconciliation_failed_total
 ### 인프라 의존성 메트릭
 
 Redis와 PostgreSQL 상태를 확인한다.
+Phase 8~9 현재 scrape는 FastAPI 애플리케이션 메트릭 중심이며, Redis/PostgreSQL exporter 기반 내부 지표는 후속 보완 항목이다.
 
 ```text
 financial_redis_lock_acquire_failed_total
@@ -167,7 +171,7 @@ redis_keyspace_misses_total
   "request_id": "req-20260527-0001",
   "event_id": "evt-0001",
   "external_event_id": "BANK-A-20260527-0001",
-  "idempotency_key": "idem-20260527-0001",
+  "idempotency_key_masked": "id***0001",
   "client_id": "bank-a",
   "event_type": "DEPOSIT",
   "status_before": "PROCESSING",
@@ -217,6 +221,9 @@ redis_keyspace_misses_total
 
 목적: DB 병목과 정합성 위험 감지
 
+현재 Phase 8~9 구현에는 PostgreSQL exporter가 포함되지 않는다.
+아래 패널은 Phase 10~12에서 exporter 또는 SQLAlchemy pool gauge를 추가한 뒤 활성화한다.
+
 패널:
 
 - Active Connections
@@ -231,6 +238,9 @@ redis_keyspace_misses_total
 ### Dashboard 4. Redis
 
 목적: Redis Lock/Cache 상태 확인
+
+현재 Phase 8~9 구현에는 Redis exporter가 포함되지 않는다.
+애플리케이션에서 노출하는 Redis lock/cache 도메인 메트릭을 우선 사용하고, Redis 서버 내부 지표는 후속 단계에서 추가한다.
 
 패널:
 

@@ -8,6 +8,11 @@
 
 이 편에서는 Prometheus 메트릭과 Grafana 대시보드를 다룹니다.
 
+현재 구현은 FastAPI 애플리케이션의 Prometheus custom metric과
+`X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적을 중심으로 합니다.
+W3C `traceparent`/`tracestate` 전파나 OpenTelemetry SDK 기반 분산 추적은 아직 구현 범위가 아니며,
+후속 고도화 항목으로 남깁니다.
+
 ---
 
 ## Prometheus 메트릭
@@ -39,6 +44,9 @@ db_transaction_duration_seconds
 db_deadlock_total
 ```
 
+DB connection/lock/deadlock 같은 내부 지표는 PostgreSQL exporter 또는 SQLAlchemy pool gauge가 필요합니다.
+Phase 8~9에서는 FastAPI API 서버 metric과 도메인 metric을 우선 노출하고, PostgreSQL exporter는 후속 단계에서 추가합니다.
+
 ### Redis 메트릭
 ```
 redis_up
@@ -47,6 +55,9 @@ redis_keyspace_misses_total
 redis_memory_used_bytes
 redis_lock_acquire_failed_total
 ```
+
+Redis 서버 내부 지표는 Redis exporter가 필요합니다.
+현재는 애플리케이션에서 기록하는 Redis lock/cache 결과 metric을 우선 확인하고, Redis exporter scrape는 Phase 10~12 운영 관측 보강 항목으로 둡니다.
 
 ---
 

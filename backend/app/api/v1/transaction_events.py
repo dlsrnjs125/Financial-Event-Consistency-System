@@ -32,7 +32,7 @@ router = APIRouter(tags=["Transaction Events"])
 
 def build_idempotency_service(session: Session):
     idempotency_service = IdempotencyService(IdempotencyRecordRepository(session))
-    if not settings.redis_enabled:
+    if not settings.redis_enabled or not settings.idempotency_cache_enabled:
         return idempotency_service
     try:
         redis_client = get_redis_client()
@@ -48,7 +48,7 @@ def build_idempotency_service(session: Session):
 
 
 def build_redis_lock() -> RedisLock | None:
-    if not settings.redis_enabled:
+    if not settings.redis_enabled or not settings.redis_lock_enabled:
         return None
     try:
         return RedisLock(get_redis_client(), ttl_ms=settings.redis_lock_ttl_ms)

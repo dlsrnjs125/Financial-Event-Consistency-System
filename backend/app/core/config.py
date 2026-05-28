@@ -12,8 +12,13 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/api/v1"
     database_url: str = "postgresql://postgres:password@localhost:5432/financial_events"
+    db_pool_size: int = 10
+    db_max_overflow: int = 5
+    db_pool_timeout: int = 30
     redis_url: str = "redis://localhost:6379/0"
     redis_enabled: bool = True
+    redis_lock_enabled: bool = True
+    idempotency_cache_enabled: bool = False
     redis_lock_ttl_ms: int = 3000
     redis_idempotency_cache_ttl_seconds: int = 86400
     redis_socket_timeout_ms: int = 200
@@ -35,6 +40,8 @@ class Settings(BaseSettings):
         "debug",
         "metrics_enabled",
         "redis_enabled",
+        "redis_lock_enabled",
+        "idempotency_cache_enabled",
         "hmac_enabled",
         mode="before",
     )

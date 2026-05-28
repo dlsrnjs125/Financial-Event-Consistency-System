@@ -1,44 +1,49 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-
-// Configuration
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:80';
-const VIRTUAL_USERS = parseInt(__ENV.VUS || '10');
-const DURATION = __ENV.DURATION || '30s';
+import {
+  BASE_URL,
+  API_PATH,
+  buildHeaders,
+  buildPayload,
+  encodeBody,
+  isSuccessOrProcessing,
+  recordTransactionResult,
+  summaryTrendStats,
+  thresholds,
+  transactionUrl,
+  uniqueExternalEventId,
+  uniqueIdempotencyKey,
+} from './helpers/common.js';
 
 export const options = {
-  vus: VIRTUAL_USERS,
-  duration: DURATION,
-  thresholds: {
-    http_req_duration: ['p(95)<500', 'p(99)<1000'],
-    http_req_failed: ['rate<0.05'],
-  },
+  vus: Number(__ENV.VUS || 1),
+  iterations: Number(__ENV.ITERATIONS || 3),
+  summaryTrendStats,
+  thresholds: thresholds.smoke,
   tags: {
-    name: 'smoke-test',
-  }
+    scenario: 'phase9-smoke',
+  },
 };
 
-export default function() {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Idempotency-Key': `idem-${Date.now()}-${Math.random()}`
-  };
-
-  const payload = JSON.stringify({
-    external_event_id: `BANK-${Date.now()}-${Math.random()}`,
-    account_id: 'ACC-001',
-    event_type: 'DEPOSIT',
-    amount: 10000,
-    currency: 'KRW',
-    occurred_at: new Date().toISOString()
+export default function () {
+  const health = http.get(`${BASE_URL}/health`);
+  check(health, {
+    'health returns 200': (r) => r.status === 200,
   });
 
-  const res = http.post(`${BASE_URL}/api/v1/transaction-events`, payload, { headers });
+  const payload = buildPayload({
+    external_event_id: uniqueExternalEventId('BANK-SMOKE'),
+    amount: 1000,
+  });
+  const body = encodeBody(payload);
+  const headers = buildHeaders(body, uniqueIdempotencyKey('idem-smoke'), API_PATH);
+  const res = http.post(transactionUrl(), body, { headers });
 
+  recordTransactionResult(res, [200, 202]);
   check(res, {
-    'status is 200 or 409': (r) => r.status === 200 || r.status === 409,
-    'response time < 500ms': (r) => r.timings.duration < 500,
-    'has event_id': (r) => r.json('event_id') !== undefined,
+    'transaction status is 200 or 202': (r) => isSuccessOrProcessing(r.status),
+    'transaction has no 5xx': (r) => r.status < 500,
+    'completed response has event_id': (r) => r.status !== 200 || r.json('event_id') !== undefined,
   });
 
   sleep(1);

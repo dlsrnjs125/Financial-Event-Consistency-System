@@ -3,6 +3,10 @@ APP_NAME ?= financial-event-api
 APP_MODULE ?= app.main:app
 HOST ?= 0.0.0.0
 PORT ?= 8000
+BASE_URL ?= http://localhost:8080
+CLIENT_ID ?= bank-a
+CLIENT_SECRET ?= change-me-secret
+ACCOUNT_NO ?= ACC-001
 
 # Python
 PYTHON ?= .venv/bin/python
@@ -15,7 +19,9 @@ RUFF ?= .venv/bin/ruff
 
 # Docker
 DOCKER ?= docker
-DOCKER_COMPOSE ?= docker-compose
+DOCKER_COMPOSE ?= docker compose
+DOCKER_COMPOSE_PERF ?= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.perf.yml
+K6 ?= k6
 
 # Paths
 BACKEND_DIR ?= backend
@@ -35,6 +41,9 @@ help: ## Show this help message
 	@echo "  make check             # Run format-check, lint, and tests"
 	@echo "  make final-check       # Format, lint, compile, and test before PR"
 	@echo "  make local-bg          # Run Docker Compose stack in background"
+	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
+	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
+	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
 
 # Local development
 .PHONY: local-check
@@ -95,6 +104,14 @@ local-stop: ## Stop Docker Compose stack
 local-restart: ## Restart Docker Compose stack
 	@$(MAKE) local-stop
 	@$(MAKE) local-bg
+
+.PHONY: local-rebuild
+local-rebuild: docker-check ## Rebuild and recreate local API/Nginx services
+	$(DOCKER_COMPOSE) up -d --build --force-recreate api-blue nginx
+
+.PHONY: local-perf-bg
+local-perf-bg: docker-check ## Start Docker Compose stack with Phase 9 perf Nginx profile
+	$(DOCKER_COMPOSE_PERF) up --build -d
 
 .PHONY: local-status
 local-status: ## Show Docker Compose service status
@@ -180,6 +197,108 @@ check: format-check lint test ## Run format-check, lint, and tests
 
 .PHONY: final-check
 final-check: format lint compile test ## Format, lint, compile, and test before PR
+
+.PHONY: security-log-check
+security-log-check: ## Scan logger calls for direct sensitive-field logging; Phase 11 CI gate candidate
+	@echo "Scanning logger calls for sensitive raw fields..."
+	@if rg -n "logger\\.(info|warning|error|exception)\\([^\\n]*(account_no|raw_body|signature|secret|idempotency_key)" backend/app; then \
+		echo "Sensitive raw field logging pattern found. Use masked fields/log_event helpers instead."; \
+		exit 1; \
+	fi
+	@echo "No direct sensitive logger patterns found."
+
+# k6 performance tests
+.PHONY: k6-smoke
+k6-smoke: ## Run Phase 9 k6 smoke test
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/smoke-test.js
+
+.PHONY: k6-normal
+k6-normal: ## Run Phase 9 k6 normal load test
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/normal-load.js
+
+.PHONY: k6-peak
+k6-peak: ## Run Phase 9 k6 peak load test
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/peak-load.js
+
+.PHONY: k6-duplicate
+k6-duplicate: ## Run Phase 9 k6 duplicate storm test
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/duplicate-storm.js
+
+.PHONY: k6-redis-down
+k6-redis-down: ## Run Redis-down experiment; consistency should pass, availability may fail and is Phase 10 follow-up
+	@echo "Expected procedure: docker compose pause redis && make k6-redis-down && docker compose unpause redis"
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/redis-down-test.js
+
+.PHONY: k6-redis-down-check
+k6-redis-down-check: ## Pause Redis for failure experiment; 5xx availability issues are recorded, not hidden
+	@set -e; \
+	$(DOCKER_COMPOSE) pause redis; \
+	trap '$(DOCKER_COMPOSE) unpause redis' EXIT; \
+	$(MAKE) k6-redis-down
+
+.PHONY: k6-verify
+k6-verify: ## Run post-k6 PostgreSQL consistency verification SQL
+	@$(DOCKER_COMPOSE) exec -T postgres psql -U postgres -d financial_events < tests/k6/sql/verify-consistency.sql
+
+.PHONY: k6-all
+k6-all: k6-smoke k6-normal k6-peak k6-duplicate ## Run Phase 9 k6 tests except Redis-down
+
+.PHONY: perf-check
+perf-check: k6-smoke k6-duplicate k6-verify ## Run quick Phase 9 performance sanity checks
+
+.PHONY: phase9-check
+phase9-check: k6-smoke k6-duplicate k6-verify ## Run quick Phase 9 gate: smoke, duplicate storm, PostgreSQL consistency
+
+.PHONY: phase9-full
+phase9-full: phase9-check phase9-measure ## Run Phase 9 gate and normal/peak measurement, excluding Redis-down failure experiment
+
+.PHONY: phase9-measure
+phase9-measure: k6-normal k6-peak ## Run Phase 9 normal/peak measurement scenarios
+
+.PHONY: phase9-failure-experiment
+phase9-failure-experiment: k6-redis-down-check k6-verify ## Run Redis-down experiment; consistency gate should pass, availability may be below target
+
+.PHONY: perf-cache-off
+perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off
+	@IDEMPOTENCY_CACHE_ENABLED=false REDIS_LOCK_ENABLED=true $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-duplicate
+	@$(MAKE) k6-verify
+
+.PHONY: perf-cache-on
+perf-cache-on: ## Run duplicate storm with Redis lock and idempotency cache on
+	@IDEMPOTENCY_CACHE_ENABLED=true REDIS_LOCK_ENABLED=true $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-duplicate
+	@$(MAKE) k6-verify
+
+.PHONY: perf-lock-off
+perf-lock-off: ## Run duplicate storm with Redis lock off and idempotency cache on
+	@REDIS_LOCK_ENABLED=false IDEMPOTENCY_CACHE_ENABLED=true $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-duplicate
+	@$(MAKE) k6-verify
+
+.PHONY: perf-lock-on
+perf-lock-on: ## Run duplicate storm with Redis lock and idempotency cache on
+	@REDIS_LOCK_ENABLED=true IDEMPOTENCY_CACHE_ENABLED=true $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-duplicate
+	@$(MAKE) k6-verify
+
+.PHONY: perf-db-pool-5
+perf-db-pool-5: ## Run peak load with DB pool size 5
+	@DB_POOL_SIZE=5 DB_MAX_OVERFLOW=0 $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-peak
+	@$(MAKE) k6-verify
+
+.PHONY: perf-db-pool-10
+perf-db-pool-10: ## Run peak load with DB pool size 10
+	@DB_POOL_SIZE=10 DB_MAX_OVERFLOW=5 $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-peak
+	@$(MAKE) k6-verify
+
+.PHONY: perf-db-pool-20
+perf-db-pool-20: ## Run peak load with DB pool size 20
+	@DB_POOL_SIZE=20 DB_MAX_OVERFLOW=10 $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-peak
+	@$(MAKE) k6-verify
 
 # Health checks
 .PHONY: health
