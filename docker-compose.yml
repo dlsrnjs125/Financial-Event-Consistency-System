@@ -46,8 +46,8 @@ services:
     container_name: financial-api-blue
     environment:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/financial_events
-      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
-      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
       DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
       REDIS_URL: redis://redis:6379/0
       REDIS_ENABLED: ${REDIS_ENABLED:-true}
@@ -85,8 +85,8 @@ services:
     container_name: financial-api-green
     environment:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/financial_events
-      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
-      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
       DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
       REDIS_URL: redis://redis:6379/0
       REDIS_ENABLED: ${REDIS_ENABLED:-true}

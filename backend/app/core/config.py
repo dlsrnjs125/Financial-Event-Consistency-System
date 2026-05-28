@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/api/v1"
     database_url: str = "postgresql://postgres:password@localhost:5432/financial_events"
-    db_pool_size: int = 20
-    db_max_overflow: int = 10
+    db_pool_size: int = 10
+    db_max_overflow: int = 5
     db_pool_timeout: int = 30
     redis_url: str = "redis://localhost:6379/0"
     redis_enabled: bool = True

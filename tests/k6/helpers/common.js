@@ -143,7 +143,7 @@ export function isDuplicateScenarioAllowed(status) {
   return [200, 202, 409].includes(status);
 }
 
-export function recordTransactionResult(res, allowedStatuses = [200, 202, 409]) {
+export function recordTransactionResult(res, allowedStatuses = [200, 202]) {
   transactionRequests.add(1);
   apiDuration.add(res.timings.duration);
   unexpectedResponseRate.add(!allowedStatuses.includes(res.status));
