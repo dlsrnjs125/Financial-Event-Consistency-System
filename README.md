@@ -294,24 +294,74 @@ make final-check
 모든 개발 작업은 PR 생성 전 `make final-check`로 포맷팅, 린트, Python 컴파일, 테스트를 확인한다.
 
 ### 부하 테스트 (k6)
+
+Phase 9 기준 k6 스크립트는 HMAC이 켜진 상태에서 실행하는 것을 원칙으로 한다.
+로컬 Docker Compose 스택은 Nginx를 `http://localhost:8080`으로 노출하고,
+테스트용 client secret은 `.env.example`의 더미 값과 같은 `bank-a:change-me-secret`을 사용한다.
+로컬 Nginx rate limit은 duplicate storm 실험이 API/Redis/PostgreSQL 경로까지 도달하도록 높게 설정되어 있다.
+운영 rate limit 기준과 배포 전 gate 적용은 후속 Phase에서 별도로 다룬다.
+
 ```bash
-k6 run tests/k6/smoke-test.js
-k6 run tests/k6/peak-load.js
-k6 run tests/k6/duplicate-storm.js
+# macOS 예시
+brew install k6
+
+# 또는 Docker 기반 실행 예시
+docker run --rm -v "$PWD:/work" -w /work grafana/k6 run tests/k6/smoke-test.js
 ```
 
-### 장애 재현 테스트
-```bash
-# Redis 다운 시뮬레이션
-docker-compose pause redis
-k6 run tests/k6/consistency-test.js
-docker-compose unpause redis
+권장 실행 순서:
 
-# DB Connection Pool 고갈
-export DB_POOL_SIZE=5
-docker-compose restart api-blue
-k6 run tests/k6/peak-load.js
+```bash
+make local-bg
+make k6-smoke
+make k6-normal
+make k6-peak
+make k6-duplicate
 ```
+
+Redis Down 시나리오는 Phase 9에서 스크립트와 절차까지만 제공한다.
+장애 재현 자동화는 Phase 10 범위다.
+
+```bash
+docker compose pause redis
+make k6-redis-down
+docker compose unpause redis
+```
+
+환경변수로 대상 URL과 HMAC client를 바꿀 수 있다.
+운영용 secret은 저장소에 기록하지 않고 실행 환경에서 주입한다.
+
+```bash
+BASE_URL=http://localhost:8080 \
+CLIENT_ID=bank-a \
+CLIENT_SECRET=change-me-secret \
+ACCOUNT_NO=ACC-001 \
+make k6-smoke
+```
+
+직접 실행할 수도 있다.
+
+```bash
+BASE_URL=http://localhost:8080 CLIENT_ID=bank-a CLIENT_SECRET=change-me-secret k6 run tests/k6/smoke-test.js
+BASE_URL=http://localhost:8080 CLIENT_ID=bank-a CLIENT_SECRET=change-me-secret k6 run tests/k6/normal-load.js
+BASE_URL=http://localhost:8080 CLIENT_ID=bank-a CLIENT_SECRET=change-me-secret k6 run tests/k6/peak-load.js
+BASE_URL=http://localhost:8080 CLIENT_ID=bank-a CLIENT_SECRET=change-me-secret k6 run tests/k6/duplicate-storm.js
+BASE_URL=http://localhost:8080 CLIENT_ID=bank-a CLIENT_SECRET=change-me-secret k6 run tests/k6/redis-down-test.js
+```
+
+확인해야 할 값:
+
+| 구분 | 확인 지표 |
+|------|-----------|
+| k6 | p50, p95, p99, RPS, `http_req_failed`, `duplicate_processing_rate` |
+| Prometheus | `financial_http_request_duration_seconds`, `financial_http_errors_total`, `financial_transaction_processing_duration_seconds` |
+| Idempotency | `financial_idempotency_decisions_total`, `financial_idempotency_conflict_total`, `financial_idempotency_processing_total` |
+| Redis | `financial_redis_lock_acquired_total`, `financial_redis_lock_rejected_total`, `financial_idempotency_cache_hit_total`, `financial_redis_unavailable_total` |
+| 정합성 | 동일 `external_event_id`의 Ledger 중복 생성 0건 |
+
+테스트 후 `tests/k6/sql/verify-consistency.sql` 쿼리와 Prometheus/Grafana를 함께 확인하고,
+결과는 [Phase 9 Performance Results](./docs/performance/phase-9-results.md)에 기록한다.
+CI/CD gate 적용은 Phase 11 범위다.
 
 ---
 

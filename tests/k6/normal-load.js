@@ -15,30 +15,29 @@ import {
 
 export const options = {
   stages: [
-    { duration: __ENV.RAMP_UP || '20s', target: Number(__ENV.PEAK_VUS || 50) },
-    { duration: __ENV.STEADY || '1m', target: Number(__ENV.PEAK_VUS || 50) },
+    { duration: __ENV.RAMP_UP || '30s', target: Number(__ENV.NORMAL_VUS || 20) },
+    { duration: __ENV.STEADY || '1m', target: Number(__ENV.NORMAL_VUS || 20) },
     { duration: __ENV.RAMP_DOWN || '20s', target: 0 },
   ],
-  thresholds: thresholds.peak,
+  thresholds: thresholds.normal,
   tags: {
-    scenario: 'phase9-peak-load',
+    scenario: 'phase9-normal-load',
   },
 };
 
 export default function () {
   const payload = buildPayload({
-    external_event_id: uniqueExternalEventId('BANK-PEAK'),
+    external_event_id: uniqueExternalEventId('BANK-NORMAL'),
   });
   const body = encodeBody(payload);
-  const headers = buildHeaders(body, uniqueIdempotencyKey('idem-peak'), API_PATH);
+  const headers = buildHeaders(body, uniqueIdempotencyKey('idem-normal'), API_PATH);
   const res = http.post(transactionUrl(), body, { headers });
 
   recordTransactionResult(res);
   check(res, {
-    'status is success or controlled retry response': (r) => isAllowedTransactionStatus(r.status),
-    '500 errors are failures': (r) => r.status !== 500,
+    'status is 200/202/409': (r) => isAllowedTransactionStatus(r.status),
     'no 5xx': (r) => r.status < 500,
   });
 
-  sleep(Number(__ENV.SLEEP_SECONDS || 0.1));
+  sleep(Number(__ENV.SLEEP_SECONDS || 0.2));
 }

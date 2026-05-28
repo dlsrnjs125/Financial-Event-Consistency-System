@@ -3,6 +3,10 @@ APP_NAME ?= financial-event-api
 APP_MODULE ?= app.main:app
 HOST ?= 0.0.0.0
 PORT ?= 8000
+BASE_URL ?= http://localhost:8080
+CLIENT_ID ?= bank-a
+CLIENT_SECRET ?= change-me-secret
+ACCOUNT_NO ?= ACC-001
 
 # Python
 PYTHON ?= .venv/bin/python
@@ -15,7 +19,8 @@ RUFF ?= .venv/bin/ruff
 
 # Docker
 DOCKER ?= docker
-DOCKER_COMPOSE ?= docker-compose
+DOCKER_COMPOSE ?= docker compose
+K6 ?= k6
 
 # Paths
 BACKEND_DIR ?= backend
@@ -35,6 +40,7 @@ help: ## Show this help message
 	@echo "  make check             # Run format-check, lint, and tests"
 	@echo "  make final-check       # Format, lint, compile, and test before PR"
 	@echo "  make local-bg          # Run Docker Compose stack in background"
+	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 
 # Local development
 .PHONY: local-check
@@ -180,6 +186,37 @@ check: format-check lint test ## Run format-check, lint, and tests
 
 .PHONY: final-check
 final-check: format lint compile test ## Format, lint, compile, and test before PR
+
+# k6 performance tests
+.PHONY: k6-smoke
+k6-smoke: ## Run Phase 9 k6 smoke test
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/smoke-test.js
+
+.PHONY: k6-normal
+k6-normal: ## Run Phase 9 k6 normal load test
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/normal-load.js
+
+.PHONY: k6-peak
+k6-peak: ## Run Phase 9 k6 peak load test
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/peak-load.js
+
+.PHONY: k6-duplicate
+k6-duplicate: ## Run Phase 9 k6 duplicate storm test
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/duplicate-storm.js
+
+.PHONY: k6-redis-down
+k6-redis-down: ## Run Phase 9 k6 Redis-down scenario after pausing Redis separately
+	@echo "Expected procedure: docker compose pause redis && make k6-redis-down && docker compose unpause redis"
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/redis-down-test.js
+
+.PHONY: k6-all
+k6-all: k6-smoke k6-normal k6-peak k6-duplicate ## Run Phase 9 k6 tests except Redis-down
+
+.PHONY: perf-check
+perf-check: k6-smoke k6-duplicate ## Run quick Phase 9 performance sanity checks
+
+.PHONY: phase9-check
+phase9-check: perf-check ## Alias for Phase 9 performance sanity checks
 
 # Health checks
 .PHONY: health
