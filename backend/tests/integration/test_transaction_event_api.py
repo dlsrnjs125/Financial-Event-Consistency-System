@@ -38,6 +38,8 @@ def db_session():
 
 @pytest.fixture()
 def client(db_session, monkeypatch):
+    # These tests cover Phase 5/6 transaction consistency behavior. Phase 7 HMAC
+    # enforcement is covered separately in test_transaction_event_security.py.
     monkeypatch.setattr(settings, "hmac_enabled", False)
 
     def override_get_db():

@@ -61,7 +61,7 @@ def client(db_session, monkeypatch):
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        yield TestClient(app)
+        yield TestClient(app, raise_server_exceptions=False)
     finally:
         app.dependency_overrides.clear()
 
@@ -206,4 +206,15 @@ def test_body_tampering_after_signature_returns_401(client, db_session):
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "INVALID_SIGNATURE"
+    assert_no_financial_rows(db_session)
+
+
+def test_hmac_cannot_be_disabled_in_production(client, db_session, monkeypatch):
+    seed_account(db_session)
+    monkeypatch.setattr(settings, "hmac_enabled", False)
+    monkeypatch.setattr(settings, "app_env", "production")
+
+    response = post_signed(client, payload())
+
+    assert response.status_code == 500
     assert_no_financial_rows(db_session)

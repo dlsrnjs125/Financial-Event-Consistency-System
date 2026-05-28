@@ -21,11 +21,14 @@ from app.security.timestamp import parse_timestamp, validate_timestamp_window
 
 @lru_cache
 def get_client_secret_provider(raw_secrets: str) -> ClientSecretProvider:
+    # TODO(Phase 8+): support secret versioning/rotation without process restart.
     return ClientSecretProvider(raw_secrets)
 
 
 async def verify_external_request_signature(request: Request) -> None:
     if not settings.hmac_enabled:
+        if settings.app_env.lower() in {"prod", "production"}:
+            raise RuntimeError("HMAC must be enabled in production")
         return
 
     client_id = _required_header(request, "X-Client-Id")

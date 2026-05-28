@@ -139,6 +139,8 @@ X-Signature: <hmac-sha256-hex-digest>
 Idempotency-Key: idem-20260527-0001
 ```
 
+Signature base string은 `METHOD\nPATH\nTIMESTAMP\nBODY_HASH` 형식이며, 반드시 LF newline으로 구분한다.
+`X-Signature`는 64-character hex digest만 지원하고 `sha256=` prefix 형식은 지원하지 않는다.
 로컬/테스트용 client secret은 `.env.example`의 `EXTERNAL_CLIENT_SECRETS` 더미 값을 참고한다.
 `HMAC_ENABLED=false`는 local/test 편의용이며, 운영 환경에서는 활성화해야 한다.
 

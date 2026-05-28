@@ -51,10 +51,11 @@ Idempotency-Key: idem-20260527-0001
 
 ### 서명 대상
 
-서명 대상은 다음 값을 조합한다.
+서명 대상은 다음 값을 **LF newline(`\n`)으로 구분해** 조합한다.
+공백 연결이나 단순 문자열 덧붙이기가 아니라 반드시 `\n` 구분자를 사용한다.
 
 ```text
-HTTP_METHOD + PATH + TIMESTAMP + REQUEST_BODY_HASH
+{HTTP_METHOD_UPPERCASE}\n{PATH_WITHOUT_QUERY}\n{X_TIMESTAMP_HEADER_VALUE}\n{SHA256_RAW_REQUEST_BODY}
 ```
 
 예시:
@@ -71,10 +72,10 @@ SHA256(request_body)
 Phase 7 구현 기준의 canonical base string은 다음 형식이다.
 
 ```text
-{HTTP_METHOD}
-{PATH}
-{X_TIMESTAMP 원문}
-{SHA256(raw_request_body)}
+{HTTP_METHOD_UPPERCASE}
+{PATH_WITHOUT_QUERY}
+{X_TIMESTAMP_HEADER_VALUE}
+{SHA256_RAW_REQUEST_BODY}
 ```
 
 예:
@@ -89,6 +90,9 @@ POST
 검증 시 `hmac.compare_digest`를 사용해 timing attack 위험을 줄인다.
 Query string은 서명 대상에서 제외하며, `PATH`는 URL path만 사용한다.
 Body hash는 FastAPI/Pydantic parsing 이후 값이 아니라 raw request body bytes 기준으로 계산한다.
+`X-Signature`는 64-character HMAC-SHA256 hex digest만 허용한다.
+`sha256=<digest>` prefix 형식은 Phase 7에서 지원하지 않는다.
+Hex digest는 대소문자를 구분하지 않고 비교 전에 lowercase로 정규화한다.
 
 ---
 
@@ -211,7 +215,11 @@ EXTERNAL_CLIENT_SECRETS=bank-a:change-me-secret,broker-b:change-me-secret
 ```
 
 이 값은 로컬/테스트용 더미 예시이며, 실제 운영 secret은 GitHub Secrets, Secret Manager, Vault 등 저장소 밖의 안전한 경로로 주입해야 한다.
-Secret rotation 자동화와 Secret Manager 연동은 후속 Phase 또는 별도 ADR에서 다룬다.
+Phase 7의 `ClientSecretProvider`는 env 기반이며 프로세스 시작 시점 설정을 기준으로 동작한다.
+`get_client_secret_provider()`는 캐시되므로 secret 변경은 애플리케이션 재시작 후 반영된다.
+CSV 방식은 단순성을 위한 선택이라 secret 값에 comma/colon 사용이 제한된다.
+Phase 7 env provider는 disabled client 상태를 아직 지원하지 않으며, 코드의 `DisabledClient` 예외와 `ExternalClient.enabled` 필드는 후속 DB/Secret Manager backed provider를 위한 확장 지점이다.
+무중단 secret rotation, 다중 secret version, Secret Manager/Vault 연동은 후속 Phase 또는 별도 ADR에서 다룬다.
 
 ### 저장소에 포함하지 않는 값
 

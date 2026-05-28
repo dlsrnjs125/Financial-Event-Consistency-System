@@ -5,6 +5,12 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ExternalClient:
+    """External client metadata.
+
+    The env-backed Phase 7 provider always creates enabled clients. The enabled
+    flag is reserved for a future DB or Secret Manager backed provider.
+    """
+
     client_id: str
     secret: str
     enabled: bool = True

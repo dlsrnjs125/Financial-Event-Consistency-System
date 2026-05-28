@@ -97,6 +97,19 @@ def test_uppercase_hex_signature_is_accepted():
     assert verify_hmac_signature("secret", base, signature.upper()) is True
 
 
+def test_sha256_prefixed_signature_is_not_supported():
+    base = build_signature_base_string("POST", "/path", "ts", "hash")
+    signature = generate_hmac_signature("secret", base)
+
+    assert verify_hmac_signature("secret", base, f"sha256={signature}") is False
+
+
+def test_signature_base_string_uses_lf_newlines():
+    base = build_signature_base_string("post", "/path", "timestamp", "body-hash")
+
+    assert base == "POST\n/path\ntimestamp\nbody-hash"
+
+
 def test_compare_digest_is_used(monkeypatch):
     called = {"value": False}
     original_compare_digest = stdlib_hmac.compare_digest
