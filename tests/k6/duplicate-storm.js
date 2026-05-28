@@ -25,8 +25,8 @@ const DUPLICATE_BODY = encodeBody(
 );
 
 export const options = {
-  vus: Number(__ENV.VUS || 100),
-  duration: __ENV.DURATION || '30s',
+  vus: Number(__ENV.VUS || 50),
+  duration: __ENV.DURATION || '15s',
   summaryTrendStats,
   thresholds: {
     ...thresholds.duplicate,

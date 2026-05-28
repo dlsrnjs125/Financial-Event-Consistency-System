@@ -71,15 +71,15 @@ export function uniqueIdempotencyKey(prefix = 'idem-k6') {
 
 export function buildPayload(overrides = {}) {
   const payload = {
-    external_event_id: overrides.external_event_id || uniqueExternalEventId(),
-    account_no: overrides.account_no || DEFAULT_ACCOUNT_NO,
-    event_type: overrides.event_type || 'DEPOSIT',
-    amount: overrides.amount || randomAmount(),
-    currency: overrides.currency || 'KRW',
-    occurred_at: overrides.occurred_at || new Date().toISOString(),
+    external_event_id: overrides.external_event_id ?? uniqueExternalEventId(),
+    account_no: overrides.account_no ?? DEFAULT_ACCOUNT_NO,
+    event_type: overrides.event_type ?? 'DEPOSIT',
+    amount: overrides.amount ?? randomAmount(),
+    currency: overrides.currency ?? 'KRW',
+    occurred_at: overrides.occurred_at ?? new Date().toISOString(),
   };
 
-  if (overrides.original_external_event_id) {
+  if (overrides.original_external_event_id !== undefined) {
     payload.original_external_event_id = overrides.original_external_event_id;
   }
 
@@ -143,7 +143,11 @@ export function isDuplicateScenarioAllowed(status) {
   return [200, 202, 409].includes(status);
 }
 
-export function recordTransactionResult(res, allowedStatuses = [200, 202]) {
+export function recordTransactionResult(res, allowedStatuses) {
+  if (!Array.isArray(allowedStatuses) || allowedStatuses.length === 0) {
+    throw new Error('allowedStatuses must be explicitly provided per k6 scenario');
+  }
+
   transactionRequests.add(1);
   apiDuration.add(res.timings.duration);
   unexpectedResponseRate.add(!allowedStatuses.includes(res.status));

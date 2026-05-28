@@ -10,6 +10,7 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.observability.metrics import record_http_request
@@ -38,8 +39,9 @@ app_info.labels(service=settings.app_name, environment=settings.app_env).set(1)
 
 
 @router.get("/metrics")
-def metrics() -> Response:
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+async def metrics() -> Response:
+    payload = await run_in_threadpool(generate_latest)
+    return Response(payload, media_type=CONTENT_TYPE_LATEST)
 
 
 async def metrics_middleware(request: Request, call_next, start: float | None = None):

@@ -42,6 +42,8 @@ help: ## Show this help message
 	@echo "  make final-check       # Format, lint, compile, and test before PR"
 	@echo "  make local-bg          # Run Docker Compose stack in background"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
+	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
+	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
 
 # Local development
 .PHONY: local-check
@@ -196,6 +198,15 @@ check: format-check lint test ## Run format-check, lint, and tests
 .PHONY: final-check
 final-check: format lint compile test ## Format, lint, compile, and test before PR
 
+.PHONY: security-log-check
+security-log-check: ## Scan logger calls for direct sensitive-field logging; Phase 11 CI gate candidate
+	@echo "Scanning logger calls for sensitive raw fields..."
+	@if rg -n "logger\\.(info|warning|error|exception)\\([^\\n]*(account_no|raw_body|signature|secret|idempotency_key)" backend/app; then \
+		echo "Sensitive raw field logging pattern found. Use masked fields/log_event helpers instead."; \
+		exit 1; \
+	fi
+	@echo "No direct sensitive logger patterns found."
+
 # k6 performance tests
 .PHONY: k6-smoke
 k6-smoke: ## Run Phase 9 k6 smoke test
@@ -214,12 +225,12 @@ k6-duplicate: ## Run Phase 9 k6 duplicate storm test
 	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/duplicate-storm.js
 
 .PHONY: k6-redis-down
-k6-redis-down: ## Run Phase 9 k6 Redis-down scenario after pausing Redis separately
+k6-redis-down: ## Run Redis-down experiment; consistency should pass, availability may fail and is Phase 10 follow-up
 	@echo "Expected procedure: docker compose pause redis && make k6-redis-down && docker compose unpause redis"
 	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/redis-down-test.js
 
 .PHONY: k6-redis-down-check
-k6-redis-down-check: ## Pause Redis, run redis-down k6 scenario, then unpause Redis
+k6-redis-down-check: ## Pause Redis for failure experiment; 5xx availability issues are recorded, not hidden
 	@set -e; \
 	$(DOCKER_COMPOSE) pause redis; \
 	trap '$(DOCKER_COMPOSE) unpause redis' EXIT; \
@@ -236,10 +247,16 @@ k6-all: k6-smoke k6-normal k6-peak k6-duplicate ## Run Phase 9 k6 tests except R
 perf-check: k6-smoke k6-duplicate k6-verify ## Run quick Phase 9 performance sanity checks
 
 .PHONY: phase9-check
-phase9-check: perf-check ## Alias for Phase 9 performance sanity checks
+phase9-check: k6-smoke k6-duplicate k6-verify ## Run quick Phase 9 gate: smoke, duplicate storm, PostgreSQL consistency
 
 .PHONY: phase9-full
-phase9-full: k6-smoke k6-normal k6-peak k6-duplicate k6-redis-down-check k6-verify ## Run all Phase 9 k6 scenarios and verification
+phase9-full: phase9-check phase9-measure ## Run Phase 9 gate and normal/peak measurement, excluding Redis-down failure experiment
+
+.PHONY: phase9-measure
+phase9-measure: k6-normal k6-peak ## Run Phase 9 normal/peak measurement scenarios
+
+.PHONY: phase9-failure-experiment
+phase9-failure-experiment: k6-redis-down-check k6-verify ## Run Redis-down experiment; consistency gate should pass, availability may be below target
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

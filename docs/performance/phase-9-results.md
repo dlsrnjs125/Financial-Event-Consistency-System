@@ -149,6 +149,7 @@ Lock off에서 발생한 5xx는 동일 `external_event_id` 동시 insert/update 
 단일 API 프로세스와 로컬 Docker Desktop I/O 조건에서는 DB connection을 늘리는 것보다 트랜잭션 범위, row lock 대기, 컨테이너 리소스 제한을 함께 봐야 한다.
 현재 애플리케이션 메트릭에는 SQLAlchemy pool checked-out/overflow 사용량이 직접 export되지 않아 DB connection usage는 실제 수치로 기록하지 못했다.
 PostgreSQL exporter 또는 SQLAlchemy pool gauge 추가가 필요하지만, 이는 Phase 9 결과의 후속 관측 보완 항목으로 남긴다.
+Prometheus scrape도 Phase 9 기준 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 10~12에서 보완한다.
 
 ## Transaction 범위 비교
 
