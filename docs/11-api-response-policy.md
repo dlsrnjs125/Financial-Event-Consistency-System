@@ -89,7 +89,26 @@ TODO(Phase 8/9): lock rejected 상황에서도 Redis Cache completed response를
 
 ---
 
-## 6. 설계 결론
+## 6. Phase 7 HMAC 인증 실패 응답 정책
+
+Phase 7에서는 거래 이벤트 생성 API의 인증/변조 검증을 거래 처리, Idempotency 처리, Redis Lock 처리보다 먼저 수행한다.
+인증 실패 요청은 DB transaction에 진입하지 않으며, IdempotencyRecord, TransactionEvent, LedgerEntry를 생성하지 않는다.
+
+| 상황 | HTTP Status | code |
+|------|-------------|------|
+| `X-Client-Id`, `X-Timestamp`, `X-Signature` 누락 | 400 Bad Request | `MISSING_SECURITY_HEADER` |
+| 알 수 없는 client | 403 Forbidden | `UNKNOWN_CLIENT` |
+| 잘못된 timestamp 형식 | 401 Unauthorized | `INVALID_TIMESTAMP` |
+| 허용 오차를 벗어난 timestamp | 401 Unauthorized | `EXPIRED_TIMESTAMP` |
+| 잘못된 signature 또는 body 변조 | 401 Unauthorized | `INVALID_SIGNATURE` |
+
+인증 실패는 같은 secret, timestamp, signature를 그대로 재시도하면 계속 실패한다.
+클라이언트는 timestamp와 signature를 다시 생성하거나, client secret 설정을 확인해야 한다.
+응답과 로그에는 secret, expected signature, signature 원문을 포함하지 않는다.
+
+---
+
+## 7. 설계 결론
 
 HTTP Status는 단순 성공/실패 표현이 아니라 외부 시스템의 재시도 전략에 영향을 준다.
 

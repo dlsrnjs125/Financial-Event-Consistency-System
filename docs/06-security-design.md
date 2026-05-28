@@ -35,7 +35,8 @@
 
 ### 선택한 방식
 
-Phase 1에서는 API Key와 HMAC Signature를 함께 사용한다.
+Phase 7에서는 `POST /api/v1/transaction-events`에 HMAC Signature 검증을 적용한다.
+이 API는 일반 사용자 로그인 API가 아니라 외부 금융 시스템이 호출하는 System-to-System API다.
 
 ```text
 X-Client-Id: bank-a
@@ -67,6 +68,28 @@ SHA256(request_body)
 
 서버는 `X-Client-Id`를 기준으로 해당 외부 시스템의 Secret을 조회한 뒤 동일한 방식으로 Signature를 생성하고, 요청 Header의 `X-Signature`와 비교한다.
 
+Phase 7 구현 기준의 canonical base string은 다음 형식이다.
+
+```text
+{HTTP_METHOD}
+{PATH}
+{X_TIMESTAMP 원문}
+{SHA256(raw_request_body)}
+```
+
+예:
+
+```text
+POST
+/api/v1/transaction-events
+2026-05-27T10:00:00+09:00
+<sha256-body-hash>
+```
+
+검증 시 `hmac.compare_digest`를 사용해 timing attack 위험을 줄인다.
+Query string은 서명 대상에서 제외하며, `PATH`는 URL path만 사용한다.
+Body hash는 FastAPI/Pydantic parsing 이후 값이 아니라 raw request body bytes 기준으로 계산한다.
+
 ---
 
 ## 4. Replay Attack 방지
@@ -89,7 +112,7 @@ HMAC Signature만으로는 과거에 정상적으로 생성된 요청이 다시 
 
 ### Nonce 도입 여부
 
-Phase 1에서는 별도 Nonce 저장소를 두지 않는다.
+Phase 7에서는 별도 Nonce 저장소를 두지 않는다.
 
 대신 다음 조합으로 Replay 위험을 줄인다.
 
@@ -181,6 +204,15 @@ request_hash = SHA256(normalized_request_body)
 
 ## 7. Secret 관리
 
+Phase 7에서는 Secret Manager나 Vault 연동 대신 env 기반 `ClientSecretProvider`로 시작한다.
+
+```text
+EXTERNAL_CLIENT_SECRETS=bank-a:change-me-secret,broker-b:change-me-secret
+```
+
+이 값은 로컬/테스트용 더미 예시이며, 실제 운영 secret은 GitHub Secrets, Secret Manager, Vault 등 저장소 밖의 안전한 경로로 주입해야 한다.
+Secret rotation 자동화와 Secret Manager 연동은 후속 Phase 또는 별도 ADR에서 다룬다.
+
 ### 저장소에 포함하지 않는 값
 
 - `.env`
@@ -248,4 +280,5 @@ id_rsa
 
 이 프로젝트의 보안 설계는 단순 인증을 넘어서 거래 이벤트가 안전하게 수신되고, 변조와 재전송 위험을 줄이며, 민감정보가 로그와 저장소에 노출되지 않도록 하는 데 초점을 둔다.
 
-Phase 1에서는 API Key와 HMAC Signature를 사용하고, Idempotency-Key와 request_hash 검증을 통해 중복 요청과 충돌 요청을 구분한다.
+Phase 7에서는 HMAC Signature로 외부 시스템 인증과 요청 변조 여부를 검증하고, Idempotency-Key와 request_hash 검증으로 중복 요청과 충돌 요청을 구분한다.
+HMAC은 Idempotency를 대체하지 않으며, Idempotency는 계속 중복 처리의 기준이다.

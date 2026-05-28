@@ -19,6 +19,14 @@ from app.domain.exceptions import (
     TransactionAlreadySettled,
 )
 from app.schemas.common import ErrorDetail, ErrorResponse
+from app.security.exceptions import (
+    DisabledClient,
+    ExpiredTimestamp,
+    InvalidSignature,
+    InvalidTimestamp,
+    MissingSecurityHeader,
+    UnknownClient,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +112,32 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
+async def security_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    status_code = status.HTTP_401_UNAUTHORIZED
+    code = type(exc).__name__
+    message = str(exc)
+
+    if isinstance(exc, MissingSecurityHeader):
+        status_code = status.HTTP_400_BAD_REQUEST
+        code = "MISSING_SECURITY_HEADER"
+    elif isinstance(exc, (UnknownClient, DisabledClient)):
+        status_code = status.HTTP_403_FORBIDDEN
+        code = "UNKNOWN_CLIENT" if isinstance(exc, UnknownClient) else "DISABLED_CLIENT"
+    elif isinstance(exc, InvalidTimestamp):
+        code = "INVALID_TIMESTAMP"
+        message = "The request timestamp is invalid or expired."
+    elif isinstance(exc, ExpiredTimestamp):
+        code = "EXPIRED_TIMESTAMP"
+        message = "The request timestamp is invalid or expired."
+    elif isinstance(exc, InvalidSignature):
+        code = "INVALID_SIGNATURE"
+
+    return JSONResponse(
+        status_code=status_code,
+        content=error_response(code, message, _request_id(request)),
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     for exception_type in (
         AccountNotFound,
@@ -119,5 +153,14 @@ def register_exception_handlers(app: FastAPI) -> None:
         TransactionAlreadySettled,
     ):
         app.add_exception_handler(exception_type, domain_exception_handler)
+    for exception_type in (
+        DisabledClient,
+        ExpiredTimestamp,
+        InvalidSignature,
+        InvalidTimestamp,
+        MissingSecurityHeader,
+        UnknownClient,
+    ):
+        app.add_exception_handler(exception_type, security_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
