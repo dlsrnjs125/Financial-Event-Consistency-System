@@ -81,6 +81,12 @@ Phase 6에서는 Redis를 최종 정합성 저장소가 아니라 중복 요청 
 Redis Lock 획득 실패는 거래 실패가 아니라 "동일 Idempotency-Key 요청이 이미 처리 중일 가능성이 높다"는 신호로 다룬다.
 Redis 장애가 발생해도 PostgreSQL Unique Constraint와 DB Transaction을 최종 방어선으로 유지한다.
 
+Phase 6의 선택 정책은 Lock 획득 실패 시 DB transaction 진입을 줄이기 위해 우선 `202 Accepted`를 반환하는 것이다.
+따라서 첫 요청이 거의 완료되었지만 짧은 TTL lock이 아직 남아 있는 아주 짧은 구간에서는 completed response replay 대신 `202 Accepted`가 반환될 수 있다.
+완료 응답 replay는 lock이 없거나 lock 만료 후 `CachedIdempotencyService` 경로에서 처리한다.
+
+TODO(Phase 8/9): lock rejected 상황에서도 Redis Cache completed response를 먼저 peek할지 성능과 책임 분리 관점에서 재검토한다.
+
 ---
 
 ## 6. 설계 결론

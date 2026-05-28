@@ -456,6 +456,8 @@ Redis를 사용해 중복 요청의 DB 진입을 줄이고, 완료된 Idempotenc
 - Redis Lock 획득 실패 시 DB transaction 진입 전 `202 Accepted`를 반환한다.
 - Redis가 다운되어도 PostgreSQL 기준 정합성은 유지된다.
 - Redis 장애 시 API가 즉시 전체 장애로 전파되지 않는다.
+- Phase 6에서는 Redis unavailable fallback의 순차 회귀 테스트를 수행한다.
+- 동시 duplicate storm에서 Redis 적용 전후 p95/p99, DB transaction count, duplicate rate는 Phase 9 k6/PostgreSQL 환경에서 검증한다.
 
 **측정 지표**
 
@@ -481,7 +483,7 @@ Redis를 사용해 중복 요청의 DB 진입을 줄이고, 완료된 Idempotenc
 - [x] TTL 정책 적용
 - [x] Redis Down fallback 구현
 - [x] Redis 관련 Unit Test 작성
-- [x] Redis Down 상태 동일 이벤트 중복 반영 0건 테스트 작성
+- [x] Redis Down 상태 동일 이벤트 순차 재요청 중복 반영 0건 테스트 작성
 - [x] Redis Cache/Lock 성능 비교 측정 항목 문서화
 
 **연결 문서**

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     redis_lock_ttl_ms: int = 3000
     redis_idempotency_cache_ttl_seconds: int = 86400
     redis_socket_timeout_ms: int = 200
+    redis_max_connections: int = 50
     log_level: str = "INFO"
     metrics_enabled: bool = True
 

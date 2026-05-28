@@ -127,6 +127,8 @@ Redis Lock은 DB 부하를 줄이는 데 효과가 있으면 유지한다.
 
 Phase 6에서는 Redis Lock/Cache 코드와 fallback 회귀 테스트를 구현한다.
 실제 부하 수치는 Phase 9 k6 실험에서 측정하며, Phase 6 문서에는 측정 항목만 고정한다.
+Phase 6의 Redis unavailable fallback 테스트는 동일 이벤트 순차 재요청 기준으로 중복 반영 0건을 확인한다.
+동시 duplicate storm의 PostgreSQL unique conflict, row lock, DB transaction count 비교는 Phase 9 k6/PostgreSQL 환경에서 검증한다.
 
 | 항목 | 측정 목적 |
 |------|-----------|

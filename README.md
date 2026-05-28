@@ -125,6 +125,7 @@ GET /api/v1/accounts/{account_no}/balance
 Phase 6 기준으로 거래 이벤트 수신, 계좌 잔액 조회, Idempotency 응답 재사용, Ledger 기반 balance 반영, Redis Lock/Cache 최적화가 구현되어 있다.
 Redis는 완료된 Idempotency 응답 재사용과 동일 Key 중복 요청의 DB 진입 완화를 담당하며, PostgreSQL Unique Constraint와 DB Transaction이 최종 정합성 기준이다.
 Redis 장애 또는 timeout이 발생해도 기존 DB 기반 처리로 fallback한다.
+Phase 6의 Redis Down 검증은 순차 재요청 회귀 테스트 기준이며, 동시 duplicate storm에서 Redis 적용 전후 p95/p99, DB transaction count, duplicate rate는 Phase 9 k6/PostgreSQL 환경에서 측정한다.
 HMAC 인증, k6 부하 테스트, 도메인 메트릭 본격화는 후속 Phase에서 구현한다.
 금액은 Phase 6 기준 KRW 정수 원 단위로 처리한다.
 

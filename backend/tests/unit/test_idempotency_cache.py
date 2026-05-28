@@ -1,6 +1,9 @@
 """Unit tests for idempotency response cache."""
 
 import json
+from datetime import UTC, datetime
+from decimal import Decimal
+from enum import StrEnum
 
 from app.cache.idempotency_cache import IdempotencyResponseCache
 from app.cache.redis_keys import idempotency_cache_key
@@ -60,3 +63,25 @@ def test_invalid_cached_payload_returns_none():
     redis.store[idempotency_cache_key("idem-001")] = json.dumps({"bad": "payload"})
 
     assert IdempotencyResponseCache(redis).get("idem-001") is None
+
+
+def test_set_completed_serializes_decimal_datetime_and_enum_values():
+    class ResultStatus(StrEnum):
+        COMPLETED = "COMPLETED"
+
+    redis = FakeRedis()
+    cache = IdempotencyResponseCache(redis)
+    response_body = {
+        "balance_after": Decimal("11000"),
+        "processed_at": datetime(2026, 5, 28, 12, 0, tzinfo=UTC),
+        "status": ResultStatus.COMPLETED,
+    }
+
+    cache.set_completed("idem-001", "hash", 200, response_body)
+    cached = cache.get("idem-001")
+
+    assert cached.response_body == {
+        "balance_after": 11000,
+        "processed_at": "2026-05-28T12:00:00+00:00",
+        "status": "COMPLETED",
+    }
