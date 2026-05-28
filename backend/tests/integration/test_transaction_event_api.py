@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -36,7 +37,11 @@ def db_session():
 
 
 @pytest.fixture()
-def client(db_session):
+def client(db_session, monkeypatch):
+    # These tests cover Phase 5/6 transaction consistency behavior. Phase 7 HMAC
+    # enforcement is covered separately in test_transaction_event_security.py.
+    monkeypatch.setattr(settings, "hmac_enabled", False)
+
     def override_get_db():
         yield db_session
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.idempotency import get_idempotency_key
+from app.api.dependencies.security import verify_external_request_signature
 from app.cache.idempotency_cache import IdempotencyResponseCache
 from app.cache.redis_lock import RedisLock
 from app.core.config import settings
@@ -75,6 +76,7 @@ def build_transaction_event_service(session: Session) -> TransactionEventService
 def create_transaction_event(
     request: TransactionEventCreateRequest,
     response: Response,
+    _: None = Depends(verify_external_request_signature),
     idempotency_key: str = Depends(get_idempotency_key),
     db: Session = Depends(get_db),
 ):

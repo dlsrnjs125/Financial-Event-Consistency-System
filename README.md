@@ -122,12 +122,27 @@ GET /api/v1/transaction-events/{event_id}
 GET /api/v1/accounts/{account_no}/balance
 ```
 
-Phase 6 기준으로 거래 이벤트 수신, 계좌 잔액 조회, Idempotency 응답 재사용, Ledger 기반 balance 반영, Redis Lock/Cache 최적화가 구현되어 있다.
+Phase 7 기준으로 거래 이벤트 수신, 계좌 잔액 조회, Idempotency 응답 재사용, Ledger 기반 balance 반영, Redis Lock/Cache 최적화, POST 거래 이벤트 생성 API HMAC 검증이 구현되어 있다.
 Redis는 완료된 Idempotency 응답 재사용과 동일 Key 중복 요청의 DB 진입 완화를 담당하며, PostgreSQL Unique Constraint와 DB Transaction이 최종 정합성 기준이다.
 Redis 장애 또는 timeout이 발생해도 기존 DB 기반 처리로 fallback한다.
 Phase 6의 Redis Down 검증은 순차 재요청 회귀 테스트 기준이며, 동시 duplicate storm에서 Redis 적용 전후 p95/p99, DB transaction count, duplicate rate는 Phase 9 k6/PostgreSQL 환경에서 측정한다.
-HMAC 인증, k6 부하 테스트, 도메인 메트릭 본격화는 후속 Phase에서 구현한다.
-금액은 Phase 6 기준 KRW 정수 원 단위로 처리한다.
+HMAC 인증은 `POST /api/v1/transaction-events`에 적용되며, 조회 API 보안/인가 정책은 후속 Phase 또는 별도 ADR에서 다룬다.
+k6 부하 테스트와 도메인 메트릭 본격화는 후속 Phase에서 구현한다.
+금액은 Phase 7 기준 KRW 정수 원 단위로 처리한다.
+
+HMAC Header 예시:
+
+```http
+X-Client-Id: bank-a
+X-Timestamp: 2026-05-27T10:00:00+09:00
+X-Signature: <hmac-sha256-hex-digest>
+Idempotency-Key: idem-20260527-0001
+```
+
+Signature base string은 `METHOD\nPATH\nTIMESTAMP\nBODY_HASH` 형식이며, 반드시 LF newline으로 구분한다.
+`X-Signature`는 64-character hex digest만 지원하고 `sha256=` prefix 형식은 지원하지 않는다.
+로컬/테스트용 client secret은 `.env.example`의 `EXTERNAL_CLIENT_SECRETS` 더미 값을 참고한다.
+`HMAC_ENABLED=false`는 local/test 편의용이며, 운영 환경에서는 활성화해야 한다.
 
 ---
 
@@ -212,6 +227,16 @@ pytest backend/tests/unit/test_ledger_service.py
 pytest backend/tests/unit/test_transaction_event_service.py
 pytest backend/tests/integration/test_transaction_event_processing.py
 pytest backend/tests/integration/test_transaction_event_api.py
+```
+
+HMAC 보안 관련 테스트만 실행하려면 다음 명령을 사용한다.
+
+```bash
+pytest backend/tests/unit/test_hmac_signature.py
+pytest backend/tests/unit/test_timestamp_validation.py
+pytest backend/tests/unit/test_client_secret_provider.py
+pytest backend/tests/unit/test_masking.py
+pytest backend/tests/integration/test_transaction_event_security.py
 ```
 
 ### Integration Test
