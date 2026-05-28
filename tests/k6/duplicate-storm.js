@@ -7,6 +7,7 @@ import {
   encodeBody,
   isDuplicateScenarioAllowed,
   recordTransactionResult,
+  summaryTrendStats,
   thresholds,
   transactionUrl,
 } from './helpers/common.js';
@@ -26,6 +27,7 @@ const DUPLICATE_BODY = encodeBody(
 export const options = {
   vus: Number(__ENV.VUS || 100),
   duration: __ENV.DURATION || '30s',
+  summaryTrendStats,
   thresholds: {
     ...thresholds.duplicate,
     unexpected_response_rate: ['rate==0'],

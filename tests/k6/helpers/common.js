@@ -36,6 +36,8 @@ export const thresholds = {
   },
 };
 
+export const summaryTrendStats = ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'];
+
 export const acceptedStatusCodes = {
   completed: [200],
   processing: [202],

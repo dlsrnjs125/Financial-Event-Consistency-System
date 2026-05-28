@@ -8,6 +8,7 @@ import {
   encodeBody,
   isSuccessOrProcessing,
   recordTransactionResult,
+  summaryTrendStats,
   thresholds,
   transactionUrl,
   uniqueExternalEventId,
@@ -17,6 +18,7 @@ import {
 export const options = {
   vus: Number(__ENV.VUS || 1),
   iterations: Number(__ENV.ITERATIONS || 3),
+  summaryTrendStats,
   thresholds: thresholds.smoke,
   tags: {
     scenario: 'phase9-smoke',

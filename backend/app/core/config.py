@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     redis_enabled: bool = True
     redis_lock_enabled: bool = True
-    idempotency_cache_enabled: bool = True
+    idempotency_cache_enabled: bool = False
     redis_lock_ttl_ms: int = 3000
     redis_idempotency_cache_ttl_seconds: int = 86400
     redis_socket_timeout_ms: int = 200

@@ -7,6 +7,7 @@ import {
   encodeBody,
   isSuccessOrProcessing,
   recordTransactionResult,
+  summaryTrendStats,
   thresholds,
   transactionUrl,
   uniqueExternalEventId,
@@ -19,6 +20,7 @@ export const options = {
     { duration: __ENV.STEADY || '1m', target: Number(__ENV.PEAK_VUS || 50) },
     { duration: __ENV.RAMP_DOWN || '20s', target: 0 },
   ],
+  summaryTrendStats,
   thresholds: thresholds.peak,
   tags: {
     scenario: 'phase9-peak-load',
