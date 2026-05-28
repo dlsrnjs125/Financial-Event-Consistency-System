@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     database_url: str = "postgresql://postgres:password@localhost:5432/financial_events"
     redis_url: str = "redis://localhost:6379/0"
+    redis_enabled: bool = True
+    redis_lock_ttl_ms: int = 3000
+    redis_idempotency_cache_ttl_seconds: int = 86400
+    redis_socket_timeout_ms: int = 200
+    redis_max_connections: int = 50
     log_level: str = "INFO"
     metrics_enabled: bool = True
 
@@ -23,7 +28,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    @field_validator("debug", "metrics_enabled", mode="before")
+    @field_validator("debug", "metrics_enabled", "redis_enabled", mode="before")
     @classmethod
     def parse_boolish(cls, value):
         if isinstance(value, bool):

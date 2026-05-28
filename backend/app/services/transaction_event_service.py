@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.cache.redis_keys import idempotency_lock_key
+from app.cache.redis_lock import RedisLock
 from app.domain.event_type import EventType
 from app.domain.exceptions import (
     AccountNotFound,
@@ -39,6 +41,7 @@ class TransactionEventService:
         account_repository: AccountRepository,
         ledger_service: LedgerService,
         transaction_state_service: TransactionStateService,
+        redis_lock: RedisLock | None = None,
     ) -> None:
         self.session = session
         self.idempotency_service = idempotency_service
@@ -46,9 +49,32 @@ class TransactionEventService:
         self.account_repository = account_repository
         self.ledger_service = ledger_service
         self.transaction_state_service = transaction_state_service
+        self.redis_lock = redis_lock
         self._active_event: TransactionEvent | None = None
 
     def process(
+        self,
+        idempotency_key: str,
+        request: TransactionEventCreateRequest,
+    ) -> TransactionProcessingResult:
+        lock_key = idempotency_lock_key(idempotency_key)
+        lock_result = None
+        if self.redis_lock is not None:
+            lock_result = self.redis_lock.acquire(lock_key)
+            if lock_result.redis_available and not lock_result.acquired:
+                return self._already_processing_result()
+
+        try:
+            return self._process_with_db_fallback(idempotency_key, request)
+        finally:
+            if (
+                self.redis_lock is not None
+                and lock_result is not None
+                and lock_result.acquired
+            ):
+                self.redis_lock.release(lock_key, lock_result.token)
+
+    def _process_with_db_fallback(
         self,
         idempotency_key: str,
         request: TransactionEventCreateRequest,
@@ -59,16 +85,7 @@ class TransactionEventService:
             with self.session.begin():
                 idem = self.idempotency_service.check_or_start(idempotency_key, payload)
                 if idem.decision == IdempotencyDecision.ALREADY_PROCESSING:
-                    return TransactionProcessingResult(
-                        status_code=202,
-                        body={
-                            "status": "PROCESSING",
-                            "message": "The same request is already being processed.",
-                            "retry_after_seconds": 3,
-                        },
-                        processed=False,
-                        duplicated=True,
-                    )
+                    return self._already_processing_result()
                 if idem.decision == IdempotencyDecision.REPLAY_COMPLETED:
                     return TransactionProcessingResult(
                         status_code=idem.response_code or 200,
@@ -88,6 +105,18 @@ class TransactionEventService:
         except Exception:
             self.session.rollback()
             raise
+
+    def _already_processing_result(self) -> TransactionProcessingResult:
+        return TransactionProcessingResult(
+            status_code=202,
+            body={
+                "status": "PROCESSING",
+                "message": "The same request is already being processed.",
+                "retry_after_seconds": 3,
+            },
+            processed=False,
+            duplicated=True,
+        )
 
     def _process_started(
         self,

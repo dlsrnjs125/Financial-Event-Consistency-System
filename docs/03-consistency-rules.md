@@ -52,6 +52,9 @@ Phase 5에서는 동일 `external_event_id`를 순차 재요청했을 때 다음
 
 동시 100회 요청 검증은 PostgreSQL row lock과 concurrent unique conflict를 정확히 확인해야 하므로 Docker Compose 기반 PostgreSQL integration test에서 보강한다.
 
+Phase 6에서는 Redis Lock이 동일 Idempotency-Key 요청의 DB transaction 진입을 줄이지만, Single Event Processing의 최종 방어선은 PostgreSQL Unique Constraint와 DB Transaction이다.
+Redis가 down이거나 timeout이 발생해도 동일 `external_event_id`는 1회만 반영되어야 하며, 이 기준은 Redis fallback consistency test로 회귀 검증한다.
+
 **테스트**:
 ```python
 def test_same_external_event_processed_only_once():
@@ -193,6 +196,10 @@ idempotency_records 테이블
 3. 다르면 → 409 Conflict
 4. 같으면 → 저장된 response 반환
 ```
+
+Phase 6에서는 완료된 Idempotency 응답을 Redis Cache에 보조 저장할 수 있다.
+Cache hit이고 현재 요청의 `request_hash`가 캐시된 `request_hash`와 같으면 DB 조회 없이 저장 응답을 반환할 수 있다.
+다만 Cache miss, hash 불일치, Redis 장애 상황에서는 항상 DB IdempotencyRecord로 fallback하며, Redis Cache는 최종 정합성 저장소로 간주하지 않는다.
 
 ---
 

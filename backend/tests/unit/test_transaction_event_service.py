@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from app.cache.redis_lock import RedisLockResult
 from app.domain.idempotency import IdempotencyCheckResult, IdempotencyDecision
 from app.domain.transaction_status import TransactionStatus
 from app.schemas.transaction_event import TransactionEventCreateRequest
@@ -10,7 +11,12 @@ from app.services.transaction_event_service import TransactionEventService
 
 
 class FakeSession:
+    def __init__(self):
+        self.began = False
+        self.rolled_back = False
+
     def begin(self):
+        self.began = True
         return self
 
     def __enter__(self):
@@ -92,6 +98,20 @@ class FakeTransactionStateService:
         transaction_event.status = next_status.value
 
 
+class FakeRedisLock:
+    def __init__(self, result):
+        self.result = result
+        self.acquired_keys = []
+        self.released = []
+
+    def acquire(self, key):
+        self.acquired_keys.append(key)
+        return self.result
+
+    def release(self, key, token):
+        self.released.append((key, token))
+
+
 def make_request(external_event_id="ext-001", amount=1000):
     return TransactionEventCreateRequest(
         external_event_id=external_event_id,
@@ -103,22 +123,24 @@ def make_request(external_event_id="ext-001", amount=1000):
     )
 
 
-def make_service(decision, account=None):
+def make_service(decision, account=None, redis_lock=None):
     idempotency_service = FakeIdempotencyService(decision)
     event_repository = FakeTransactionEventRepository()
+    session = FakeSession()
     service = TransactionEventService(
-        session=FakeSession(),
+        session=session,
         idempotency_service=idempotency_service,
         transaction_event_repository=event_repository,
         account_repository=FakeAccountRepository(account),
         ledger_service=FakeLedgerService(),
         transaction_state_service=FakeTransactionStateService(),
+        redis_lock=redis_lock,
     )
-    return service, idempotency_service, event_repository
+    return service, idempotency_service, event_repository, session
 
 
 def test_already_processing_returns_202():
-    service, _, _ = make_service(
+    service, _, _, _ = make_service(
         IdempotencyCheckResult(IdempotencyDecision.ALREADY_PROCESSING, 1)
     )
 
@@ -129,7 +151,7 @@ def test_already_processing_returns_202():
 
 
 def test_replay_completed_returns_saved_response():
-    service, _, _ = make_service(
+    service, _, _, _ = make_service(
         IdempotencyCheckResult(
             IdempotencyDecision.REPLAY_COMPLETED,
             1,
@@ -146,7 +168,7 @@ def test_replay_completed_returns_saved_response():
 
 def test_started_processes_transaction_and_completes_idempotency():
     account = SimpleNamespace(id=1, balance=10000)
-    service, idempotency_service, _ = make_service(
+    service, idempotency_service, _, _ = make_service(
         IdempotencyCheckResult(IdempotencyDecision.STARTED, 1),
         account,
     )
@@ -161,7 +183,7 @@ def test_started_processes_transaction_and_completes_idempotency():
 
 
 def test_account_not_found_marks_idempotency_failed():
-    service, idempotency_service, _ = make_service(
+    service, idempotency_service, _, _ = make_service(
         IdempotencyCheckResult(IdempotencyDecision.STARTED, 1),
         account=None,
     )
@@ -175,7 +197,7 @@ def test_account_not_found_marks_idempotency_failed():
 
 def test_duplicate_external_event_returns_duplicate_response():
     account = SimpleNamespace(id=1, balance=10000)
-    service, _, event_repository = make_service(
+    service, _, event_repository, _ = make_service(
         IdempotencyCheckResult(IdempotencyDecision.STARTED, 1),
         account,
     )
@@ -195,3 +217,73 @@ def test_duplicate_external_event_returns_duplicate_response():
     assert result.status_code == 200
     assert result.body["processed"] is False
     assert result.body["duplicated"] is True
+
+
+def test_redis_lock_rejected_returns_202_without_db_transaction():
+    redis_lock = FakeRedisLock(
+        RedisLockResult(
+            acquired=False,
+            token=None,
+            redis_available=True,
+            reason="lock_not_acquired",
+        )
+    )
+    service, idempotency_service, _, session = make_service(
+        IdempotencyCheckResult(IdempotencyDecision.STARTED, 1),
+        account=SimpleNamespace(id=1, balance=10000),
+        redis_lock=redis_lock,
+    )
+
+    result = service.process("idem-001", make_request())
+
+    assert result.status_code == 202
+    assert result.body["status"] == "PROCESSING"
+    assert idempotency_service.completed == []
+    assert session.began is False
+    assert redis_lock.released == []
+
+
+def test_redis_lock_acquired_runs_existing_process_and_releases():
+    redis_lock = FakeRedisLock(
+        RedisLockResult(
+            acquired=True,
+            token="owner-token",
+            redis_available=True,
+        )
+    )
+    service, _, _, session = make_service(
+        IdempotencyCheckResult(IdempotencyDecision.STARTED, 1),
+        account=SimpleNamespace(id=1, balance=10000),
+        redis_lock=redis_lock,
+    )
+
+    result = service.process("idem-001", make_request())
+
+    assert result.status_code == 200
+    assert session.began is True
+    assert redis_lock.released == [
+        (redis_lock.acquired_keys[0], "owner-token"),
+    ]
+
+
+def test_redis_unavailable_falls_back_to_db_process():
+    redis_lock = FakeRedisLock(
+        RedisLockResult(
+            acquired=False,
+            token=None,
+            redis_available=False,
+            reason="redis timeout",
+        )
+    )
+    service, idempotency_service, _, session = make_service(
+        IdempotencyCheckResult(IdempotencyDecision.STARTED, 1),
+        account=SimpleNamespace(id=1, balance=10000),
+        redis_lock=redis_lock,
+    )
+
+    result = service.process("idem-001", make_request())
+
+    assert result.status_code == 200
+    assert session.began is True
+    assert idempotency_service.completed
+    assert redis_lock.released == []
