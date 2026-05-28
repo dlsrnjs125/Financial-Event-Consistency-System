@@ -27,6 +27,8 @@ def get_client_secret_provider(raw_secrets: str) -> ClientSecretProvider:
 
 async def verify_external_request_signature(request: Request) -> None:
     if not settings.hmac_enabled:
+        # TODO(Phase 8+): move production HMAC misconfiguration checks to
+        # application startup or Settings validation so the app fails fast.
         if settings.app_env.lower() in {"prod", "production"}:
             raise RuntimeError("HMAC must be enabled in production")
         return

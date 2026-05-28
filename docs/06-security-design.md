@@ -64,7 +64,7 @@ Idempotency-Key: idem-20260527-0001
 POST
 /api/v1/transaction-events
 2026-05-27T10:00:00+09:00
-SHA256(request_body)
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 ```
 
 서버는 `X-Client-Id`를 기준으로 해당 외부 시스템의 Secret을 조회한 뒤 동일한 방식으로 Signature를 생성하고, 요청 Header의 `X-Signature`와 비교한다.
@@ -84,7 +84,7 @@ Phase 7 구현 기준의 canonical base string은 다음 형식이다.
 POST
 /api/v1/transaction-events
 2026-05-27T10:00:00+09:00
-<sha256-body-hash>
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 ```
 
 검증 시 `hmac.compare_digest`를 사용해 timing attack 위험을 줄인다.
@@ -290,3 +290,5 @@ id_rsa
 
 Phase 7에서는 HMAC Signature로 외부 시스템 인증과 요청 변조 여부를 검증하고, Idempotency-Key와 request_hash 검증으로 중복 요청과 충돌 요청을 구분한다.
 HMAC은 Idempotency를 대체하지 않으며, Idempotency는 계속 중복 처리의 기준이다.
+`HMAC_ENABLED=false`는 local/test 편의용으로만 사용한다.
+Phase 7에서는 production 환경에서 HMAC이 비활성화된 요청을 차단하며, 후속 Phase에서는 이 검사를 애플리케이션 startup 또는 Settings validation으로 옮겨 부팅 시점에 실패하도록 개선한다.

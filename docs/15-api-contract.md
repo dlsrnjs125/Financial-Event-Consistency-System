@@ -45,7 +45,7 @@ Signature base string은 반드시 LF newline(`\n`)으로 구분한다.
 POST
 /api/v1/transaction-events
 2026-05-27T10:00:00+09:00
-<sha256-body-hash>
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 ```
 
 `X-Signature`는 위 base string을 client secret으로 HMAC-SHA256 서명한 64-character hex digest다.
