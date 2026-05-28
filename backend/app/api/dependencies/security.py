@@ -5,9 +5,12 @@ from functools import lru_cache
 from fastapi import Request
 
 from app.core.config import settings
+from app.observability.metrics import record_hmac_auth_failure, record_hmac_auth_success
 from app.security.client_secret_provider import ClientSecretProvider
 from app.security.exceptions import (
+    ExpiredTimestamp,
     InvalidSignature,
+    InvalidTimestamp,
     MissingSecurityHeader,
     UnknownClient,
 )
@@ -40,13 +43,21 @@ async def verify_external_request_signature(request: Request) -> None:
     provider = get_client_secret_provider(settings.external_client_secrets)
     secret = provider.get_secret(client_id)
     if secret is None:
+        record_hmac_auth_failure("unknown_client")
         raise UnknownClient()
 
-    parsed_timestamp = parse_timestamp(timestamp)
-    validate_timestamp_window(
-        parsed_timestamp,
-        allowed_skew_seconds=settings.hmac_allowed_skew_seconds,
-    )
+    try:
+        parsed_timestamp = parse_timestamp(timestamp)
+        validate_timestamp_window(
+            parsed_timestamp,
+            allowed_skew_seconds=settings.hmac_allowed_skew_seconds,
+        )
+    except InvalidTimestamp:
+        record_hmac_auth_failure("invalid_timestamp")
+        raise
+    except ExpiredTimestamp:
+        record_hmac_auth_failure("expired_timestamp")
+        raise
 
     raw_body = await request.body()
     body_hash = generate_body_hash(raw_body)
@@ -57,11 +68,14 @@ async def verify_external_request_signature(request: Request) -> None:
         body_hash=body_hash,
     )
     if not verify_hmac_signature(secret, base_string, signature):
+        record_hmac_auth_failure("invalid_signature")
         raise InvalidSignature()
+    record_hmac_auth_success()
 
 
 def _required_header(request: Request, header_name: str) -> str:
     value = request.headers.get(header_name)
     if value is None or not value.strip():
+        record_hmac_auth_failure("missing_header")
         raise MissingSecurityHeader(header_name)
     return value.strip()

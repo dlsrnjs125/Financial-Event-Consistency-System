@@ -35,6 +35,21 @@ def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
 
+def _trace_id(request: Request) -> str | None:
+    return getattr(request.state, "trace_id", None)
+
+
+def _observability_headers(request: Request) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    request_id = _request_id(request)
+    trace_id = _trace_id(request)
+    if request_id:
+        headers["X-Request-ID"] = request_id
+    if trace_id:
+        headers["X-Trace-ID"] = trace_id
+    return headers
+
+
 def error_response(
     code: str, message: str, request_id: str | None
 ) -> dict[str, dict[str, str | None]]:
@@ -51,10 +66,12 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     elif exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
         code = "SERVICE_UNAVAILABLE"
 
+    headers = dict(getattr(exc, "headers", None) or {})
+    headers.update(_observability_headers(request))
     return JSONResponse(
         status_code=exc.status_code,
         content=error_response(code, message, _request_id(request)),
-        headers=getattr(exc, "headers", None),
+        headers=headers,
     )
 
 
@@ -71,6 +88,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
             "Unexpected server error",
             _request_id(request),
         ),
+        headers=_observability_headers(request),
     )
 
 
@@ -109,6 +127,7 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
     return JSONResponse(
         status_code=status_code,
         content=error_response(code, str(exc), _request_id(request)),
+        headers=_observability_headers(request),
     )
 
 
@@ -135,6 +154,7 @@ async def security_exception_handler(request: Request, exc: Exception) -> JSONRe
     return JSONResponse(
         status_code=status_code,
         content=error_response(code, message, _request_id(request)),
+        headers=_observability_headers(request),
     )
 
 

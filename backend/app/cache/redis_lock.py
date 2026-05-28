@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from uuid import uuid4
 
+from app.observability.metrics import record_redis_lock_result, record_redis_operation
+
 
 @dataclass(frozen=True)
 class RedisLockResult:
@@ -29,6 +31,7 @@ class RedisLock:
         try:
             acquired = bool(self.redis_client.set(key, token, nx=True, px=self.ttl_ms))
         except Exception as exc:
+            record_redis_lock_result("unavailable")
             return RedisLockResult(
                 acquired=False,
                 token=None,
@@ -37,6 +40,7 @@ class RedisLock:
             )
 
         if not acquired:
+            record_redis_lock_result("rejected")
             return RedisLockResult(
                 acquired=False,
                 token=None,
@@ -44,6 +48,7 @@ class RedisLock:
                 reason="LOCK_NOT_ACQUIRED",
             )
 
+        record_redis_lock_result("success")
         return RedisLockResult(
             acquired=True,
             token=token,
@@ -55,5 +60,7 @@ class RedisLock:
             return
         try:
             self.redis_client.eval(self._RELEASE_SCRIPT, 1, key, token)
+            record_redis_operation("lock_release", "success")
         except Exception:
+            record_redis_operation("lock_release", "unavailable")
             return

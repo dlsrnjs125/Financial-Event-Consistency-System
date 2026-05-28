@@ -54,6 +54,8 @@ Phase 5에서는 동일 `external_event_id`를 순차 재요청했을 때 다음
 
 Phase 6에서는 Redis Lock이 동일 Idempotency-Key 요청의 DB transaction 진입을 줄이지만, Single Event Processing의 최종 방어선은 PostgreSQL Unique Constraint와 DB Transaction이다.
 Redis가 down이거나 timeout이 발생해도 동일 `external_event_id`는 1회만 반영되어야 하며, 이 기준은 Redis fallback consistency test로 회귀 검증한다.
+Phase 8에서는 `financial_duplicate_external_event_total`로 duplicate external_event_id 관측 기반을 추가한다.
+단, 최종 중복 반영 여부는 계속 PostgreSQL row count와 Ledger/Account 검증으로 판단한다.
 
 **테스트**:
 ```python
@@ -200,6 +202,8 @@ idempotency_records 테이블
 Phase 6에서는 완료된 Idempotency 응답을 Redis Cache에 보조 저장할 수 있다.
 Cache hit이고 현재 요청의 `request_hash`가 캐시된 `request_hash`와 같으면 DB 조회 없이 저장 응답을 반환할 수 있다.
 다만 Cache miss, hash 불일치, Redis 장애 상황에서는 항상 DB IdempotencyRecord로 fallback하며, Redis Cache는 최종 정합성 저장소로 간주하지 않는다.
+Phase 8에서는 `financial_idempotency_conflict_total`과 `financial_idempotency_decisions_total`로 멱등성 decision과 충돌 상황을 관측한다.
+Idempotency-Key 원문은 metric label에 넣지 않는다.
 
 ---
 

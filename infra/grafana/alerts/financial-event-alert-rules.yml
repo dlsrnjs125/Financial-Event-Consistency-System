@@ -1,0 +1,83 @@
+groups:
+  - name: financial-event-phase-8-draft
+    interval: 30s
+    rules:
+      - alert: High5xxErrorRate
+        expr: |
+          sum(rate(financial_http_errors_total{status_class="5xx"}[5m]))
+          /
+          clamp_min(sum(rate(financial_http_requests_total[5m])), 1)
+          > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate"
+          description: "5xx error rate is above the Phase 8 draft threshold."
+
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(financial_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p99 latency"
+          description: "HTTP p99 latency is above 1 second. Threshold is draft until Phase 9 load tests."
+
+      - alert: IdempotencyConflictSpike
+        expr: sum(rate(financial_idempotency_conflict_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Idempotency conflict spike"
+          description: "Idempotency conflicts are being observed."
+
+      - alert: RedisUnavailable
+        expr: sum(rate(financial_redis_unavailable_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis unavailable"
+          description: "Redis fallback path is being used."
+
+      - alert: HmacAuthFailureSpike
+        expr: sum(rate(financial_hmac_auth_failures_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HMAC authentication failures detected"
+          description: "External request authentication failures are being observed."
+
+      - alert: InvalidStateTransitionDetected
+        expr: sum(rate(financial_invalid_state_transition_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Invalid state transition detected"
+          description: "A forbidden transaction state transition was rejected."
+
+      - alert: ReconciliationFailureDetected
+        expr: financial_reconciliation_failures_total > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Reconciliation failure detected"
+          description: "Ledger and account balance reconciliation failure metric is non-zero."
+
+      - alert: DuplicateProcessingDetected
+        expr: sum(rate(financial_duplicate_external_event_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Duplicate external event detected"
+          description: "Duplicate external_event_id requests are being observed."

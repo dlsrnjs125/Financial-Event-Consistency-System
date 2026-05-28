@@ -1,6 +1,8 @@
 """Service for processing transaction events atomically."""
 
+import logging
 from datetime import datetime
+from time import perf_counter
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +25,12 @@ from app.domain.transaction_result import TransactionProcessingResult
 from app.domain.transaction_status import TransactionStatus
 from app.models.ledger_entry import LedgerEntry
 from app.models.transaction_event import TransactionEvent
+from app.observability.logging import log_event
+from app.observability.metrics import (
+    observe_transaction_duration,
+    record_duplicate_external_event,
+    record_transaction_processed,
+)
 from app.repositories.account_repository import AccountRepository
 from app.repositories.ledger_entry_repository import LedgerEntryRepository
 from app.repositories.transaction_event_repository import TransactionEventRepository
@@ -30,6 +38,8 @@ from app.schemas.transaction_event import TransactionEventCreateRequest
 from app.services.idempotency_service import IdempotencyService
 from app.services.ledger_service import LedgerService
 from app.services.transaction_state_service import TransactionStateService
+
+logger = logging.getLogger(__name__)
 
 
 class TransactionEventService:
@@ -57,15 +67,20 @@ class TransactionEventService:
         idempotency_key: str,
         request: TransactionEventCreateRequest,
     ) -> TransactionProcessingResult:
+        started_at = perf_counter()
         lock_key = idempotency_lock_key(idempotency_key)
         lock_result = None
         if self.redis_lock is not None:
             lock_result = self.redis_lock.acquire(lock_key)
             if lock_result.redis_available and not lock_result.acquired:
-                return self._already_processing_result()
+                result = self._already_processing_result()
+                self._record_process_result(request, result, started_at)
+                return result
 
         try:
-            return self._process_with_db_fallback(idempotency_key, request)
+            result = self._process_with_db_fallback(idempotency_key, request)
+            self._record_process_result(request, result, started_at)
+            return result
         finally:
             if (
                 self.redis_lock is not None
@@ -126,6 +141,15 @@ class TransactionEventService:
     ) -> TransactionProcessingResult:
         try:
             self._active_event = None
+            log_event(
+                logger,
+                logging.INFO,
+                "transaction_processing_started",
+                external_event_id=request.external_event_id,
+                event_type=request.event_type.value,
+                idempotency_key=idempotency_key,
+                account_no=request.account_no,
+            )
             result = self._apply_started_request(idempotency_key, request)
             self.idempotency_service.complete(
                 idempotency_key,
@@ -147,6 +171,16 @@ class TransactionEventService:
                 payload=payload,
             )
             if self._is_domain_failure(exc):
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "transaction_processing_failed",
+                    external_event_id=request.external_event_id,
+                    event_type=request.event_type.value,
+                    transaction_status=TransactionStatus.FAILED.value,
+                    idempotency_key=idempotency_key,
+                    account_no=request.account_no,
+                )
                 return TransactionProcessingResult(
                     status_code=status_code,
                     body=response_body,
@@ -173,6 +207,16 @@ class TransactionEventService:
         )
         if existing_event is not None:
             self._ensure_duplicate_matches_request(existing_event, request, account.id)
+            log_event(
+                logger,
+                logging.INFO,
+                "duplicate_external_event_detected",
+                external_event_id=request.external_event_id,
+                event_type=request.event_type.value,
+                idempotency_key=idempotency_key,
+                account_no=request.account_no,
+            )
+            record_duplicate_external_event(request.event_type.value)
             return self._duplicate_result(existing_event)
 
         original_event = self._get_original_event_for_cancel(request)
@@ -202,6 +246,17 @@ class TransactionEventService:
                 )
             self.transaction_state_service.change_status(
                 event, TransactionStatus.COMPLETED, "ledger processing completed"
+            )
+            log_event(
+                logger,
+                logging.INFO,
+                "transaction_processing_completed",
+                event_id=event.id,
+                external_event_id=event.external_event_id,
+                event_type=event.event_type,
+                transaction_status=event.status,
+                idempotency_key=idempotency_key,
+                account_no=request.account_no,
             )
             return self._success_result(event, ledger, processed=True, duplicated=False)
         except IntegrityError:
@@ -340,3 +395,21 @@ class TransactionEventService:
                 TransactionAlreadySettled,
             ),
         )
+
+    def _record_process_result(
+        self,
+        request: TransactionEventCreateRequest,
+        result: TransactionProcessingResult,
+        started_at: float,
+    ) -> None:
+        duration = perf_counter() - started_at
+        event_type = request.event_type.value
+        status_value = str(result.body.get("status", "unknown"))
+        if result.processed:
+            outcome = "processed"
+        elif result.duplicated:
+            outcome = "duplicated"
+        else:
+            outcome = "failed"
+        observe_transaction_duration(event_type, duration)
+        record_transaction_processed(event_type, status_value, outcome)
