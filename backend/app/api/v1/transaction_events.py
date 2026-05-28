@@ -4,8 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.idempotency import get_idempotency_key
+from app.cache.idempotency_cache import IdempotencyResponseCache
+from app.cache.redis_lock import RedisLock
+from app.core.config import settings
 from app.db.session import get_db
 from app.domain.exceptions import AccountNotFound
+from app.redis.client import get_redis_client
 from app.repositories.account_repository import AccountRepository
 from app.repositories.idempotency_record_repository import IdempotencyRecordRepository
 from app.repositories.ledger_entry_repository import LedgerEntryRepository
@@ -16,6 +20,7 @@ from app.schemas.transaction_event import (
     TransactionEventStatusResponse,
     mask_account_no,
 )
+from app.services.cached_idempotency_service import CachedIdempotencyService
 from app.services.idempotency_service import IdempotencyService
 from app.services.ledger_service import LedgerService
 from app.services.transaction_event_service import TransactionEventService
@@ -24,21 +29,45 @@ from app.services.transaction_state_service import TransactionStateService
 router = APIRouter(tags=["Transaction Events"])
 
 
+def build_idempotency_service(session: Session):
+    idempotency_service = IdempotencyService(IdempotencyRecordRepository(session))
+    if not settings.redis_enabled:
+        return idempotency_service
+    try:
+        redis_client = get_redis_client()
+    except Exception:
+        return idempotency_service
+    return CachedIdempotencyService(
+        idempotency_service=idempotency_service,
+        response_cache=IdempotencyResponseCache(
+            redis_client,
+            ttl_seconds=settings.redis_idempotency_cache_ttl_seconds,
+        ),
+    )
+
+
+def build_redis_lock() -> RedisLock | None:
+    if not settings.redis_enabled:
+        return None
+    try:
+        return RedisLock(get_redis_client(), ttl_ms=settings.redis_lock_ttl_ms)
+    except Exception:
+        return None
+
+
 def build_transaction_event_service(session: Session) -> TransactionEventService:
     account_repository = AccountRepository(session)
     ledger_entry_repository = LedgerEntryRepository(session)
     transaction_event_repository = TransactionEventRepository(session)
     ledger_service = LedgerService(account_repository, ledger_entry_repository)
-    idempotency_service = IdempotencyService(
-        IdempotencyRecordRepository(session),
-    )
     return TransactionEventService(
         session=session,
-        idempotency_service=idempotency_service,
+        idempotency_service=build_idempotency_service(session),
         transaction_event_repository=transaction_event_repository,
         account_repository=account_repository,
         ledger_service=ledger_service,
         transaction_state_service=TransactionStateService(session),
+        redis_lock=build_redis_lock(),
     )
 
 

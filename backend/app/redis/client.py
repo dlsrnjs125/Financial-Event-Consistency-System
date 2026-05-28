@@ -6,7 +6,13 @@ from app.core.config import settings
 
 
 def get_redis_client() -> Redis:
-    return Redis.from_url(settings.redis_url, decode_responses=True)
+    timeout_seconds = settings.redis_socket_timeout_ms / 1000
+    return Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=timeout_seconds,
+        socket_timeout=timeout_seconds,
+    )
 
 
 def check_redis_connection() -> bool:

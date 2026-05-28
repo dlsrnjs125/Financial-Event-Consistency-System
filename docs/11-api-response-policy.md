@@ -19,7 +19,7 @@
 | Idempotency-Key 누락 | 400 Bad Request | 필수 Header 누락 | Header 추가 후 재요청 |
 | 잘못된 상태 전이 | 422 Unprocessable Entity | 도메인 규칙 위반 | 재시도해도 실패 |
 | DB Pool 고갈 | 503 Service Unavailable | 일시적 처리 불가 | 가능 |
-| Redis 장애 | 200 또는 503 | DB fallback 가능 여부에 따라 결정 | 상황별 |
+| Redis 장애 | 기존 DB 처리 결과 | PostgreSQL 기반 fallback | 상황별 |
 | 인증 실패 | 401 Unauthorized | 인증 실패 | Secret 확인 필요 |
 | 권한 없음 | 403 Forbidden | 허용되지 않은 client | 재시도해도 실패 |
 | 요청 형식 오류 | 400 Bad Request | 필수 필드 누락 | 수정 후 재요청 |
@@ -64,7 +64,26 @@ FAILED 재처리 허용 여부는 후속 ADR에서 별도 검토한다.
 
 ---
 
-## 5. 설계 결론
+## 5. Phase 6 Redis Lock/Cache 응답 정책
+
+Phase 6에서는 Redis를 최종 정합성 저장소가 아니라 중복 요청 폭주 완화와 완료 응답 재사용을 위한 최적화 계층으로 사용한다.
+
+| 상황 | 처리 정책 |
+|------|-----------|
+| Redis Cache hit + 같은 request_hash | DB 조회 없이 저장된 `response_code`, `response_body` 반환 |
+| Redis Cache hit + 다른 request_hash | Cache를 사용하지 않고 DB IdempotencyRecord로 fallback |
+| Redis Cache miss | 기존 DB IdempotencyService로 fallback |
+| DB에서 COMPLETED 재사용 확인 | Redis Cache 저장을 best-effort로 시도 |
+| Redis Lock 획득 실패 | DB transaction 진입 전 `202 Accepted` 처리 중 응답 반환 |
+| Redis Lock 획득 성공 | 기존 DB Transaction 기반 거래 처리 수행 후 finally에서 release |
+| Redis 장애 또는 timeout | Redis Lock/Cache 없이 기존 DB 기반 처리로 fallback |
+
+Redis Lock 획득 실패는 거래 실패가 아니라 "동일 Idempotency-Key 요청이 이미 처리 중일 가능성이 높다"는 신호로 다룬다.
+Redis 장애가 발생해도 PostgreSQL Unique Constraint와 DB Transaction을 최종 방어선으로 유지한다.
+
+---
+
+## 6. 설계 결론
 
 HTTP Status는 단순 성공/실패 표현이 아니라 외부 시스템의 재시도 전략에 영향을 준다.
 
