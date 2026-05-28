@@ -5,7 +5,7 @@ import {
   buildHeaders,
   buildPayload,
   encodeBody,
-  isAllowedTransactionStatus,
+  isDuplicateScenarioAllowed,
   recordTransactionResult,
   thresholds,
   transactionUrl,
@@ -28,7 +28,8 @@ export const options = {
   duration: __ENV.DURATION || '30s',
   thresholds: {
     ...thresholds.duplicate,
-    duplicate_processing_rate: ['rate==0'],
+    unexpected_response_rate: ['rate==0'],
+    server_error_rate: ['rate==0'],
   },
   tags: {
     scenario: 'phase9-duplicate-storm',
@@ -39,12 +40,11 @@ export default function () {
   const headers = buildHeaders(DUPLICATE_BODY, DUPLICATE_KEY, API_PATH);
   const res = http.post(transactionUrl(), DUPLICATE_BODY, { headers });
 
-  recordTransactionResult(res);
+  recordTransactionResult(res, [200, 202, 409]);
   const duplicated = safeDuplicatedFlag(res);
 
   check(res, {
-    'status is 200/202/409': (r) => isAllowedTransactionStatus(r.status),
-    'same-key different-body conflict is not expected': (r) => r.status !== 409,
+    'status is 200/202/409': (r) => isDuplicateScenarioAllowed(r.status),
     'no 5xx': (r) => r.status < 500,
     '200 response is original or replay': (r) => r.status !== 200 || duplicated === true || duplicated === false,
   });

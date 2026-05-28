@@ -11,14 +11,20 @@ export const thresholds = {
   smoke: {
     http_req_duration: ['p(95)<500', 'p(99)<1000'],
     http_req_failed: ['rate<0.01'],
+    unexpected_response_rate: ['rate==0'],
+    server_error_rate: ['rate==0'],
   },
   normal: {
     http_req_duration: ['p(50)<100', 'p(95)<300', 'p(99)<1000'],
     http_req_failed: ['rate<0.01'],
+    unexpected_response_rate: ['rate==0'],
+    server_error_rate: ['rate==0'],
   },
   peak: {
     http_req_duration: ['p(95)<800', 'p(99)<1500'],
     http_req_failed: ['rate<0.03'],
+    unexpected_response_rate: ['rate==0'],
+    server_error_rate: ['rate==0'],
   },
   duplicate: {
     http_req_duration: ['p(95)<1000', 'p(99)<2000'],
@@ -43,7 +49,8 @@ export const transactionProcessing = new Counter('transaction_processing_total')
 export const transactionConflicts = new Counter('transaction_conflicts_total');
 export const transactionFailures = new Counter('transaction_failures_total');
 export const duplicateResponses = new Counter('duplicate_responses_total');
-export const duplicateProcessingRate = new Rate('duplicate_processing_rate');
+export const unexpectedResponseRate = new Rate('unexpected_response_rate');
+export const serverErrorRate = new Rate('server_error_rate');
 export const apiDuration = new Trend('transaction_api_duration_ms');
 
 export function uniqueSuffix(prefix = 'k6') {
@@ -126,34 +133,36 @@ export function transactionUrl(path = API_PATH) {
   return `${BASE_URL}${path}`;
 }
 
-export function isAllowedTransactionStatus(status) {
+export function isSuccessOrProcessing(status) {
+  return [200, 202].includes(status);
+}
+
+export function isDuplicateScenarioAllowed(status) {
   return [200, 202, 409].includes(status);
 }
 
-export function recordTransactionResult(res) {
+export function recordTransactionResult(res, allowedStatuses = [200, 202, 409]) {
   transactionRequests.add(1);
   apiDuration.add(res.timings.duration);
+  unexpectedResponseRate.add(!allowedStatuses.includes(res.status));
+  serverErrorRate.add(res.status >= 500);
 
   if (res.status === 200) {
     transactionCompleted.add(1);
     const duplicated = safeJsonValue(res, 'duplicated');
     duplicateResponses.add(duplicated === true ? 1 : 0);
-    duplicateProcessingRate.add(false);
     return;
   }
   if (res.status === 202) {
     transactionProcessing.add(1);
-    duplicateProcessingRate.add(false);
     return;
   }
   if (res.status === 409) {
     transactionConflicts.add(1);
-    duplicateProcessingRate.add(false);
     return;
   }
 
   transactionFailures.add(1);
-  duplicateProcessingRate.add(true);
 }
 
 export function safeJsonValue(res, selector) {

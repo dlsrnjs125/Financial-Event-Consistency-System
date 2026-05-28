@@ -6,7 +6,7 @@ import {
   buildHeaders,
   buildPayload,
   encodeBody,
-  isAllowedTransactionStatus,
+  isSuccessOrProcessing,
   recordTransactionResult,
   thresholds,
   transactionUrl,
@@ -37,9 +37,9 @@ export default function () {
   const headers = buildHeaders(body, uniqueIdempotencyKey('idem-smoke'), API_PATH);
   const res = http.post(transactionUrl(), body, { headers });
 
-  recordTransactionResult(res);
+  recordTransactionResult(res, [200, 202]);
   check(res, {
-    'transaction status is allowed': (r) => isAllowedTransactionStatus(r.status),
+    'transaction status is 200 or 202': (r) => isSuccessOrProcessing(r.status),
     'transaction has no 5xx': (r) => r.status < 500,
     'completed response has event_id': (r) => r.status !== 200 || r.json('event_id') !== undefined,
   });

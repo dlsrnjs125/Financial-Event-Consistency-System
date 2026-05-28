@@ -13,6 +13,15 @@ FROM (
 ) duplicated_ledger_events;
 
 SELECT
+    COUNT(*) AS duplicated_external_event_count
+FROM (
+    SELECT external_event_id
+    FROM transaction_events
+    GROUP BY external_event_id
+    HAVING COUNT(*) > 1
+) duplicated_events;
+
+SELECT
     external_event_id,
     COUNT(*) AS event_rows
 FROM transaction_events

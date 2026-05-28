@@ -20,6 +20,7 @@ RUFF ?= .venv/bin/ruff
 # Docker
 DOCKER ?= docker
 DOCKER_COMPOSE ?= docker compose
+DOCKER_COMPOSE_PERF ?= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.perf.yml
 K6 ?= k6
 
 # Paths
@@ -101,6 +102,14 @@ local-stop: ## Stop Docker Compose stack
 local-restart: ## Restart Docker Compose stack
 	@$(MAKE) local-stop
 	@$(MAKE) local-bg
+
+.PHONY: local-rebuild
+local-rebuild: docker-check ## Rebuild and recreate local API/Nginx services
+	$(DOCKER_COMPOSE) up -d --build --force-recreate api-blue nginx
+
+.PHONY: local-perf-bg
+local-perf-bg: docker-check ## Start Docker Compose stack with Phase 9 perf Nginx profile
+	$(DOCKER_COMPOSE_PERF) up --build -d
 
 .PHONY: local-status
 local-status: ## Show Docker Compose service status
@@ -209,14 +218,70 @@ k6-redis-down: ## Run Phase 9 k6 Redis-down scenario after pausing Redis separat
 	@echo "Expected procedure: docker compose pause redis && make k6-redis-down && docker compose unpause redis"
 	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/redis-down-test.js
 
+.PHONY: k6-redis-down-check
+k6-redis-down-check: ## Pause Redis, run redis-down k6 scenario, then unpause Redis
+	@set -e; \
+	$(DOCKER_COMPOSE) pause redis; \
+	trap '$(DOCKER_COMPOSE) unpause redis' EXIT; \
+	$(MAKE) k6-redis-down
+
+.PHONY: k6-verify
+k6-verify: ## Run post-k6 PostgreSQL consistency verification SQL
+	@$(DOCKER_COMPOSE) exec -T postgres psql -U postgres -d financial_events < tests/k6/sql/verify-consistency.sql
+
 .PHONY: k6-all
 k6-all: k6-smoke k6-normal k6-peak k6-duplicate ## Run Phase 9 k6 tests except Redis-down
 
 .PHONY: perf-check
-perf-check: k6-smoke k6-duplicate ## Run quick Phase 9 performance sanity checks
+perf-check: k6-smoke k6-duplicate k6-verify ## Run quick Phase 9 performance sanity checks
 
 .PHONY: phase9-check
 phase9-check: perf-check ## Alias for Phase 9 performance sanity checks
+
+.PHONY: phase9-full
+phase9-full: k6-smoke k6-normal k6-peak k6-duplicate k6-redis-down-check k6-verify ## Run all Phase 9 k6 scenarios and verification
+
+.PHONY: perf-cache-off
+perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off
+	@IDEMPOTENCY_CACHE_ENABLED=false REDIS_LOCK_ENABLED=true $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-duplicate
+	@$(MAKE) k6-verify
+
+.PHONY: perf-cache-on
+perf-cache-on: ## Run duplicate storm with Redis lock and idempotency cache on
+	@IDEMPOTENCY_CACHE_ENABLED=true REDIS_LOCK_ENABLED=true $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-duplicate
+	@$(MAKE) k6-verify
+
+.PHONY: perf-lock-off
+perf-lock-off: ## Run duplicate storm with Redis lock off and idempotency cache on
+	@REDIS_LOCK_ENABLED=false IDEMPOTENCY_CACHE_ENABLED=true $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-duplicate
+	@$(MAKE) k6-verify
+
+.PHONY: perf-lock-on
+perf-lock-on: ## Run duplicate storm with Redis lock and idempotency cache on
+	@REDIS_LOCK_ENABLED=true IDEMPOTENCY_CACHE_ENABLED=true $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-duplicate
+	@$(MAKE) k6-verify
+
+.PHONY: perf-db-pool-5
+perf-db-pool-5: ## Run peak load with DB pool size 5
+	@DB_POOL_SIZE=5 DB_MAX_OVERFLOW=0 $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-peak
+	@$(MAKE) k6-verify
+
+.PHONY: perf-db-pool-10
+perf-db-pool-10: ## Run peak load with DB pool size 10
+	@DB_POOL_SIZE=10 DB_MAX_OVERFLOW=5 $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-peak
+	@$(MAKE) k6-verify
+
+.PHONY: perf-db-pool-20
+perf-db-pool-20: ## Run peak load with DB pool size 20
+	@DB_POOL_SIZE=20 DB_MAX_OVERFLOW=10 $(DOCKER_COMPOSE_PERF) up -d --build --force-recreate api-blue nginx
+	@$(MAKE) k6-peak
+	@$(MAKE) k6-verify
 
 # Health checks
 .PHONY: health

@@ -1,0 +1,5 @@
+services:
+  nginx:
+    volumes:
+      - ./infra/nginx/nginx.perf.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/conf.d:/etc/nginx/conf.d:ro

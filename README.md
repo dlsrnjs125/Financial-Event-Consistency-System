@@ -298,34 +298,61 @@ make final-check
 Phase 9 기준 k6 스크립트는 HMAC이 켜진 상태에서 실행하는 것을 원칙으로 한다.
 로컬 Docker Compose 스택은 Nginx를 `http://localhost:8080`으로 노출하고,
 테스트용 client secret은 `.env.example`의 더미 값과 같은 `bank-a:change-me-secret`을 사용한다.
-로컬 Nginx rate limit은 duplicate storm 실험이 API/Redis/PostgreSQL 경로까지 도달하도록 높게 설정되어 있다.
-운영 rate limit 기준과 배포 전 gate 적용은 후속 Phase에서 별도로 다룬다.
+기본 Nginx 설정은 운영형 rate limit을 유지하고, Phase 9 부하 실험에서는 `docker-compose.perf.yml`과 `infra/nginx/nginx.perf.conf`를 사용해 Nginx가 API/Redis/PostgreSQL 병목을 가리지 않도록 분리한다.
 
 ```bash
 # macOS 예시
 brew install k6
 
 # 또는 Docker 기반 실행 예시
-docker run --rm -v "$PWD:/work" -w /work grafana/k6 run tests/k6/smoke-test.js
+docker run --rm \
+  -v "$PWD:/work" \
+  -w /work \
+  -e BASE_URL=http://host.docker.internal:8080 \
+  -e CLIENT_ID=bank-a \
+  -e CLIENT_SECRET=change-me-secret \
+  grafana/k6 run tests/k6/smoke-test.js
+
+# Linux Docker 예시
+docker run --rm --network host \
+  -v "$PWD:/work" \
+  -w /work \
+  -e BASE_URL=http://localhost:8080 \
+  -e CLIENT_ID=bank-a \
+  -e CLIENT_SECRET=change-me-secret \
+  grafana/k6 run tests/k6/smoke-test.js
 ```
 
 권장 실행 순서:
 
 ```bash
-make local-bg
+make local-perf-bg
 make k6-smoke
 make k6-normal
 make k6-peak
 make k6-duplicate
+make k6-verify
 ```
 
 Redis Down 시나리오는 Phase 9에서 스크립트와 절차까지만 제공한다.
 장애 재현 자동화는 Phase 10 범위다.
 
 ```bash
-docker compose pause redis
-make k6-redis-down
-docker compose unpause redis
+make local-perf-bg
+make k6-redis-down-check
+make k6-verify
+```
+
+Redis Cache/Lock과 DB Pool 비교 실험은 다음 타겟으로 조건을 바꿔 실행한다.
+
+```bash
+make perf-cache-off
+make perf-cache-on
+make perf-lock-off
+make perf-lock-on
+make perf-db-pool-5
+make perf-db-pool-10
+make perf-db-pool-20
 ```
 
 환경변수로 대상 URL과 HMAC client를 바꿀 수 있다.
@@ -353,13 +380,15 @@ BASE_URL=http://localhost:8080 CLIENT_ID=bank-a CLIENT_SECRET=change-me-secret k
 
 | 구분 | 확인 지표 |
 |------|-----------|
-| k6 | p50, p95, p99, RPS, `http_req_failed`, `duplicate_processing_rate` |
+| k6 | p50, p95, p99, RPS, `http_req_failed`, `unexpected_response_rate`, `server_error_rate` |
 | Prometheus | `financial_http_request_duration_seconds`, `financial_http_errors_total`, `financial_transaction_processing_duration_seconds` |
 | Idempotency | `financial_idempotency_decisions_total`, `financial_idempotency_conflict_total`, `financial_idempotency_processing_total` |
 | Redis | `financial_redis_lock_acquired_total`, `financial_redis_lock_rejected_total`, `financial_idempotency_cache_hit_total`, `financial_redis_unavailable_total` |
 | 정합성 | 동일 `external_event_id`의 Ledger 중복 생성 0건 |
 
-테스트 후 `tests/k6/sql/verify-consistency.sql` 쿼리와 Prometheus/Grafana를 함께 확인하고,
+`unexpected_response_rate`는 HTTP 응답 정책 위반율이며 실제 중복 반영률이 아니다.
+실제 duplicate processing rate는 `make k6-verify`로 PostgreSQL 검증 쿼리를 실행해 판단한다.
+테스트 후 Prometheus/Grafana 지표와 `make k6-verify` 결과를 함께 확인하고,
 결과는 [Phase 9 Performance Results](./docs/performance/phase-9-results.md)에 기록한다.
 CI/CD gate 적용은 Phase 11 범위다.
 
@@ -473,7 +502,7 @@ backend/
 make local-status
 
 # 재시작
-docker-compose restart redis
+docker compose restart redis
 
 # 검증: 정합성은 유지되는가?
 curl http://localhost:8000/metrics | grep financial_duplicate_external_event_total
@@ -485,13 +514,13 @@ curl http://localhost:8000/metrics | grep financial_duplicate_external_event_tot
 psql -U postgres -d financial_events -c "SELECT count(*) FROM pg_stat_activity;"
 
 # 재시작
-docker-compose restart postgres
+docker compose restart postgres
 ```
 
 ### API 서버 장애
 ```bash
 # Blue → Green 전환
-docker-compose exec nginx bash -c "sed -i 's/api-blue:8000/api-green:8000/g' /etc/nginx/nginx.conf && nginx -s reload"
+docker compose exec nginx bash -c "sed -i 's/api-blue:8000/api-green:8000/g' /etc/nginx/nginx.conf && nginx -s reload"
 
 # 또는 자동 Rollback
 ./scripts/rollback.sh
