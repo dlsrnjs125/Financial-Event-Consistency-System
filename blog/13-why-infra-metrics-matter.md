@@ -107,12 +107,33 @@ reports/monitoring/ops1-compose-status.md
 
 Ops Phase 1에서 남길 캡처는 성능 그래프가 아니라 monitoring foundation이 정상 구성되었는지 보여주는 화면이다.
 
-```text
-docs/images/grafana/08-prometheus-targets-up.png
-docs/images/grafana/09-grafana-datasource-provisioning.png
-docs/images/grafana/10-ops1-dashboard-list.png
-docs/images/grafana/11-ops1-required-metrics-query.png
-```
+### 7.1 Prometheus Targets UP
+
+![Prometheus Targets UP](../docs/images/grafana/08-prometheus-targets-up.png)
+
+Prometheus에서 API, cAdvisor, node-exporter, PostgreSQL exporter, Redis exporter target이 모두 `UP` 상태로 scrape되는 것을 확인했다.
+특히 `api-blue:8000/metrics`, `postgres-exporter:9187`, `redis-exporter:9121`, `cadvisor:8080`, `node-exporter:9100`이 모두 정상 수집 대상에 포함된다.
+
+### 7.2 Required Metrics Query
+
+![Required Metrics Query](../docs/images/grafana/11-ops1-required-metrics-query.png)
+
+`up{job=~"api|node-exporter|cadvisor|postgres-exporter|redis-exporter"}` 쿼리 결과 모든 필수 job이 `1`로 조회되었다.
+Targets 화면뿐 아니라 PromQL query로도 필수 exporter job 상태를 확인했다.
+
+### 7.3 Grafana Datasource Provisioning
+
+![Grafana Datasource](../docs/images/grafana/09-grafana-datasource-provisioning.png)
+
+Grafana datasource provisioning을 통해 Prometheus datasource가 자동 등록되었다.
+datasource는 Docker network 내부 주소인 `http://prometheus:9090`으로 연결되며, 수동 클릭 없이 provisioning 파일 기준으로 등록된다.
+
+### 7.4 Dashboard Provisioning
+
+![Grafana Dashboard List](../docs/images/grafana/10-ops1-dashboard-list.png)
+
+Grafana에는 API, Infra, Nginx, PostgreSQL, Redis 계층별 dashboard를 `Financial Event Ops` 폴더로 provisioning했다.
+이번 단계에서는 계층별 관측 기반을 구성하고, 실제 장애/부하 수치는 이후 Ops 단계에서 채운다.
 
 캡처에는 HMAC secret, DB password, Redis password, Authorization header, 계좌번호 원문, idempotency key 원문, raw request body가 노출되지 않아야 한다.
 
