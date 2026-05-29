@@ -36,6 +36,7 @@ from app.repositories.account_repository import AccountRepository
 from app.repositories.ledger_entry_repository import LedgerEntryRepository
 from app.repositories.transaction_event_repository import TransactionEventRepository
 from app.schemas.transaction_event import TransactionEventCreateRequest
+from app.security.masking import mask_idempotency_key
 from app.services.idempotency_service import IdempotencyService
 from app.services.ledger_service import LedgerService
 from app.services.transaction_state_service import TransactionStateService
@@ -80,7 +81,7 @@ class TransactionEventService:
                     "redis_lock_degraded_mode_enabled",
                     external_event_id=request.external_event_id,
                     event_type=request.event_type.value,
-                    idempotency_key=idempotency_key,
+                    idempotency_key_masked=mask_idempotency_key(idempotency_key),
                     account_no=request.account_no,
                     operation="lock_acquire",
                     dependency="redis",
@@ -146,7 +147,7 @@ class TransactionEventService:
                     "db_integrity_conflict_retry",
                     external_event_id=request.external_event_id,
                     event_type=request.event_type.value,
-                    idempotency_key=idempotency_key,
+                    idempotency_key_masked=mask_idempotency_key(idempotency_key),
                     account_no=request.account_no,
                     operation="transaction_event_process",
                     dependency="postgres",

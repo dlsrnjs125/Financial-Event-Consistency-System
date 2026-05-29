@@ -119,7 +119,7 @@ make local-stop    # Docker Compose 스택 중지
 
 ```
 GET /health        서버 상태
-GET /ready         PostgreSQL, Redis readiness 확인
+GET /ready         PostgreSQL readiness와 Redis degraded 상태 확인
 GET /metrics       Prometheus 메트릭
 POST /api/v1/transaction-events
 GET /api/v1/transaction-events/{event_id}
@@ -360,9 +360,13 @@ Redis 장애 fallback 정책:
 |------|-----------|
 | Redis lock/cache 정상 | Redis lock과 completed response cache로 duplicate storm DB 진입을 완화 |
 | Redis connection error/timeout | warning log와 metric 기록 후 DB transaction 기준 처리 |
-| Redis lock 획득 실패 | 동일 key 처리 중으로 보고 기존 정책의 202 응답 유지 |
+| Redis lock 획득 실패 | Redis 장애가 아니라 동일 key 처리 중으로 보고 `rejected/lock_not_acquired` metric과 202 응답 유지 |
 | PostgreSQL unique conflict | rollback 후 1회 재시도해 기존 idempotency/event 결과 조회 |
 | PostgreSQL 장애 | Source of Truth 장애이므로 `/ready` 실패 및 5xx/503 계열로 구분 |
+
+`/ready` 정책은 PostgreSQL을 hard dependency로, Redis를 degraded dependency로 분리한다.
+PostgreSQL이 정상이면 Redis 장애 중에도 `/ready`는 200 OK와 `mode="degraded"`를 반환해 트래픽 대상에서 제외되지 않도록 한다.
+Redis 장애 상태는 response body와 `financial_readiness_dependency_status{dependency="redis"}` metric으로 확인한다.
 
 장애 재현 명령:
 
@@ -373,6 +377,7 @@ make failure-redis-up
 make failure-redis-logs
 make failure-api-restart
 make failure-db-down
+make failure-db-up
 ```
 
 Redis Down duplicate storm 실행:

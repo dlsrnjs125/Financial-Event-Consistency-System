@@ -21,20 +21,22 @@ def health_check() -> dict[str, str]:
 
 @router.get("/ready")
 def readiness_check(response: Response) -> dict[str, object]:
-    database_ok = check_database_connection()
+    postgres_ok = check_database_connection()
     redis_ok = check_redis_connection()
-    record_readiness_dependency_status("postgres", database_ok)
+    record_readiness_dependency_status("postgres", postgres_ok)
     record_readiness_dependency_status("redis", redis_ok)
     checks = {
-        "database": "ok" if database_ok else "failed",
-        "redis": "ok" if redis_ok else "failed",
+        "postgres": "ok" if postgres_ok else "failed",
+        "redis": "ok" if redis_ok else "degraded",
     }
-    ready = all(value == "ok" for value in checks.values())
+    ready = postgres_ok
 
     if not ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
+    mode = "normal" if redis_ok else "degraded"
     return {
         "status": "ready" if ready else "not_ready",
+        "mode": mode if ready else "unavailable",
         "checks": checks,
     }

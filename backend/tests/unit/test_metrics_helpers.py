@@ -101,6 +101,38 @@ def test_redis_fallback_metric_uses_bounded_labels():
     assert after == before + 1
 
 
+def test_redis_lock_rejected_metric_is_not_recorded_as_failure():
+    rejected_before = sample_value(
+        "financial_redis_operation_total",
+        {
+            "operation": "lock_acquire",
+            "result": "rejected",
+            "reason": "lock_not_acquired",
+        },
+    )
+    failed_before = sample_value(
+        "financial_redis_operation_failed_total",
+        {"operation": "lock_acquire", "reason": "lock_not_acquired"},
+    )
+
+    metrics.record_redis_operation_v2("lock_acquire", "rejected", "lock_not_acquired")
+
+    rejected_after = sample_value(
+        "financial_redis_operation_total",
+        {
+            "operation": "lock_acquire",
+            "result": "rejected",
+            "reason": "lock_not_acquired",
+        },
+    )
+    failed_after = sample_value(
+        "financial_redis_operation_failed_total",
+        {"operation": "lock_acquire", "reason": "lock_not_acquired"},
+    )
+    assert rejected_after == rejected_before + 1
+    assert failed_after == failed_before
+
+
 def test_db_transaction_retry_metric_increments():
     before = sample_value(
         "financial_db_transaction_retry_total",

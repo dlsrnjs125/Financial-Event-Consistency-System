@@ -37,13 +37,29 @@ def test_ready_returns_200_when_dependencies_are_available(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "checks": {"database": "ok", "redis": "ok"},
+        "mode": "normal",
+        "checks": {"postgres": "ok", "redis": "ok"},
     }
 
 
-def test_ready_returns_503_when_a_dependency_fails(monkeypatch):
+def test_ready_returns_200_degraded_when_only_redis_fails(monkeypatch):
     monkeypatch.setattr(health, "check_database_connection", lambda: True)
     monkeypatch.setattr(health, "check_redis_connection", lambda: False)
+    client = TestClient(app)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "mode": "degraded",
+        "checks": {"postgres": "ok", "redis": "degraded"},
+    }
+
+
+def test_ready_returns_503_when_postgres_fails(monkeypatch):
+    monkeypatch.setattr(health, "check_database_connection", lambda: False)
+    monkeypatch.setattr(health, "check_redis_connection", lambda: True)
     client = TestClient(app)
 
     response = client.get("/ready")
@@ -51,7 +67,8 @@ def test_ready_returns_503_when_a_dependency_fails(monkeypatch):
     assert response.status_code == 503
     assert response.json() == {
         "status": "not_ready",
-        "checks": {"database": "ok", "redis": "failed"},
+        "mode": "unavailable",
+        "checks": {"postgres": "failed", "redis": "ok"},
     }
 
 

@@ -46,6 +46,7 @@ def test_acquire_fails_when_key_exists():
     assert first.acquired is True
     assert second.acquired is False
     assert second.redis_available is True
+    assert second.reason == "LOCK_NOT_ACQUIRED"
 
 
 def test_release_deletes_only_same_token():

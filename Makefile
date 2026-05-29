@@ -293,6 +293,12 @@ failure-db-down: docker-check ## Stop PostgreSQL container without deleting data
 	$(DOCKER_COMPOSE) ps
 	@echo "DB is stopped. Readiness should fail: curl -i $(BASE_URL)/ready"
 
+.PHONY: failure-db-up
+failure-db-up: docker-check ## Start PostgreSQL container and print readiness checks
+	$(DOCKER_COMPOSE) start postgres
+	$(DOCKER_COMPOSE) ps postgres
+	@echo "Readiness check: curl -i $(BASE_URL)/ready"
+
 .PHONY: failure-status
 failure-status: ## Show Docker Compose service status
 	$(DOCKER_COMPOSE) ps

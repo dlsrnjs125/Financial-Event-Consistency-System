@@ -66,7 +66,7 @@ class RedisLock:
 
         if not acquired:
             record_redis_lock_result("rejected")
-            record_redis_operation_v2("lock_acquire", "failure", "unavailable")
+            record_redis_operation_v2("lock_acquire", "rejected", "lock_not_acquired")
             return RedisLockResult(
                 acquired=False,
                 token=None,

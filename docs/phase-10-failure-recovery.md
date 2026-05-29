@@ -15,7 +15,7 @@ Redis를 최종 정합성 저장소가 아니라 중복 요청 완화와 응답 
 - 예상 원인: Redis 프로세스 장애, 네트워크 단절, 컨테이너 중지, Redis 재시작.
 - 사용자 영향: 캐시 재사용과 Redis lock 기반 중복 완화가 사라져 응답 시간이 증가할 수 있다.
 - 정합성 위험: duplicate storm 중 PostgreSQL unique constraint 경합이 증가한다.
-- 탐지 방법: `financial_redis_fallback_total`, `financial_redis_operation_failed_total`, `/ready`의 Redis failed, structured log의 `redis_*_fallback`.
+- 탐지 방법: `financial_redis_fallback_total`, `financial_redis_operation_failed_total`, `/ready`의 `mode="degraded"`와 Redis `degraded`, structured log의 `redis_*_fallback`.
 - 대응 전략: Redis 작업 실패를 warning log/metric으로 기록하고 DB transaction, idempotency record, unique constraint 기준으로 처리한다.
 - 복구 후 검증 방법: `make failure-redis-up`, `make k6-verify`, `/metrics`에서 fallback metric 확인.
 - README에 기록할 요약 문장: Redis Down 중에도 PostgreSQL 기준 중복 Ledger 반영은 0건이어야 하며, Redis 실패는 fallback metric/log로 추적한다.
@@ -83,6 +83,39 @@ Redis를 최종 정합성 저장소가 아니라 중복 요청 완화와 응답 
 4. 재시도 시 기존 idempotency record 또는 transaction event를 읽어 replay/processing/duplicate 응답을 반환한다.
 5. PostgreSQL에서도 처리할 수 없는 오류만 5xx 계열 오류로 둔다.
 
+### Readiness 정책
+
+Phase 10에서 Redis 장애는 정합성 장애가 아니다.
+PostgreSQL이 살아 있으면 애플리케이션은 degraded mode로 계속 처리할 수 있으므로 `/ready`는 Redis 장애만으로 실패하지 않는다.
+
+Redis 장애 시 `/ready` 예시:
+
+```json
+{
+  "status": "ready",
+  "mode": "degraded",
+  "checks": {
+    "postgres": "ok",
+    "redis": "degraded"
+  }
+}
+```
+
+PostgreSQL 장애는 Source of Truth 장애이므로 `/ready`가 503과 `status="not_ready"`를 반환한다.
+Redis 상태는 body와 `financial_readiness_dependency_status{dependency="redis"}` metric으로 남긴다.
+
+### Lock rejected와 Redis failure 구분
+
+Redis lock을 획득하지 못한 상황은 Redis 장애가 아니라 동일 `Idempotency-Key` 요청이 이미 처리 중이라는 정상적인 중복 방어 신호일 수 있다.
+따라서 lock rejected는 `financial_redis_operation_total{operation="lock_acquire", result="rejected", reason="lock_not_acquired"}`로 기록하고, `financial_redis_operation_failed_total`에는 포함하지 않는다.
+Redis connection error 또는 timeout만 Redis failure/fallback metric으로 기록한다.
+
+### Cache miss와 Redis failure 구분
+
+Redis get이 성공했지만 값이 없는 cache miss는 장애가 아니다.
+cache miss는 `financial_idempotency_cache_miss_total`로 기록하고, Redis operation은 success로 기록한다.
+Redis connection error 또는 timeout만 `financial_redis_operation_failed_total`과 `financial_redis_fallback_total`에 반영한다.
+
 ### PostgreSQL을 최종 정합성 기준으로 삼는 이유
 
 PostgreSQL은 transaction, row lock, unique constraint, durable storage를 제공한다.
@@ -124,6 +157,53 @@ make k6-redis-down-duplicate-storm
 make k6-verify
 make failure-redis-up
 ```
+
+PostgreSQL 장애 재현 후 복구:
+
+```bash
+make failure-db-down
+make failure-status
+make failure-db-up
+```
+
+## 5. 복구 워커 동시성 설계 기준
+
+현재 Phase 10은 Python/FastAPI 코드베이스에 Redis fallback hardening을 적용하는 범위이며, 별도 Go 기반 `models/event.go` 또는 `services/recovery.go` 파일은 존재하지 않는다.
+후속 실패 이벤트 복구 워커를 구현할 때는 단순 `SELECT ... FOR UPDATE`만 사용하지 않고, 여러 워커가 같은 실패 이벤트를 동시에 처리하지 못하도록 claim 단계를 원자화한다.
+
+권장 조회 패턴:
+
+```sql
+SELECT *
+FROM transaction_events
+WHERE status = 'FAILED'
+ORDER BY updated_at ASC
+LIMIT 100
+FOR UPDATE SKIP LOCKED;
+```
+
+권장 claim 패턴:
+
+```sql
+WITH picked AS (
+    SELECT id
+    FROM transaction_events
+    WHERE status = 'FAILED'
+    ORDER BY updated_at ASC
+    LIMIT 100
+    FOR UPDATE SKIP LOCKED
+)
+UPDATE transaction_events e
+SET status = 'PROCESSING',
+    updated_at = NOW()
+FROM picked
+WHERE e.id = picked.id
+RETURNING e.*;
+```
+
+복구 워커는 `FOR UPDATE SKIP LOCKED`를 사용해 이미 다른 워커가 처리 중인 실패 이벤트를 건너뛴다.
+이를 통해 분산 복구 환경에서 lock 대기 병목과 중복 복구를 줄인다.
+단일 이벤트 즉시 claim이 필요하면 `FOR UPDATE NOWAIT` 또는 `WHERE id = :id AND status = 'FAILED'` 조건부 update의 affected rows를 확인한다.
 
 Prometheus 확인 지표:
 

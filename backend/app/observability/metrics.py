@@ -39,11 +39,12 @@ REDIS_OPERATIONS = {
     "unknown",
 }
 DEPENDENCIES = {"redis", "postgres", "unknown"}
-DEPENDENCY_RESULTS = {"success", "failure", "fallback", "unknown"}
+DEPENDENCY_RESULTS = {"success", "failure", "fallback", "rejected", "unknown"}
 FAILURE_REASONS = {
     "timeout",
     "connection_error",
     "integrity_conflict",
+    "lock_not_acquired",
     "unavailable",
     "unknown",
 }
@@ -412,7 +413,7 @@ def record_idempotency_cache_hit() -> None:
 @safe_metric
 def record_idempotency_cache_miss() -> None:
     financial_idempotency_cache_miss_total.inc()
-    record_redis_operation("cache_get", "failure")
+    record_redis_operation("cache_get", "success")
     record_redis_operation_v2("cache_get", "success")
 
 

@@ -19,6 +19,7 @@ from app.observability.metrics import (
     record_redis_operation,
     record_redis_operation_v2,
 )
+from app.security.masking import mask_idempotency_key
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class IdempotencyResponseCache:
                 logger,
                 logging.WARNING,
                 "redis_cache_get_fallback",
-                idempotency_key=idempotency_key,
+                idempotency_key_masked=mask_idempotency_key(idempotency_key),
                 operation="cache_get",
                 dependency="redis",
                 fallback_used=True,
@@ -104,7 +105,7 @@ class IdempotencyResponseCache:
                 logger,
                 logging.WARNING,
                 "redis_cache_set_fallback",
-                idempotency_key=idempotency_key,
+                idempotency_key_masked=mask_idempotency_key(idempotency_key),
                 operation="cache_set",
                 dependency="redis",
                 fallback_used=True,
@@ -126,7 +127,7 @@ class IdempotencyResponseCache:
                 logger,
                 logging.WARNING,
                 "redis_cache_delete_fallback",
-                idempotency_key=idempotency_key,
+                idempotency_key_masked=mask_idempotency_key(idempotency_key),
                 operation="cache_delete",
                 dependency="redis",
                 fallback_used=True,
