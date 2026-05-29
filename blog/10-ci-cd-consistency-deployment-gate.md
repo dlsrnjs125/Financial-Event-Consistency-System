@@ -41,13 +41,13 @@ make security-log-check
 
 자동 수정은 별도 명령으로 남겨야 한다. 그래야 "검증을 통과했다"와 "검증 중 파일이 수정됐다"가 섞이지 않는다.
 
-## CI를 정리하면서 발견한 안티패턴
+## CI Gate를 만들면서 발견한 문제
 
 첫 번째는 `final-check`가 코드를 수정하는 문제였다. 최종 검증 명령은 깨끗한 working tree에서 성공/실패만 판단해야 한다. 그런데 format 명령이 포함되어 있으면 검증 과정에서 파일이 바뀐다. 그래서 `final-check`는 `format-check`, `lint`, `compile`, `test`, `security-log-check`처럼 non-mutating 명령으로 구성했다.
 
 두 번째는 security scan의 역할 혼동이었다. `security-log-check`는 repository secret 유출을 찾는 도구가 아니다. 이 명령은 운영 코드 경로에서 `idempotency_key=`, `account_no=`, `signature=`, `secret=`, `raw_body=` 같은 raw structured logging 패턴을 막는다. 반대로 TruffleHog는 repository에 실제 credential이 들어갔는지 확인한다. 두 검사는 서로 대체할 수 없다.
 
-세 번째는 외부 GitHub Action을 floating ref로 사용하는 문제였다. Secret scan은 보안 Gate이므로 `@main`처럼 언제든 바뀌는 ref보다 고정된 tag 또는 commit SHA를 사용하는 편이 재현성이 높다. 이 프로젝트에서는 TruffleHog action ref를 고정해 어느 날 갑자기 스캔 동작이 바뀌는 위험을 줄였다.
+세 번째는 외부 GitHub Action을 floating ref로 사용하는 문제였다. 처음에는 secret scan action을 `trufflesecurity/trufflehog@main`으로 두었다. 동작은 했지만, 보안 Gate가 외부 action의 main 브랜치를 따라가면 어느 시점에 CI 결과가 달라질 수 있다. 그래서 재현성을 위해 version tag로 고정했다. 이 프로젝트에서는 TruffleHog action ref를 고정해 어느 날 갑자기 스캔 동작이 바뀌는 위험을 줄였다.
 
 마지막으로 k6 heavy test를 PR 필수 Gate에 넣지 않았다. duplicate storm과 Redis Down 테스트는 중요하지만 PR마다 실행하면 피드백이 느려진다. 대신 빠른 consistency regression은 CI에 넣고, heavy performance는 수동/릴리즈 전 Gate로 분리했다.
 

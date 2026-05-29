@@ -428,6 +428,8 @@ Redis Lock과 Cache는 DB 부하와 중복 요청 응답시간을 줄이는 데 
 
 이 구분을 하지 않으면 Grafana에서 duplicate storm을 Redis 장애처럼 해석하거나, cache miss가 많은 정상 상황을 장애로 오해할 수 있다.
 
+readiness 정책도 같은 기준으로 맞췄다. PostgreSQL은 거래 정합성의 Source of Truth이므로 hard dependency다. PostgreSQL에 연결할 수 없다면 `/ready`는 실패해야 한다. 반대로 Redis는 lock/cache 최적화 계층이므로 Redis 장애만으로 API를 트래픽 대상에서 제외하지 않는다. Redis가 내려가면 `/ready`는 Redis 상태를 degraded로 노출하고, 요청 처리는 PostgreSQL transaction, unique constraint, idempotency record 기준으로 계속한다.
+
 검증은 다음 흐름으로 했다.
 
 ```bash

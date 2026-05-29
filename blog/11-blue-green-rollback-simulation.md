@@ -17,11 +17,6 @@ CI Gate를 통과한 코드라도 바로 운영 트래픽에 노출하면 위험
 
 처음에는 Nginx upstream을 Blue에서 Green으로 바꾸고 reload하면 충분하다고 생각했다.
 
-```text
-api-blue:8000  -> api-green:8000
-nginx -s reload
-```
-
 하지만 실제 배포 스크립트를 만들면서 전환보다 중요한 것은 실패했을 때의 복구라는 점이 드러났다. Green이 준비되지 않았거나, Nginx config test는 통과했지만 reload가 실패하거나, host port와 container port를 혼동하면 전환은 성공한 것처럼 보이지만 실제 트래픽은 실패할 수 있다.
 
 ## 3. 구현한 구조
@@ -76,7 +71,7 @@ make phase12-check
 
 가장 위험했던 지점은 Nginx reload 실패였다.
 
-예를 들어 파일은 Green으로 바뀌었고 `.active-color`도 Green으로 기록됐는데, 실제 `nginx -s reload`가 실패하면 Nginx process는 여전히 Blue로 트래픽을 보낼 수 있다. 이 상태에서는 상태 파일은 Green이라고 말하지만 실제 트래픽은 Blue로 가는 drift가 생긴다.
+예를 들어 파일은 Green으로 바뀌었고 `.active-color`도 Green으로 기록됐는데, 실제 Nginx reload가 실패하면 Nginx process는 여전히 Blue로 트래픽을 보낼 수 있다. 이 상태에서는 상태 파일은 Green이라고 말하지만 실제 트래픽은 Blue로 가는 drift가 생긴다.
 
 그래서 upstream 전환은 다음 순서로 바꿨다.
 
@@ -84,7 +79,7 @@ make phase12-check
 2. target snippet을 candidate로 만든다.
 3. candidate를 active file로 교체한다.
 4. `nginx -t`를 실행한다.
-5. `nginx -s reload`를 실행한다.
+5. Nginx reload를 실행한다.
 6. reload 실패 시 backup snippet과 active color를 이전 값으로 복구한다.
 
 이렇게 하면 reload 실패가 발생해도 "표시 상태"와 "실제 트래픽 상태"가 어긋나는 상황을 줄일 수 있다.

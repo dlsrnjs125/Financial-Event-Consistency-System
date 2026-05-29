@@ -17,7 +17,7 @@
 3. ✅ **잘못된 상태 전이는 차단**
 4. ✅ **Redis 장애가 발생해도 PostgreSQL 기준 최종 정합성 유지**
 5. ✅ **로컬 검증 명령으로 정합성 회귀를 재현 가능하게 확인**
-6. ✅ **Blue-Green 배포와 Rollback 흐름을 Docker Compose로 재현**
+6. ✅ **Blue-Green 배포와 Rollback 흐름에서 배포 전후 정합성 검증**
 
 Phase 9 측정에서는 Redis 장애 상황에서도 PostgreSQL 기준 중복 반영은 0건이었다.
 Phase 10에서는 Redis Down duplicate storm에서 확인된 일부 5xx를 보완하기 위해 Redis fallback, DB unique conflict retry, 장애 재현 명령을 추가했다.
