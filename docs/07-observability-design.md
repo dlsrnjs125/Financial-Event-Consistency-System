@@ -180,9 +180,17 @@ redis_keyspace_misses_total
   "path": "/api/v1/transaction-events",
   "status_code": 200,
   "latency_ms": 132,
+  "operation": "transaction_event_process",
+  "dependency": "postgres",
+  "fallback_used": false,
+  "error_type": null,
+  "duration_ms": 132,
   "message": "transaction event processed successfully"
 }
 ```
+
+Phase 10 Redis fallback 로그는 동일한 trace/request context를 유지하고 `operation`, `dependency`, `fallback_used`, `error_type`, `duration_ms`를 포함한다.
+`account_no`와 `idempotency_key`는 원문을 남기지 않고 masking helper를 통해 `account_no_masked`, `idempotency_key_masked`로 기록한다.
 
 ---
 

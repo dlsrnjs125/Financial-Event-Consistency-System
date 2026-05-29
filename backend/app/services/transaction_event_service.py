@@ -28,6 +28,7 @@ from app.models.transaction_event import TransactionEvent
 from app.observability.logging import log_event
 from app.observability.metrics import (
     observe_transaction_duration,
+    record_db_transaction_retry,
     record_duplicate_external_event,
     record_transaction_processed,
 )
@@ -72,6 +73,20 @@ class TransactionEventService:
         lock_result = None
         if self.redis_lock is not None:
             lock_result = self.redis_lock.acquire(lock_key)
+            if not lock_result.redis_available:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "redis_lock_degraded_mode_enabled",
+                    external_event_id=request.external_event_id,
+                    event_type=request.event_type.value,
+                    idempotency_key=idempotency_key,
+                    account_no=request.account_no,
+                    operation="lock_acquire",
+                    dependency="redis",
+                    fallback_used=True,
+                    error_type=lock_result.reason,
+                )
             if lock_result.redis_available and not lock_result.acquired:
                 result = self._already_processing_result()
                 self._record_process_result(request, result, started_at)
@@ -96,30 +111,54 @@ class TransactionEventService:
     ) -> TransactionProcessingResult:
         payload = request.model_dump(mode="json")
 
-        try:
-            with self.session.begin():
-                idem = self.idempotency_service.check_or_start(idempotency_key, payload)
-                if idem.decision == IdempotencyDecision.ALREADY_PROCESSING:
-                    return self._already_processing_result()
-                if idem.decision == IdempotencyDecision.REPLAY_COMPLETED:
-                    return TransactionProcessingResult(
-                        status_code=idem.response_code or 200,
-                        body=dict(idem.response_body or {}),
-                        processed=False,
-                        duplicated=True,
+        for attempt in range(2):
+            try:
+                with self.session.begin():
+                    idem = self.idempotency_service.check_or_start(
+                        idempotency_key, payload
                     )
-                if idem.decision == IdempotencyDecision.REPLAY_FAILED:
-                    return TransactionProcessingResult(
-                        status_code=idem.response_code or 422,
-                        body=dict(idem.response_body or {}),
-                        processed=False,
-                        duplicated=True,
-                    )
+                    if idem.decision == IdempotencyDecision.ALREADY_PROCESSING:
+                        return self._already_processing_result()
+                    if idem.decision == IdempotencyDecision.REPLAY_COMPLETED:
+                        return TransactionProcessingResult(
+                            status_code=idem.response_code or 200,
+                            body=dict(idem.response_body or {}),
+                            processed=False,
+                            duplicated=True,
+                        )
+                    if idem.decision == IdempotencyDecision.REPLAY_FAILED:
+                        return TransactionProcessingResult(
+                            status_code=idem.response_code or 422,
+                            body=dict(idem.response_body or {}),
+                            processed=False,
+                            duplicated=True,
+                        )
 
-                return self._process_started(idempotency_key, request, payload)
-        except Exception:
-            self.session.rollback()
-            raise
+                    return self._process_started(idempotency_key, request, payload)
+            except IntegrityError as exc:
+                self.session.rollback()
+                if attempt >= 1:
+                    raise
+                record_db_transaction_retry("integrity_conflict")
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "db_integrity_conflict_retry",
+                    external_event_id=request.external_event_id,
+                    event_type=request.event_type.value,
+                    idempotency_key=idempotency_key,
+                    account_no=request.account_no,
+                    operation="transaction_event_process",
+                    dependency="postgres",
+                    fallback_used=True,
+                    error_type=type(exc).__name__,
+                )
+                continue
+            except Exception:
+                self.session.rollback()
+                raise
+
+        raise RuntimeError("unreachable transaction retry state")
 
     def _already_processing_result(self) -> TransactionProcessingResult:
         return TransactionProcessingResult(
@@ -128,6 +167,7 @@ class TransactionEventService:
                 "status": "PROCESSING",
                 "message": "The same request is already being processed.",
                 "retry_after_seconds": 3,
+                "idempotency_key_status": "processing",
             },
             processed=False,
             duplicated=True,
@@ -149,6 +189,9 @@ class TransactionEventService:
                 event_type=request.event_type.value,
                 idempotency_key=idempotency_key,
                 account_no=request.account_no,
+                operation="transaction_event_process",
+                dependency="postgres",
+                fallback_used=False,
             )
             result = self._apply_started_request(idempotency_key, request)
             self.idempotency_service.complete(
@@ -180,6 +223,10 @@ class TransactionEventService:
                     transaction_status=TransactionStatus.FAILED.value,
                     idempotency_key=idempotency_key,
                     account_no=request.account_no,
+                    operation="transaction_event_process",
+                    dependency="postgres",
+                    fallback_used=False,
+                    error_type=type(exc).__name__,
                 )
                 return TransactionProcessingResult(
                     status_code=status_code,
@@ -215,6 +262,9 @@ class TransactionEventService:
                 event_type=request.event_type.value,
                 idempotency_key=idempotency_key,
                 account_no=request.account_no,
+                operation="duplicate_external_event_check",
+                dependency="postgres",
+                fallback_used=False,
             )
             record_duplicate_external_event(request.event_type.value)
             return self._duplicate_result(existing_event)
@@ -257,6 +307,9 @@ class TransactionEventService:
                 transaction_status=event.status,
                 idempotency_key=idempotency_key,
                 account_no=request.account_no,
+                operation="transaction_event_process",
+                dependency="postgres",
+                fallback_used=False,
             )
             return self._success_result(event, ledger, processed=True, duplicated=False)
         except IntegrityError:

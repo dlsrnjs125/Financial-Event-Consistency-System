@@ -113,7 +113,8 @@ DEPOSIT/WITHDRAW 요청에서는 이 필드를 사용하지 않는다.
 {
   "status": "PROCESSING",
   "message": "The same request is already being processed.",
-  "retry_after_seconds": 3
+  "retry_after_seconds": 3,
+  "idempotency_key_status": "processing"
 }
 ```
 

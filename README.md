@@ -19,7 +19,7 @@
 5. ✅ **로컬 검증 명령으로 정합성 회귀를 재현 가능하게 확인**
 
 Phase 9 측정에서는 Redis 장애 상황에서도 PostgreSQL 기준 중복 반영은 0건이었다.
-다만 Redis Down duplicate storm에서 일부 5xx가 발생했기 때문에, 가용성/timeout/fallback 정책은 Phase 10 장애 재현 단계에서 보완한다.
+Phase 10에서는 Redis Down duplicate storm에서 확인된 일부 5xx를 보완하기 위해 Redis fallback, DB unique conflict retry, 장애 재현 명령을 추가했다.
 GitHub Actions 기반 배포 Gate 자동화는 Phase 11 범위다.
 
 ---
@@ -126,14 +126,12 @@ GET /api/v1/transaction-events/{event_id}
 GET /api/v1/accounts/{account_no}/balance
 ```
 
-Phase 8 기준으로 거래 이벤트 수신, 계좌 잔액 조회, Idempotency 응답 재사용, Ledger 기반 balance 반영, Redis Lock/Cache 최적화, POST 거래 이벤트 생성 API HMAC 검증, Prometheus custom metrics, trace_id/request_id 구조화 로그 기반이 구현되어 있다.
+Phase 10 기준으로 거래 이벤트 수신, 계좌 잔액 조회, Idempotency 응답 재사용, Ledger 기반 balance 반영, Redis Lock/Cache 최적화, Redis 장애 fallback, POST 거래 이벤트 생성 API HMAC 검증, Prometheus custom metrics, trace_id/request_id 구조화 로그 기반이 구현되어 있다.
 Redis는 완료된 Idempotency 응답 재사용과 동일 Key 중복 요청의 DB 진입 완화를 담당하며, PostgreSQL Unique Constraint와 DB Transaction이 최종 정합성 기준이다.
-Redis 장애 또는 timeout이 발생해도 PostgreSQL 기준 최종 정합성은 유지되도록 DB 기반 처리로 fallback한다.
-Phase 6의 Redis Down 검증은 순차 재요청 회귀 테스트 기준이며, 동시 duplicate storm에서 Redis 적용 전후 p95/p99, DB transaction count, duplicate rate는 Phase 9 k6/PostgreSQL 환경에서 측정한다.
-Phase 9 Redis Down duplicate storm에서는 ledger 중복은 0건이었지만 일부 5xx가 발생했다.
-이는 정합성 실패가 아니라 가용성/장애 fallback 품질 개선 대상으로 분리해 Phase 10에서 다룬다.
+Redis 장애 또는 timeout이 발생하면 Redis lock/cache를 생략하고 PostgreSQL idempotency record, DB transaction, unique constraint 기준으로 degraded mode 처리한다.
+Redis Down duplicate storm에서 DB unique conflict가 발생하면 rollback 후 한 번 재시도해 기존 idempotency/event 결과를 읽는다.
 HMAC 인증은 `POST /api/v1/transaction-events`에 적용되며, 조회 API 보안/인가 정책은 후속 Phase 또는 별도 ADR에서 다룬다.
-k6 부하 테스트와 실제 p95/p99/RPS 수치 기록은 Phase 9에서 수행한다.
+k6 부하 테스트와 실제 p95/p99/RPS 수치 기록은 Phase 9에서 수행했고, 장애 재현과 fallback hardening은 Phase 10에서 보완한다.
 금액은 Phase 8 기준 KRW 정수 원 단위로 처리한다.
 모든 HTTP 응답에는 `X-Trace-ID`, `X-Request-ID`가 포함된다.
 현재 추적 구현은 `X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적이다.
@@ -161,6 +159,11 @@ financial_transaction_events_total
 financial_idempotency_decisions_total
 financial_redis_lock_acquired_total
 financial_idempotency_cache_hit_total
+financial_redis_operation_total
+financial_redis_operation_failed_total
+financial_redis_fallback_total
+financial_db_transaction_retry_total
+financial_readiness_dependency_status
 financial_hmac_auth_failures_total
 financial_invalid_state_transition_total
 financial_reconciliation_failures_total
@@ -339,13 +342,92 @@ make phase9-check
 make phase9-measure
 ```
 
-Redis Down 시나리오는 Phase 9에서 스크립트와 절차까지만 제공한다.
-장애 재현 자동화는 Phase 10 범위다.
+Redis Down 시나리오는 Phase 9에서 스크립트와 절차를 제공했고, Phase 10에서 장애 재현 명령과 fallback hardening을 추가했다.
 
 ```bash
 make local-perf-bg
 make phase9-failure-experiment
 ```
+
+## Phase 10 - Failure Recovery & Redis Fallback Hardening
+
+Phase 10에서는 Phase 9 성능 측정에서 확인된 Redis Down duplicate storm 상황의 일부 5xx 문제를 보완했다.
+Redis를 최종 정합성 저장소가 아닌 중복 요청 완화 및 성능 최적화 계층으로 정의하고, Redis 장애 시 PostgreSQL transaction, unique constraint, idempotency record를 기준으로 degraded mode 처리를 수행하도록 개선했다.
+
+Redis 장애 fallback 정책:
+
+| 상황 | 처리 정책 |
+|------|-----------|
+| Redis lock/cache 정상 | Redis lock과 completed response cache로 duplicate storm DB 진입을 완화 |
+| Redis connection error/timeout | warning log와 metric 기록 후 DB transaction 기준 처리 |
+| Redis lock 획득 실패 | 동일 key 처리 중으로 보고 기존 정책의 202 응답 유지 |
+| PostgreSQL unique conflict | rollback 후 1회 재시도해 기존 idempotency/event 결과 조회 |
+| PostgreSQL 장애 | Source of Truth 장애이므로 `/ready` 실패 및 5xx/503 계열로 구분 |
+
+장애 재현 명령:
+
+```bash
+make failure-status
+make failure-redis-down
+make failure-redis-up
+make failure-redis-logs
+make failure-api-restart
+make failure-db-down
+```
+
+Redis Down duplicate storm 실행:
+
+```bash
+make local-perf-bg
+make failure-redis-down
+make k6-redis-down-duplicate-storm
+make k6-verify
+make failure-redis-up
+```
+
+자동 복구 trap을 포함한 단일 검증 명령:
+
+```bash
+make phase10-redis-down-check
+```
+
+검증 기준:
+
+| 항목 | 기준 |
+|------|------|
+| PostgreSQL 최종 정합성 | `make k6-verify`에서 중복 Ledger/Event 0건 |
+| Redis 장애 단독 | 가능한 한 API 5xx로 확산하지 않고 DB fallback |
+| PostgreSQL 장애 | Redis fallback 대상이 아니며 readiness 실패 |
+| k6 허용 응답 | 200, 201, 202, 409 |
+| 5xx 목표 | `server_error_rate < 0.01` |
+
+2026-05-29 KST 로컬 검증 결과:
+
+| Scenario | Requests | p95 | p99 | 5xx | Duplicate Ledger/Event | Result |
+|----------|---------:|----:|----:|----:|------------------------:|--------|
+| Redis Down duplicate storm | 5013 | 651.15ms | 2.28s | 0 | 0 / 0 | PASS |
+
+`http_req_failed`는 409 Conflict를 실패 응답으로 집계할 수 있으므로, Phase 10 Redis Down storm에서는 `unexpected_response_rate`, `server_error_rate`, PostgreSQL 중복 검증 결과를 함께 본다.
+
+Redis 장애 시 포기한 것은 cache hit 기반 빠른 replay, Redis lock 기반 DB 부하 완화, 낮은 p95/p99 latency다.
+대신 PostgreSQL unique constraint와 idempotency record를 최종 방어선으로 사용하고, DB conflict retry와 사후 검증 SQL로 중복 반영 0건을 확인한다.
+
+모니터링 확인 포인트:
+
+```text
+financial_redis_operation_total
+financial_redis_operation_failed_total
+financial_redis_fallback_total
+financial_idempotency_duplicate_total
+financial_transaction_event_processed_total
+financial_transaction_event_failed_total
+financial_transaction_event_conflict_total
+financial_db_transaction_retry_total
+financial_readiness_dependency_status
+```
+
+로그 추적은 `trace_id`, `request_id`, masked `idempotency_key`, masked `account_no`, `operation`, `dependency`, `fallback_used`, `error_type`, `duration_ms` 필드를 기준으로 한다.
+상세 Failure Mode 명세는 [Phase 10 Failure Recovery](./docs/phase-10-failure-recovery.md)에 기록한다.
 
 Redis Cache/Lock과 DB Pool 비교 실험은 다음 타겟으로 조건을 바꿔 실행한다.
 
@@ -558,6 +640,7 @@ docker compose exec nginx bash -c "sed -i 's/api-blue:8000/api-green:8000/g' /et
 - [성능 측정 설계](./docs/16-performance-measurement-design.md)
 - [실험 기록 템플릿](./docs/17-experiment-log-template.md)
 - [성능 트러블슈팅 가이드](./docs/18-performance-troubleshooting-guide.md)
+- [Phase 10 Failure Recovery](./docs/phase-10-failure-recovery.md)
 
 ---
 

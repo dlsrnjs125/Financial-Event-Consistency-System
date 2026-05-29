@@ -1,15 +1,20 @@
 """Transaction event API endpoints."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.idempotency import get_idempotency_key
 from app.api.dependencies.security import verify_external_request_signature
 from app.cache.idempotency_cache import IdempotencyResponseCache
+from app.cache.redis_errors import REDIS_FALLBACK_EXCEPTIONS, redis_failure_reason
 from app.cache.redis_lock import RedisLock
 from app.core.config import settings
 from app.db.session import get_db
 from app.domain.exceptions import AccountNotFound
+from app.observability.logging import log_event
+from app.observability.metrics import record_redis_fallback, record_redis_operation_v2
 from app.redis.client import get_redis_client
 from app.repositories.account_repository import AccountRepository
 from app.repositories.idempotency_record_repository import IdempotencyRecordRepository
@@ -28,6 +33,7 @@ from app.services.transaction_event_service import TransactionEventService
 from app.services.transaction_state_service import TransactionStateService
 
 router = APIRouter(tags=["Transaction Events"])
+logger = logging.getLogger(__name__)
 
 
 def build_idempotency_service(session: Session):
@@ -36,7 +42,19 @@ def build_idempotency_service(session: Session):
         return idempotency_service
     try:
         redis_client = get_redis_client()
-    except Exception:
+    except REDIS_FALLBACK_EXCEPTIONS as exc:
+        reason = redis_failure_reason(exc)
+        record_redis_operation_v2("cache_get", "failure", reason)
+        record_redis_fallback("cache_get", reason)
+        log_event(
+            logger,
+            logging.WARNING,
+            "redis_cache_client_fallback",
+            operation="cache_get",
+            dependency="redis",
+            fallback_used=True,
+            error_type=type(exc).__name__,
+        )
         return idempotency_service
     return CachedIdempotencyService(
         idempotency_service=idempotency_service,
@@ -52,7 +70,19 @@ def build_redis_lock() -> RedisLock | None:
         return None
     try:
         return RedisLock(get_redis_client(), ttl_ms=settings.redis_lock_ttl_ms)
-    except Exception:
+    except REDIS_FALLBACK_EXCEPTIONS as exc:
+        reason = redis_failure_reason(exc)
+        record_redis_operation_v2("lock_acquire", "failure", reason)
+        record_redis_fallback("lock_acquire", reason)
+        log_event(
+            logger,
+            logging.WARNING,
+            "redis_lock_client_fallback",
+            operation="lock_acquire",
+            dependency="redis",
+            fallback_used=True,
+            error_type=type(exc).__name__,
+        )
         return None
 
 

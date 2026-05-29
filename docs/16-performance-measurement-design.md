@@ -176,6 +176,12 @@ Phase 8의 표준 관측 기준은 bounded label을 사용하는 `financial_http
 | `financial_redis_lock_acquired_total` | none | Redis lock 획득 추적 |
 | `financial_redis_lock_rejected_total` | none | Redis lock rejected 추적 |
 | `financial_redis_unavailable_total` | operation | Redis 장애 fallback 추적 |
+| `financial_redis_operation_total` | operation, result, reason | Phase 10 Redis operation 성공/실패/fallback 추적 |
+| `financial_redis_operation_failed_total` | operation, reason | Redis operation 실패 원인 추적 |
+| `financial_redis_fallback_total` | operation, reason | Redis 실패 후 PostgreSQL fallback 진입 추적 |
+| `financial_db_transaction_retry_total` | reason | PostgreSQL unique conflict rollback 후 retry 추적 |
+| `financial_readiness_dependency_status` | dependency | readiness dependency 상태 추적 |
+| `financial_idempotency_duplicate_total` | source, decision | duplicate/replay idempotency decision 추적 |
 | `financial_idempotency_cache_hit_total` | none | Idempotency cache hit 추적 |
 | `financial_idempotency_cache_miss_total` | none | Idempotency cache miss 추적 |
 | `financial_idempotency_cache_set_failure_total` | none | cache set 실패 추적 |
