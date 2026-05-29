@@ -65,7 +65,7 @@ PostgreSQL/Redis service container 기반 consistency gate, migration gate, Dock
 
 - 모든 테스트를 PR Gate에 넣지 않는다. 빠른 feedback을 위해 k6 부하 테스트는 수동/야간/릴리즈 전 Gate로 분리한다.
 - `security-log-check`는 구조화 로그 정책 검사이고, `secret-scan`은 저장소 credential 유출 검사다. 둘은 서로 대체하지 않는다.
-- Secret scan action은 CI 재현성을 위해 floating ref(`@main`)가 아닌 version tag(`@v3`)로 고정한다.
+- Secret scan action은 CI 재현성을 위해 floating ref(`@main`)나 존재하지 않는 major tag가 아니라 TruffleHog `v3.95.3` commit SHA로 고정한다.
 - TruffleHog는 PR Gate 안정성을 위해 `--only-verified`를 사용한다. 오탐은 줄어들지만, unverified secret-like pattern 탐지는 별도 강화 후보로 남긴다.
 - GitHub Actions service container는 PR마다 깨끗한 PostgreSQL/Redis를 제공하지만, 로컬 Docker Compose의 Nginx/Prometheus/Grafana 전체 스택과 완전히 같지는 않다.
 - migration downgrade는 이번 Gate에 포함하지 않는다. 금융 데이터 migration rollback은 별도 backward-compatible migration 정책으로 다룬다.
