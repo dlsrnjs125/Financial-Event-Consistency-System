@@ -227,6 +227,7 @@ migration-smoke: ## Verify migrated PostgreSQL consistency constraints
 .PHONY: scripts-check
 scripts-check: ## Check shell script syntax
 	bash -n scripts/deployment-lib.sh
+	bash -n scripts/check_active_upstream.sh
 	bash -n scripts/deploy-blue-green.sh
 	bash -n scripts/deploy_green.sh
 	bash -n scripts/rollback.sh
@@ -464,7 +465,10 @@ ops2-start-blue: docker-check ## Start Blue, Nginx, PostgreSQL, and Redis for Op
 	@echo "Blue/Nginx stack is starting. Verify with: make ops2-check-blue"
 
 .PHONY: ops2-start-green
-ops2-start-green: docker-check ## Start and verify Green service without switching traffic
+ops2-start-green: ops2-start-blue ops2-deploy-green-only ## Start and verify Green service without switching traffic
+
+.PHONY: ops2-deploy-green-only
+ops2-deploy-green-only:
 	@BASE_URL=$(BASE_URL) GREEN_URL=$(GREEN_URL) ./scripts/deploy_green.sh
 
 .PHONY: ops2-check-blue
@@ -501,6 +505,14 @@ ops2-check-green: ## Check Green direct /health and /ready
 	done
 	@echo "Green health/ready checks passed: $(GREEN_URL)"
 
+.PHONY: ops2-check-routed-blue
+ops2-check-routed-blue: docker-check ops2-check-blue ## Verify Nginx is configured and routed to Blue
+	@./scripts/check_active_upstream.sh blue
+
+.PHONY: ops2-check-routed-green
+ops2-check-routed-green: docker-check ops2-check-blue ## Verify Nginx is configured and routed to Green
+	@./scripts/check_active_upstream.sh green
+
 .PHONY: ops2-switch-green
 ops2-switch-green: docker-check ## Switch Nginx upstream to Green after config validation
 	@./scripts/switch_traffic.sh green
@@ -517,6 +529,10 @@ ops2-rollback: docker-check ## Roll Nginx upstream back to Blue and verify healt
 ops2-smoke-green: ## Run lightweight smoke test directly against Green
 	@BASE_URL=$(GREEN_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
 
+.PHONY: ops2-smoke-routed
+ops2-smoke-routed: ## Run lightweight smoke test through Nginx BASE_URL
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
+
 .PHONY: ops2-status
 ops2-status: docker-check ## Show Blue/Green/Nginx Docker Compose status
 	$(DOCKER_COMPOSE) --profile green-deployment ps nginx api-blue api-green postgres redis
@@ -527,20 +543,28 @@ ops2-logs: docker-check ## Follow Ops Phase 2 Nginx and API logs
 	$(DOCKER_COMPOSE) --profile green-deployment logs -f nginx api-blue api-green
 
 .PHONY: ops2-cleanup
-ops2-cleanup: docker-check ## Stop Green container without deleting volumes
-	$(DOCKER_COMPOSE) --profile green-deployment stop api-green
+ops2-cleanup: docker-check ## Roll back to Blue and stop Green without deleting volumes
+	@if $(DOCKER_COMPOSE) ps --status running --services | rg -q '^nginx$$'; then \
+		BASE_URL=$(BASE_URL) ./scripts/rollback_to_blue.sh --stop-green; \
+	else \
+		echo "Nginx is not running; resetting active upstream files to Blue and stopping Green if present."; \
+		cp infra/nginx/conf.d/upstream-active.conf.blue infra/nginx/conf.d/upstream-active.conf; \
+		printf 'blue\n' > infra/nginx/.active-color; \
+		$(DOCKER_COMPOSE) --profile green-deployment stop api-green || true; \
+	fi
 
 .PHONY: ops2-demo
 ops2-demo: docker-check ## Run Blue start, Green verification, switch, rollback, and checks
 	@$(MAKE) ops2-start-blue
-	@$(MAKE) ops2-check-blue
-	@$(MAKE) ops2-start-green
+	@$(MAKE) ops2-check-routed-blue
+	@$(MAKE) ops2-deploy-green-only
 	@$(MAKE) ops2-check-green
 	@$(MAKE) ops2-smoke-green
 	@$(MAKE) ops2-switch-green
-	@$(MAKE) ops2-check-blue
+	@$(MAKE) ops2-check-routed-green
+	@$(MAKE) ops2-smoke-routed
 	@$(MAKE) ops2-rollback
-	@$(MAKE) ops2-check-blue
+	@$(MAKE) ops2-check-routed-blue
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

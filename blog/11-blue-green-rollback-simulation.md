@@ -86,6 +86,8 @@ make ops2-start-green
 make ops2-check-green
 make ops2-smoke-green
 make ops2-switch-green
+make ops2-check-routed-green
+make ops2-smoke-routed
 make ops2-rollback
 make ops2-demo
 ```
@@ -93,6 +95,8 @@ make ops2-demo
 `deploy-*` 명령은 Phase 12의 통합 배포 시뮬레이션에 가깝고, `ops2-*` 명령은 장애 훈련이나 운영 리허설에서 각 단계를 끊어서 확인하기 위한 진입점이다.
 예를 들어 `ops2-start-green`은 Green을 띄우고 직접 endpoint와 Nginx 내부 접근을 검증하지만 아직 traffic switch는 하지 않는다.
 `ops2-switch-green`은 Green 검증이 끝났다는 전제에서 Nginx upstream만 전환한다.
+전환 이후에는 `ops2-check-routed-green`으로 active color, upstream snippet, Nginx에 로드된 config가 Green을 바라보는지 확인하고, `ops2-smoke-routed`로 Nginx 경유 거래 smoke를 다시 실행한다.
+이 과정을 넣은 이유는 Green 직접 호출이 성공해도 Nginx가 여전히 Blue를 바라보는 상태라면 배포 검증이 성립하지 않기 때문이다.
 
 ## 5. 트러블슈팅 1: reload 실패 시 상태 drift
 
@@ -189,6 +193,15 @@ make ops2-smoke-green
 
 이 명령은 `BASE_URL=http://localhost:8001`로 smoke test를 실행한다.
 즉, Nginx traffic switch 전에 Green이 독립적으로 거래 이벤트 API를 처리할 수 있는지 확인한다.
+
+전환 후에는 Nginx 경유 smoke를 다시 실행한다.
+
+```bash
+make ops2-smoke-routed
+```
+
+이 검증은 `BASE_URL=http://localhost:8080`을 사용한다.
+따라서 Green이 직접 호출에서는 정상이지만 Nginx 전환 후 요청 처리에 실패하는 상황을 별도로 잡을 수 있다.
 
 ## 9. 포기한 것
 
