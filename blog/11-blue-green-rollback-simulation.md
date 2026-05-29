@@ -97,6 +97,7 @@ make ops2-demo
 `ops2-switch-green`은 Green 검증이 끝났다는 전제에서 Nginx upstream만 전환한다.
 전환 이후에는 `ops2-check-routed-green`으로 active color, upstream snippet, Nginx에 로드된 config가 Green을 바라보는지 확인하고, `ops2-smoke-routed`로 Nginx 경유 거래 smoke를 다시 실행한다.
 이 과정을 넣은 이유는 Green 직접 호출이 성공해도 Nginx가 여전히 Blue를 바라보는 상태라면 배포 검증이 성립하지 않기 때문이다.
+최종적으로는 `/health` 응답에도 `deployment_color`와 `instance_id`를 포함해 실제 HTTP 응답이 어느 instance에서 왔는지 확인하도록 했다.
 
 ## 5. 트러블슈팅 1: reload 실패 시 상태 drift
 
@@ -116,6 +117,46 @@ make ops2-demo
 이렇게 하면 reload 실패가 발생해도 "표시 상태"와 "실제 트래픽 상태"가 어긋나는 상황을 줄일 수 있다.
 Ops Phase 2의 `scripts/switch_traffic.sh`와 `scripts/rollback_to_blue.sh`도 같은 공통 함수인 `set_active_upstream`을 사용한다.
 새 명령을 추가하면서 전환 로직을 다시 만들지 않은 이유는, rollback처럼 사고 가능성이 큰 로직은 한 곳에서만 관리하는 편이 안전하기 때문이다.
+
+## 5-1. 트러블슈팅: 설정 검증과 실제 응답 검증은 다르다
+
+처음 보완에서는 active upstream file과 `nginx -T` 출력이 Green을 바라보는지만 확인했다.
+이것은 중요한 검증이지만, 실제 HTTP 요청이 Green에서 응답했다는 증거는 아니다.
+Nginx 설정은 Green을 바라보지만 reload 타이밍이나 컨테이너 상태 문제로 실제 요청이 기대와 다르게 처리될 수 있기 때문이다.
+
+그래서 API의 `/health` 응답에 배포 identity를 추가했다.
+
+```json
+{
+  "status": "ok",
+  "deployment_color": "green",
+  "instance_id": "api-green"
+}
+```
+
+Blue와 Green 컨테이너는 Docker Compose 환경변수로 서로 다른 값을 가진다.
+
+```yaml
+api-blue:
+  environment:
+    DEPLOYMENT_COLOR: blue
+    INSTANCE_ID: api-blue
+
+api-green:
+  environment:
+    DEPLOYMENT_COLOR: green
+    INSTANCE_ID: api-green
+```
+
+이후 `ops2-check-routed-green`은 다음을 함께 확인한다.
+
+1. `.active-color`가 `green`인지
+2. active upstream snippet이 `api-green:8000`을 포함하는지
+3. Nginx에 로드된 config가 `api-green:8000`을 포함하는지
+4. Nginx 경유 `/health` 응답의 `deployment_color`가 `green`인지
+5. Nginx 경유 `/health` 응답의 `instance_id`가 `api-green`인지
+
+이 변경으로 "설정상 Green"과 "실제 응답이 Green"을 분리해서 검증할 수 있게 됐다.
 
 ## 6. 트러블슈팅 2: host port와 container port 혼동
 
@@ -166,6 +207,22 @@ depends_on:
 
 PostgreSQL은 Source of Truth이므로 hard dependency다. Redis는 최적화 계층이므로 컨테이너 시작을 막지 않고, 애플리케이션 `/ready`에서 `mode="degraded"`로 노출한다.
 
+## 7-1. 트러블슈팅: 운영 명령이 의도하지 않은 재시작을 만들면 안 된다
+
+`ops2-start-green`은 Blue-Green 배포의 특성상 Blue가 이미 운영 중이라는 전제가 있다.
+처음에는 이 전제를 보장하기 위해 `ops2-start-green`이 내부적으로 `ops2-start-blue`를 먼저 실행하도록 구성했다.
+
+하지만 이 구조는 Green만 검증하려던 명령이 Blue/Nginx/PostgreSQL/Redis 실행 상태까지 다시 건드릴 수 있다.
+Docker Compose가 볼륨을 삭제하지는 않더라도, 운영 리허설 명령이 의도하지 않은 재시작이나 recreate 가능성을 만드는 것은 피하는 편이 낫다.
+
+그래서 명령을 다음처럼 분리했다.
+
+- `ops2-start-blue`: Blue/Nginx/PostgreSQL/Redis를 명시적으로 시작한다.
+- `ops2-start-green`: Blue/Nginx가 실행 중인지 확인한다. 없으면 실패한다.
+- `ops2-deploy-green-only`: Green만 실행하고 검증하는 내부 단계다.
+
+이렇게 하면 Green 배포 리허설 명령이 Blue 운영 환경을 몰래 재시작하지 않는다.
+
 ## 8. 검증 결과
 
 `make phase12-check` 실행 결과 Green 전환과 Blue rollback 흐름이 통과했다.
@@ -202,6 +259,15 @@ make ops2-smoke-routed
 
 이 검증은 `BASE_URL=http://localhost:8080`을 사용한다.
 따라서 Green이 직접 호출에서는 정상이지만 Nginx 전환 후 요청 처리에 실패하는 상황을 별도로 잡을 수 있다.
+
+더 무거운 정합성 검증이 필요하면 다음 명령으로 PostgreSQL 검증 SQL까지 실행한다.
+
+```bash
+make ops2-demo-full
+```
+
+이 명령은 `ops2-demo` 이후 `deploy-verify`를 실행한다.
+배포 전환 중 생성된 smoke 거래 이벤트가 PostgreSQL unique constraint와 ledger 검증 기준을 깨지 않았는지 확인하기 위한 선택적 full gate다.
 
 ## 9. 포기한 것
 

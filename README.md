@@ -256,6 +256,7 @@ make ops2-smoke-routed
 make ops2-switch-green
 make ops2-rollback
 make ops2-demo
+make ops2-demo-full
 ```
 
 상세 절차는 [Deployment Strategy](./docs/09-deployment-strategy.md)와 [blog 11편](./blog/11-blue-green-rollback-simulation.md)에 정리한다.

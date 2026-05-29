@@ -363,6 +363,7 @@ Ops Phase 2에서는 Phase 12에서 만든 Blue-Green 전환 구조를 운영자
 | `make ops2-status` | Blue/Green/Nginx 상태와 active upstream 출력 |
 | `make ops2-cleanup` | Blue rollback 후 Green 컨테이너 중지 |
 | `make ops2-demo` | Blue 시작부터 Green 전환, Blue rollback까지 한 번에 재현 |
+| `make ops2-demo-full` | `ops2-demo` 후 PostgreSQL 정합성 SQL 검증 |
 
 직접 실행 흐름:
 
@@ -383,11 +384,43 @@ make ops2-check-routed-blue
 전환 전 현재 active upstream을 출력하고, snippet 교체 후 `nginx -t`가 성공할 때만 reload한다.
 `nginx -t` 또는 reload가 실패하면 이전 snippet과 active color 상태를 복구한다.
 전환 후에는 `scripts/check_active_upstream.sh`가 `.active-color`, active upstream snippet, Nginx 컨테이너에 로드된 config를 함께 확인한다.
-이 검증은 설정과 로드된 Nginx 상태를 확인하는 방어선이며, 실제 요청 경로 검증은 `make ops2-smoke-routed`로 Nginx 경유 거래 smoke를 다시 실행해 보완한다.
+또한 Nginx 경유 `/health` 응답의 `deployment_color`와 `instance_id`를 확인해 실제 HTTP 응답이 기대한 Blue/Green instance에서 왔는지 검증한다.
+실제 거래 요청 경로 검증은 `make ops2-smoke-routed`로 Nginx 경유 HMAC 거래 smoke를 다시 실행해 보완한다.
 
 `scripts/deploy_green.sh`는 Green 컨테이너를 시작하고 `http://localhost:8001/health`, `http://localhost:8001/ready`, Nginx 컨테이너 내부 `api-green:8000/health` 접근을 확인한다.
 Green이 준비되지 않으면 non-zero exit로 실패하고, `STOP_GREEN_ON_FAILURE=true`일 때 Green 컨테이너를 중지한다.
-`make ops2-start-green`은 Blue 운영 상태가 전제이므로 `ops2-start-blue`를 먼저 실행한다.
+`make ops2-start-green`은 Blue 운영 상태가 전제이므로 Blue/Nginx 실행 여부만 확인한다.
+Blue를 몰래 재시작하지 않으며, 전제가 충족되지 않으면 `make ops2-start-blue`를 먼저 실행하라는 메시지와 함께 실패한다.
 
 `scripts/rollback_to_blue.sh --stop-green`은 Blue rollback 이후 Green 컨테이너까지 중지한다.
 기본 rollback은 traffic rollback만 수행하며 DB schema downgrade는 실행하지 않는다.
+
+### Ops Phase 2 트러블슈팅 메모
+
+#### 1. 전환 후 `/health` 200만으로는 Green 라우팅을 증명할 수 없다.
+
+처음에는 `ops2-switch-green` 이후 Nginx 기준 `/health`, `/ready`만 확인했다.
+하지만 이 방식은 Nginx가 여전히 Blue를 바라봐도 200 응답이면 통과할 수 있다.
+
+보완:
+
+- `api-blue`, `api-green`에 각각 `DEPLOYMENT_COLOR`, `INSTANCE_ID` 환경변수를 주입한다.
+- `/health` 응답에 `deployment_color`, `instance_id`를 포함한다.
+- `ops2-check-routed-green`은 active snippet, loaded Nginx config, 실제 `/health` 응답 identity를 함께 검증한다.
+- 전환 후 `ops2-smoke-routed`를 실행해 Nginx 경유 거래 API까지 확인한다.
+
+#### 2. Green 시작 명령이 Blue 운영 컨테이너를 건드리면 안 된다.
+
+Green 검증 명령이 내부적으로 Blue를 재시작하면 운영 리허설에서 의도하지 않은 변경이 생길 수 있다.
+따라서 `ops2-start-green`은 Blue/Nginx 실행 여부만 확인하고, Blue가 없으면 실패한다.
+실제 Blue 시작은 명시적으로 `make ops2-start-blue`에서만 수행한다.
+
+#### 3. Green cleanup은 active upstream 상태를 먼저 고려해야 한다.
+
+Green이 active upstream인 상태에서 Green 컨테이너만 중지하면 Nginx가 죽은 upstream을 계속 바라볼 수 있다.
+따라서 `ops2-cleanup`은 Nginx가 실행 중이면 먼저 Blue rollback을 수행하고, Nginx가 이미 내려간 상태라면 active snippet과 `.active-color`를 Blue로 복구한 뒤 Green stop을 시도한다.
+
+#### 4. Ops 명령은 공통 전환 로직을 재사용해야 한다.
+
+`ops2-*` 명령은 운영 리허설용 wrapper이며, 실제 전환/rollback 핵심 로직은 `scripts/deployment-lib.sh`의 공통 함수로 유지한다.
+전환 로직을 여러 스크립트에 복제하지 않아야 `nginx -t`, reload 실패 복구, active color 복구 정책이 한 곳에서 일관되게 관리된다.

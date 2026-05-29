@@ -25,6 +25,8 @@ def test_health_response_contains_service_and_environment():
     assert "status" in body
     assert "service" in body
     assert "environment" in body
+    assert "deployment_color" in body
+    assert "instance_id" in body
 
 
 def test_ready_returns_200_when_dependencies_are_available(monkeypatch):

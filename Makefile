@@ -239,6 +239,14 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
 	bash -n scripts/monitoring/write-compose-status-report.sh
+	test -x scripts/check_active_upstream.sh
+	test -x scripts/deploy-blue-green.sh
+	test -x scripts/deploy_green.sh
+	test -x scripts/rollback.sh
+	test -x scripts/rollback_to_blue.sh
+	test -x scripts/switch_traffic.sh
+	test -x scripts/deployment-status.sh
+	test -x scripts/deployment-smoke.sh
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -465,11 +473,18 @@ ops2-start-blue: docker-check ## Start Blue, Nginx, PostgreSQL, and Redis for Op
 	@echo "Blue/Nginx stack is starting. Verify with: make ops2-check-blue"
 
 .PHONY: ops2-start-green
-ops2-start-green: ops2-start-blue ops2-deploy-green-only ## Start and verify Green service without switching traffic
+ops2-start-green: docker-check ops2-ensure-blue-running ops2-deploy-green-only ## Start and verify Green service without switching traffic
+
+.PHONY: ops2-ensure-blue-running
+ops2-ensure-blue-running:
+	@$(DOCKER_COMPOSE) ps --status running --services | grep -q '^nginx$$' || \
+		(echo "Blue/Nginx is not running. Run: make ops2-start-blue"; exit 1)
+	@$(DOCKER_COMPOSE) ps --status running --services | grep -q '^api-blue$$' || \
+		(echo "api-blue is not running. Run: make ops2-start-blue"; exit 1)
 
 .PHONY: ops2-deploy-green-only
 ops2-deploy-green-only:
-	@BASE_URL=$(BASE_URL) GREEN_URL=$(GREEN_URL) ./scripts/deploy_green.sh
+	@STOP_GREEN_ON_FAILURE=true BASE_URL=$(BASE_URL) GREEN_URL=$(GREEN_URL) ./scripts/deploy_green.sh
 
 .PHONY: ops2-check-blue
 ops2-check-blue: ## Check Nginx routed /health and /ready
@@ -544,7 +559,7 @@ ops2-logs: docker-check ## Follow Ops Phase 2 Nginx and API logs
 
 .PHONY: ops2-cleanup
 ops2-cleanup: docker-check ## Roll back to Blue and stop Green without deleting volumes
-	@if $(DOCKER_COMPOSE) ps --status running --services | rg -q '^nginx$$'; then \
+	@if $(DOCKER_COMPOSE) ps --status running --services | grep -q '^nginx$$'; then \
 		BASE_URL=$(BASE_URL) ./scripts/rollback_to_blue.sh --stop-green; \
 	else \
 		echo "Nginx is not running; resetting active upstream files to Blue and stopping Green if present."; \
@@ -565,6 +580,12 @@ ops2-demo: docker-check ## Run Blue start, Green verification, switch, rollback,
 	@$(MAKE) ops2-smoke-routed
 	@$(MAKE) ops2-rollback
 	@$(MAKE) ops2-check-routed-blue
+
+.PHONY: ops2-verify
+ops2-verify: deploy-verify ## Run PostgreSQL consistency verification after Ops Phase 2 traffic switch
+
+.PHONY: ops2-demo-full
+ops2-demo-full: ops2-demo ops2-verify ## Run Ops Phase 2 demo and PostgreSQL consistency verification
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

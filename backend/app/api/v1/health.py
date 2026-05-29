@@ -16,6 +16,8 @@ def health_check() -> dict[str, str]:
         "status": "ok",
         "service": settings.app_name,
         "environment": settings.app_env,
+        "deployment_color": settings.deployment_color,
+        "instance_id": settings.instance_id,
     }
 
 
