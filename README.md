@@ -126,16 +126,37 @@ GET /api/v1/transaction-events/{event_id}
 GET /api/v1/accounts/{account_no}/balance
 ```
 
-Phase 10 기준으로 거래 이벤트 수신, 계좌 잔액 조회, Idempotency 응답 재사용, Ledger 기반 balance 반영, Redis Lock/Cache 최적화, Redis 장애 fallback, POST 거래 이벤트 생성 API HMAC 검증, Prometheus custom metrics, trace_id/request_id 구조화 로그 기반이 구현되어 있다.
-Redis는 완료된 Idempotency 응답 재사용과 동일 Key 중복 요청의 DB 진입 완화를 담당하며, PostgreSQL Unique Constraint와 DB Transaction이 최종 정합성 기준이다.
-Redis 장애 또는 timeout이 발생하면 Redis lock/cache를 생략하고 PostgreSQL idempotency record, DB transaction, unique constraint 기준으로 degraded mode 처리한다.
-Redis Down duplicate storm에서 DB unique conflict가 발생하면 rollback 후 한 번 재시도해 기존 idempotency/event 결과를 읽는다.
-HMAC 인증은 `POST /api/v1/transaction-events`에 적용되며, 조회 API 보안/인가 정책은 후속 Phase 또는 별도 ADR에서 다룬다.
-k6 부하 테스트와 실제 p95/p99/RPS 수치 기록은 Phase 9에서 수행했고, 장애 재현과 fallback hardening은 Phase 10에서 보완한다.
-금액은 Phase 8 기준 KRW 정수 원 단위로 처리한다.
-모든 HTTP 응답에는 `X-Trace-ID`, `X-Request-ID`가 포함된다.
-현재 추적 구현은 `X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적이다.
-W3C `traceparent`/`tracestate`와 OpenTelemetry SDK 기반 분산 추적은 후속 고도화 항목이다.
+현재 구현 상태는 Phase 10 기준이다.
+
+핵심 거래 처리:
+
+- `POST /api/v1/transaction-events`로 거래 이벤트를 수신한다.
+- Idempotency Key와 canonical request hash로 동일 요청 재전송과 충돌 요청을 구분한다.
+- TransactionEvent, LedgerEntry, Account.balance, IdempotencyRecord를 PostgreSQL transaction 안에서 일관되게 처리한다.
+- LedgerEntry가 balance 변경의 근거이며, 동일 `external_event_id`와 동일 Ledger 반영은 PostgreSQL unique constraint로 최종 방어한다.
+- 금액은 현재 KRW 정수 원 단위로 처리한다.
+
+Redis와 장애 처리:
+
+- Redis는 completed idempotency response cache와 동일 key 중복 요청 완화를 위한 lock/cache 계층이다.
+- Redis는 최종 정합성 저장소가 아니며, PostgreSQL Unique Constraint와 DB Transaction이 Source of Truth다.
+- Redis connection error 또는 timeout이 발생하면 Redis lock/cache를 생략하고 PostgreSQL 기준 degraded mode로 처리한다.
+- Redis Down duplicate storm에서 DB unique conflict가 발생하면 rollback 후 한 번 재시도해 기존 idempotency/event 결과를 읽는다.
+- PostgreSQL 장애는 degraded mode 대상이 아니며 `/ready` 실패와 5xx/503 계열 오류로 구분한다.
+
+보안과 관측성:
+
+- HMAC 인증은 `POST /api/v1/transaction-events`에 적용된다.
+- 모든 HTTP 응답에는 `X-Trace-ID`, `X-Request-ID`가 포함된다.
+- 구조화 로그는 trace/request context, bounded operation/dependency 필드, masked `idempotency_key`와 masked `account_no`를 사용한다.
+- Prometheus custom metric으로 HTTP, transaction, idempotency, Redis fallback, readiness 상태를 확인한다.
+
+아직 별도 고도화로 남긴 범위:
+
+- 조회 API의 외부 공개 여부와 권한 모델
+- W3C `traceparent`/`tracestate` 전파
+- OpenTelemetry SDK 기반 분산 추적
+- Redis/PostgreSQL exporter 기반 인프라 내부 metric
 
 HMAC Header 예시:
 
@@ -169,7 +190,8 @@ financial_invalid_state_transition_total
 financial_reconciliation_failures_total
 ```
 
-Grafana dashboard와 alert rule은 초안으로 추가되어 있으며, 운영 임계값과 실제 성능 수치는 Phase 9 k6 실험 후 조정한다.
+Grafana dashboard와 alert rule은 로컬 검증용 초안이다.
+Phase 9/10에서 k6 측정값과 Redis fallback 결과를 기록했지만, 운영 임계값은 장시간 운영 데이터와 exporter 보강 후 조정한다.
 `docker compose up -d` 실행 후 `http://localhost:8000/metrics`에서 API metric을 확인하고,
 `http://localhost:9090`에서 Prometheus target 상태를 확인하며,
 `http://localhost:3000`에서 Grafana dashboard 초안을 확인할 수 있다.
@@ -306,10 +328,11 @@ make final-check
 
 ### 부하 테스트 (k6)
 
-Phase 9 기준 k6 스크립트는 HMAC이 켜진 상태에서 실행하는 것을 원칙으로 한다.
+현재 k6 스크립트는 HMAC이 켜진 상태에서 실행하는 것을 원칙으로 한다.
 로컬 Docker Compose 스택은 Nginx를 `http://localhost:8080`으로 노출하고,
 테스트용 client secret은 `.env.example`의 더미 값과 같은 `bank-a:change-me-secret`을 사용한다.
-기본 Nginx 설정은 운영형 rate limit을 유지하고, Phase 9 부하 실험에서는 `docker-compose.perf.yml`과 `infra/nginx/nginx.perf.conf`를 사용해 Nginx가 API/Redis/PostgreSQL 병목을 가리지 않도록 분리한다.
+기본 Nginx 설정은 운영형 rate limit을 유지한다.
+부하 실험에서는 `docker-compose.perf.yml`과 `infra/nginx/nginx.perf.conf`를 사용해 Nginx가 API/Redis/PostgreSQL 병목을 가리지 않도록 분리한다.
 
 ```bash
 # macOS 예시
@@ -342,7 +365,7 @@ make phase9-check
 make phase9-measure
 ```
 
-Redis Down 시나리오는 Phase 9에서 스크립트와 절차를 제공했고, Phase 10에서 장애 재현 명령과 fallback hardening을 추가했다.
+Redis Down 시나리오는 Phase 9에서 최초 측정했고, Phase 10에서 장애 재현 명령과 fallback hardening을 추가했다.
 
 ```bash
 make local-perf-bg
@@ -480,7 +503,7 @@ BASE_URL=http://localhost:8080 CLIENT_ID=bank-a CLIENT_SECRET=change-me-secret k
 `unexpected_response_rate`는 HTTP 응답 정책 위반율이며 실제 중복 반영률이 아니다.
 실제 duplicate processing rate는 `make k6-verify`로 PostgreSQL 검증 쿼리를 실행해 판단한다.
 테스트 후 Prometheus/Grafana 지표와 `make k6-verify` 결과를 함께 확인하고,
-결과는 [Phase 9 Performance Results](./docs/performance/phase-9-results.md)에 기록한다.
+Phase 9 성능 비교 결과는 [Phase 9 Performance Results](./docs/performance/phase-9-results.md)에 기록되어 있고, Redis Down fallback 보완 결과는 [Phase 10 Failure Recovery](./docs/phase-10-failure-recovery.md)에 기록되어 있다.
 CI/CD gate 적용은 Phase 11 범위다.
 `security-log-check`는 logger 직접 호출과 `log_event()` 구조화 로그에서 `account_no`, `raw_body`, `signature`, `secret`, `idempotency_key` 같은 민감 필드가 raw keyword로 들어가는 패턴을 찾는 로컬 보안 점검 타겟이다.
 현재 `final-check`에는 강제 포함하지 않으며, Phase 11 CI Gate 후보로 둔다.
@@ -528,8 +551,8 @@ http://localhost:9090
 3. `http://localhost:9090/targets`에서 `api-server` target UP 확인
 4. `http://localhost:3000`에서 `Financial Event Consistency System` dashboard 확인
 
-Phase 8~9의 Prometheus scrape 대상은 Prometheus 자체와 FastAPI `api-server` 중심이다.
-`api-green`, Redis exporter, PostgreSQL exporter scrape는 Phase 10~12 후속 보완 항목이며, 현재 Phase 9 PR에서는 구현하지 않는다.
+현재 Prometheus scrape 대상은 Prometheus 자체와 FastAPI `api-server` 중심이다.
+`api-green`, Redis exporter, PostgreSQL exporter scrape는 Phase 11 이후 운영 관측 보강 항목이다.
 
 ### 주요 대시보드
 

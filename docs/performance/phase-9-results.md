@@ -105,13 +105,15 @@ make k6-verify
 
 Redis 장애 중에도 PostgreSQL 기준 ledger 중복 생성은 0건이어야 한다.
 이번 로컬 실행에서는 중복은 0건이었지만 5xx가 14건 발생했다.
-따라서 최종 정합성은 유지됐으나 Redis 장애 중 가용성은 Phase 10 장애 재현/복구 설계에서 보완 대상이다.
+따라서 Phase 9 시점의 결론은 "최종 정합성은 유지됐지만 Redis 장애 중 API 가용성은 보완 필요"였다.
+이 항목은 Phase 10에서 Redis fallback hardening과 DB unique conflict retry를 추가해 보완했다.
+최신 Redis Down duplicate storm 결과는 [Phase 10 Failure Recovery](../phase-10-failure-recovery.md)에 기록한다.
 
 | 검증 관점 | 결과 | 판단 |
 |-----------|------|------|
 | 최종 정합성 | ledger 중복 0건, external_event 중복 0건 | 통과 |
-| API 가용성 | 5xx 14건, error rate 6.86% | 미달 / Phase 10 보완 |
-| Redis fallback 품질 | 일부 요청 실패 및 p99 3490ms | 개선 필요 |
+| API 가용성 | 5xx 14건, error rate 6.86% | Phase 9 기준 미달, Phase 10에서 보완 |
+| Redis fallback 품질 | 일부 요청 실패 및 p99 3490ms | Phase 10에서 Redis fallback hardening 적용 |
 
 ## Redis Cache 사용 전/후 비교
 
@@ -135,7 +137,7 @@ Cache on은 duplicate storm에서 p95가 약 34.5% 감소했고 RPS는 약 26.8%
 Lock off는 처리량이 높아 보였지만 5xx 26건이 발생했다.
 금융 이벤트 시스템의 판단 기준에서는 Redis Lock + PostgreSQL unique 조합이 tail latency와 안정성 모두 더 낫다.
 Lock off에서 발생한 5xx는 동일 `external_event_id` 동시 insert/update 경합, idempotency record terminal 상태 전환 경합, 또는 DB unique conflict 처리 경로의 예외 전파 가능성이 있다.
-정확한 원인은 Phase 10에서 API 구조화 로그의 `trace_id`/`request_id`와 PostgreSQL error log를 함께 확인해 좁힌다.
+Phase 10에서는 DB unique conflict rollback 후 read/retry 경로와 Redis fallback 구조화 로그를 추가해 이 계열의 장애를 재현하고 추적할 수 있게 했다.
 
 ## DB Pool Size 비교
 
@@ -149,7 +151,7 @@ Lock off에서 발생한 5xx는 동일 `external_event_id` 동시 insert/update 
 단일 API 프로세스와 로컬 Docker Desktop I/O 조건에서는 DB connection을 늘리는 것보다 트랜잭션 범위, row lock 대기, 컨테이너 리소스 제한을 함께 봐야 한다.
 현재 애플리케이션 메트릭에는 SQLAlchemy pool checked-out/overflow 사용량이 직접 export되지 않아 DB connection usage는 실제 수치로 기록하지 못했다.
 PostgreSQL exporter 또는 SQLAlchemy pool gauge 추가가 필요하지만, 이는 Phase 9 결과의 후속 관측 보완 항목으로 남긴다.
-Prometheus scrape도 Phase 9 기준 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 10~12에서 보완한다.
+Prometheus scrape도 현재 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 11 이후 운영 관측 보강 항목으로 남긴다.
 
 ## Transaction 범위 비교
 
@@ -178,8 +180,9 @@ Phase 9에서는 비즈니스 로직, DB 모델, 상태 머신, 트랜잭션 처
 | Redis Cache 유지 여부 | 유지. duplicate storm에서 p95 128.88ms -> 84.37ms, RPS 403.08 -> 511.15로 개선 |
 | Redis Lock 유지 여부 | 유지. Lock off는 5xx 26건, Lock on은 5xx 0건 및 p95 70.15ms |
 | 권장 DB pool size | 기본 10/5를 보수적 로컬 기본값으로 유지. 단기 peak run에서는 5/0이 가장 안정적이었으므로 운영값은 별도 장시간 측정 필요 |
-| 병목 원인 | peak load p95 초과, Redis down 중 5xx, DB pool 확대 시 tail latency 악화 |
-| 후속 Phase 10 장애 재현 필요 항목 | Redis 장애 중 5xx 원인, 재시도/timeout 정책, DB connection 사용량 exporter 보강 |
+| 병목 원인 | peak load p95 초과, Phase 9 Redis down 중 5xx, DB pool 확대 시 tail latency 악화 |
+| Phase 10 보완 결과 | Redis 장애 fallback, DB unique conflict retry, Redis Down duplicate storm 5xx 0건과 중복 반영 0건 확인 |
+| 후속 관측 보완 필요 항목 | DB connection 사용량 exporter 또는 SQLAlchemy pool gauge |
 
 ## 최종 정합성 검증
 

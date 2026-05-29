@@ -6,12 +6,15 @@
 - GitHub 초기 Push: **완료**
 - 다음 단계: **Phase 11 CI/CD와 배포 Gate 구성**
 
-Phase 8 완료 범위에는 Prometheus custom metrics, HTTP/transaction/idempotency/Redis/HMAC/state transition metric helper, trace_id/request_id context middleware, 구조화 로그 필드 보강, Grafana dashboard 초안, alert rule 초안, 로컬 Prometheus/Grafana provisioning 구성이 포함된다.
-Phase 8~9의 추적은 `X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적이며, OpenTelemetry SDK 및 W3C `traceparent`/`tracestate` 분산 추적은 후속 고도화 항목이다.
-Prometheus scrape 대상은 FastAPI API 중심이고 `api-green`, Redis exporter, PostgreSQL exporter는 Phase 10~12 후속 보완 항목이다.
-Phase 9 범위에서는 k6 smoke/normal/peak/duplicate/redis-down 시나리오, HMAC helper, 성능 비교 실행 타겟, PostgreSQL 정합성 검증 SQL, 결과 기록 문서를 준비했다.
+Phase 8에서는 Prometheus custom metrics, trace_id/request_id context middleware, 구조화 로그, Grafana dashboard 초안, alert rule 초안, 로컬 Prometheus/Grafana provisioning을 구현했다.
+현재 추적은 `X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적이다.
+OpenTelemetry SDK 및 W3C `traceparent`/`tracestate` 분산 추적은 후속 고도화 항목이다.
+
+Phase 9에서는 k6 smoke/normal/peak/duplicate/redis-down 시나리오, HMAC helper, 성능 비교 실행 타겟, PostgreSQL 정합성 검증 SQL, 결과 기록 문서를 준비했다.
 2026-05-29 KST 로컬 Docker Compose 환경에서 normal/peak/duplicate/redis-down, Redis Cache on/off, Redis Lock on/off, DB Pool 5/10/20 비교 값을 기록했다.
-Phase 10 범위에서는 Redis 장애 fallback metric/log, DB unique conflict retry, Docker Compose 장애 재현 Makefile 명령, Redis Down duplicate storm k6 시나리오, Failure Mode 문서를 추가했다.
+
+Phase 10에서는 Redis 장애 fallback metric/log, DB unique conflict retry, Docker Compose 장애 재현 Makefile 명령, Redis Down duplicate storm k6 시나리오, Failure Mode 문서를 추가했다.
+현재 Prometheus scrape 대상은 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 11 이후 운영 관측 보강 항목이다.
 
 ## 개발 Phase
 
