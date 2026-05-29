@@ -24,7 +24,8 @@ def test_mask_idempotency_key_does_not_return_full_key():
     masked = mask_idempotency_key(key)
 
     assert masked != key
-    assert masked.startswith("idem-202")
+    assert masked == "idem...-001"
+    assert mask_idempotency_key("short") == "***"
 
 
 def test_mask_signature_does_not_return_full_signature():

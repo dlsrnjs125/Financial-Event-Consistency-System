@@ -38,6 +38,16 @@ REDIS_OPERATIONS = {
     "cache_delete",
     "unknown",
 }
+DEPENDENCIES = {"redis", "postgres", "unknown"}
+DEPENDENCY_RESULTS = {"success", "failure", "fallback", "rejected", "unknown"}
+FAILURE_REASONS = {
+    "timeout",
+    "connection_error",
+    "integrity_conflict",
+    "lock_not_acquired",
+    "unavailable",
+    "unknown",
+}
 HMAC_FAILURE_REASONS = {
     "missing_header",
     "unknown_client",
@@ -71,6 +81,21 @@ financial_transaction_events_total = Counter(
     "Transaction event outcomes.",
     ["event_type", "status", "result"],
 )
+financial_transaction_event_processed_total = Counter(
+    "financial_transaction_event_processed_total",
+    "Successfully processed transaction events.",
+    ["event_type", "status"],
+)
+financial_transaction_event_failed_total = Counter(
+    "financial_transaction_event_failed_total",
+    "Failed transaction events.",
+    ["event_type", "status"],
+)
+financial_transaction_event_conflict_total = Counter(
+    "financial_transaction_event_conflict_total",
+    "Transaction event conflict or duplicate outcomes.",
+    ["event_type", "status"],
+)
 financial_transaction_processing_duration_seconds = Histogram(
     "financial_transaction_processing_duration_seconds",
     "Transaction event processing duration in seconds.",
@@ -102,6 +127,11 @@ financial_idempotency_processing_total = Counter(
     "Idempotency already-processing decisions.",
     ["source"],
 )
+financial_idempotency_duplicate_total = Counter(
+    "financial_idempotency_duplicate_total",
+    "Idempotency duplicate/replay decisions.",
+    ["source", "decision"],
+)
 financial_redis_lock_acquired_total = Counter(
     "financial_redis_lock_acquired_total",
     "Redis idempotency lock acquisitions.",
@@ -131,6 +161,31 @@ financial_redis_operations_total = Counter(
     "financial_redis_operations_total",
     "Redis operation outcomes.",
     ["operation", "result"],
+)
+financial_redis_operation_total = Counter(
+    "financial_redis_operation_total",
+    "Redis operation outcomes for Phase 10 fallback tracking.",
+    ["operation", "result", "reason"],
+)
+financial_redis_operation_failed_total = Counter(
+    "financial_redis_operation_failed_total",
+    "Redis operation failures for Phase 10 fallback tracking.",
+    ["operation", "reason"],
+)
+financial_redis_fallback_total = Counter(
+    "financial_redis_fallback_total",
+    "Requests continued with PostgreSQL after Redis operation failure.",
+    ["operation", "reason"],
+)
+financial_db_transaction_retry_total = Counter(
+    "financial_db_transaction_retry_total",
+    "Database transaction retries after concurrency conflicts.",
+    ["reason"],
+)
+financial_readiness_dependency_status = Gauge(
+    "financial_readiness_dependency_status",
+    "Readiness dependency status. 1 means healthy, 0 means failed.",
+    ["dependency"],
 )
 financial_hmac_auth_failures_total = Counter(
     "financial_hmac_auth_failures_total",
@@ -219,9 +274,22 @@ def record_transaction_processed(event_type: str, status: str, result: str) -> N
         status=normalized_status,
         result=normalized_result,
     ).inc()
-    if normalized_result == "duplicated":
+    if normalized_result == "processed":
+        financial_transaction_event_processed_total.labels(
+            event_type=normalized_event_type,
+            status=normalized_status,
+        ).inc()
+    elif normalized_result == "duplicated":
+        financial_transaction_event_conflict_total.labels(
+            event_type=normalized_event_type,
+            status=normalized_status,
+        ).inc()
         return
-    if normalized_result == "failed":
+    elif normalized_result == "failed":
+        financial_transaction_event_failed_total.labels(
+            event_type=normalized_event_type,
+            status=normalized_status,
+        ).inc()
         financial_transaction_failures_total.labels(
             event_type=normalized_event_type,
             status=normalized_status,
@@ -252,6 +320,11 @@ def record_idempotency_decision(decision: str, source: str = "db") -> None:
     ).inc()
     if normalized_decision == "ALREADY_PROCESSING":
         financial_idempotency_processing_total.labels(source=normalized_source).inc()
+    if normalized_decision in {"ALREADY_PROCESSING", "REPLAY_COMPLETED"}:
+        financial_idempotency_duplicate_total.labels(
+            source=normalized_source,
+            decision=normalized_decision,
+        ).inc()
 
 
 @safe_metric
@@ -288,21 +361,67 @@ def record_redis_operation(operation: str, result: str) -> None:
 
 
 @safe_metric
+def record_redis_operation_v2(
+    operation: str, result: str, reason: str = "unknown"
+) -> None:
+    normalized_operation = normalize_label(operation, REDIS_OPERATIONS)
+    normalized_result = normalize_label(result, DEPENDENCY_RESULTS)
+    normalized_reason = normalize_label(reason, FAILURE_REASONS)
+    financial_redis_operation_total.labels(
+        operation=normalized_operation,
+        result=normalized_result,
+        reason=normalized_reason,
+    ).inc()
+    if normalized_result == "failure":
+        financial_redis_operation_failed_total.labels(
+            operation=normalized_operation,
+            reason=normalized_reason,
+        ).inc()
+
+
+@safe_metric
+def record_redis_fallback(operation: str, reason: str = "unknown") -> None:
+    normalized_operation = normalize_label(operation, REDIS_OPERATIONS)
+    normalized_reason = normalize_label(reason, FAILURE_REASONS)
+    financial_redis_fallback_total.labels(
+        operation=normalized_operation,
+        reason=normalized_reason,
+    ).inc()
+
+
+@safe_metric
+def record_db_transaction_retry(reason: str = "unknown") -> None:
+    financial_db_transaction_retry_total.labels(
+        reason=normalize_label(reason, FAILURE_REASONS)
+    ).inc()
+
+
+@safe_metric
+def record_readiness_dependency_status(dependency: str, healthy: bool) -> None:
+    financial_readiness_dependency_status.labels(
+        dependency=normalize_label(dependency, DEPENDENCIES)
+    ).set(1 if healthy else 0)
+
+
+@safe_metric
 def record_idempotency_cache_hit() -> None:
     financial_idempotency_cache_hit_total.inc()
     record_redis_operation("cache_get", "success")
+    record_redis_operation_v2("cache_get", "success")
 
 
 @safe_metric
 def record_idempotency_cache_miss() -> None:
     financial_idempotency_cache_miss_total.inc()
-    record_redis_operation("cache_get", "failure")
+    record_redis_operation("cache_get", "success")
+    record_redis_operation_v2("cache_get", "success")
 
 
 @safe_metric
 def record_idempotency_cache_set_failure() -> None:
     financial_idempotency_cache_set_failure_total.inc()
     record_redis_operation("cache_set", "failure")
+    record_redis_operation_v2("cache_set", "failure")
 
 
 @safe_metric

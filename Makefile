@@ -200,12 +200,16 @@ final-check: format lint compile test ## Format, lint, compile, and test before 
 
 .PHONY: security-log-check
 security-log-check: ## Scan logger calls for direct sensitive-field logging; Phase 11 CI gate candidate
-	@echo "Scanning logger calls for sensitive raw fields..."
+	@echo "Scanning structured logs for sensitive raw fields..."
 	@if rg -n "logger\\.(info|warning|error|exception)\\([^\\n]*(account_no|raw_body|signature|secret|idempotency_key)" backend/app; then \
 		echo "Sensitive raw field logging pattern found. Use masked fields/log_event helpers instead."; \
 		exit 1; \
 	fi
-	@echo "No direct sensitive logger patterns found."
+	@if rg -n -U "log_event\\((.|\\n){0,800}(idempotency_key=|account_no=|signature=|secret=|raw_body=)" backend/app; then \
+		echo "Sensitive raw structured log field pattern found. Use masked fields instead."; \
+		exit 1; \
+	fi
+	@echo "No raw sensitive structured log fields found."
 
 # k6 performance tests
 .PHONY: k6-smoke
@@ -228,6 +232,10 @@ k6-duplicate: ## Run Phase 9 k6 duplicate storm test
 k6-redis-down: ## Run Redis-down experiment; consistency should pass, availability may fail and is Phase 10 follow-up
 	@echo "Expected procedure: docker compose pause redis && make k6-redis-down && docker compose unpause redis"
 	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/redis-down-test.js
+
+.PHONY: k6-redis-down-duplicate-storm
+k6-redis-down-duplicate-storm: ## Run Phase 10 Redis-down duplicate storm scenario
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) $(K6) run tests/k6/redis_down_duplicate_storm.js
 
 .PHONY: k6-redis-down-check
 k6-redis-down-check: ## Pause Redis for failure experiment; 5xx availability issues are recorded, not hidden
@@ -257,6 +265,56 @@ phase9-measure: k6-normal k6-peak ## Run Phase 9 normal/peak measurement scenari
 
 .PHONY: phase9-failure-experiment
 phase9-failure-experiment: k6-redis-down-check k6-verify ## Run Redis-down experiment; consistency gate should pass, availability may be below target
+
+# Phase 10 failure reproduction helpers
+.PHONY: failure-redis-down
+failure-redis-down: docker-check ## Stop Redis container and show Compose status
+	$(DOCKER_COMPOSE) stop redis
+	$(DOCKER_COMPOSE) ps
+	@echo "Redis is stopped. Run: make k6-redis-down-duplicate-storm"
+
+.PHONY: failure-redis-up
+failure-redis-up: docker-check ## Start Redis container and print readiness checks
+	$(DOCKER_COMPOSE) start redis
+	$(DOCKER_COMPOSE) ps redis
+	@echo "Readiness check: curl -i $(BASE_URL)/ready"
+	@echo "Redis ping: docker compose exec redis redis-cli ping"
+
+.PHONY: failure-redis-logs
+failure-redis-logs: ## Follow Redis container logs
+	$(DOCKER_COMPOSE) logs -f redis
+
+.PHONY: failure-api-restart
+failure-api-restart: docker-check ## Restart API container and print health checks
+	$(DOCKER_COMPOSE) restart api-blue
+	$(DOCKER_COMPOSE) ps api-blue
+	@echo "Health check: curl -i $(BASE_URL)/health"
+	@echo "Readiness check: curl -i $(BASE_URL)/ready"
+
+.PHONY: failure-db-down
+failure-db-down: docker-check ## Stop PostgreSQL container without deleting data
+	$(DOCKER_COMPOSE) stop postgres
+	$(DOCKER_COMPOSE) ps
+	@echo "DB is stopped. Readiness should fail: curl -i $(BASE_URL)/ready"
+
+.PHONY: failure-db-up
+failure-db-up: docker-check ## Start PostgreSQL container and print readiness checks
+	$(DOCKER_COMPOSE) start postgres
+	$(DOCKER_COMPOSE) ps postgres
+	@echo "Readiness check: curl -i $(BASE_URL)/ready"
+
+.PHONY: failure-status
+failure-status: ## Show Docker Compose service status
+	$(DOCKER_COMPOSE) ps
+
+.PHONY: phase10-redis-down-check
+phase10-redis-down-check: docker-check ## Run Phase 10 Redis-down duplicate storm consistency gate
+	@set -e; \
+	$(DOCKER_COMPOSE) stop redis; \
+	$(DOCKER_COMPOSE) ps; \
+	trap '$(DOCKER_COMPOSE) start redis >/dev/null; $(DOCKER_COMPOSE) ps redis; echo "Readiness check: curl -i $(BASE_URL)/ready"' EXIT; \
+	$(MAKE) k6-redis-down-duplicate-storm; \
+	$(MAKE) k6-verify
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

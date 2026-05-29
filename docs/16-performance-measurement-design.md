@@ -176,6 +176,12 @@ Phase 8의 표준 관측 기준은 bounded label을 사용하는 `financial_http
 | `financial_redis_lock_acquired_total` | none | Redis lock 획득 추적 |
 | `financial_redis_lock_rejected_total` | none | Redis lock rejected 추적 |
 | `financial_redis_unavailable_total` | operation | Redis 장애 fallback 추적 |
+| `financial_redis_operation_total` | operation, result, reason | Phase 10 Redis operation 성공/실패/fallback 추적 |
+| `financial_redis_operation_failed_total` | operation, reason | Redis operation 실패 원인 추적 |
+| `financial_redis_fallback_total` | operation, reason | Redis 실패 후 PostgreSQL fallback 진입 추적 |
+| `financial_db_transaction_retry_total` | reason | PostgreSQL unique conflict rollback 후 retry 추적 |
+| `financial_readiness_dependency_status` | dependency | readiness dependency 상태 추적 |
+| `financial_idempotency_duplicate_total` | source, decision | duplicate/replay idempotency decision 추적 |
 | `financial_idempotency_cache_hit_total` | none | Idempotency cache hit 추적 |
 | `financial_idempotency_cache_miss_total` | none | Idempotency cache miss 추적 |
 | `financial_idempotency_cache_set_failure_total` | none | cache set 실패 추적 |
@@ -186,6 +192,8 @@ Phase 8의 표준 관측 기준은 bounded label을 사용하는 `financial_http
 | `financial_reconciliation_failures_total` | none | Ledger/Account 불일치 위험 추적 |
 
 Prometheus label에는 `external_event_id`, `account_no`, `idempotency_key`, `trace_id`, `request_id` 같은 high-cardinality 값이나 민감 식별자를 넣지 않는다.
+Redis lock rejected는 Redis 장애가 아니라 정상적인 중복 요청 방어 결과이므로 `result="rejected", reason="lock_not_acquired"`로 기록하고 failure metric에는 포함하지 않는다.
+Cache miss 역시 Redis 장애가 아니므로 Redis operation은 success로 기록하고 cache 결과는 `financial_idempotency_cache_miss_total`에서 별도로 본다.
 Phase 8에서는 reconciliation failure metric hook만 제공하며, 실제 ledger/account reconciliation job은 후속 운영/장애 검증 Phase에서 구현한다.
 
 ### Phase 8 로컬 Observability 실행 기준

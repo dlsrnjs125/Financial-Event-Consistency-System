@@ -10,7 +10,7 @@ MAX_IDEMPOTENCY_KEY_LENGTH = 128
 def mask_idempotency_key(idempotency_key: str) -> str:
     stripped = idempotency_key.strip()
     if len(stripped) <= 8:
-        return "*" * len(stripped)
+        return "***"
     return f"{stripped[:4]}...{stripped[-4:]}"
 
 

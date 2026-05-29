@@ -3,6 +3,8 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from sqlalchemy.exc import IntegrityError
+
 from app.cache.redis_lock import RedisLockResult
 from app.domain.idempotency import IdempotencyCheckResult, IdempotencyDecision
 from app.domain.transaction_status import TransactionStatus
@@ -52,6 +54,20 @@ class FakeIdempotencyService:
         self.failed.append(
             (idempotency_key, response_code, response_body, error_message, payload)
         )
+
+
+class FlakyIdempotencyService(FakeIdempotencyService):
+    def __init__(self):
+        super().__init__(
+            IdempotencyCheckResult(IdempotencyDecision.ALREADY_PROCESSING, 1)
+        )
+        self.check_calls = 0
+
+    def check_or_start(self, idempotency_key, payload):
+        self.check_calls += 1
+        if self.check_calls == 1:
+            raise IntegrityError("insert", {}, Exception("unique conflict"))
+        return self.decision
 
 
 class FakeTransactionEventRepository:
@@ -241,6 +257,26 @@ def test_redis_lock_rejected_returns_202_without_db_transaction():
     assert idempotency_service.completed == []
     assert session.began is False
     assert redis_lock.released == []
+
+
+def test_db_integrity_conflict_rolls_back_and_retries_once():
+    idempotency_service = FlakyIdempotencyService()
+    session = FakeSession()
+    service = TransactionEventService(
+        session=session,
+        idempotency_service=idempotency_service,
+        transaction_event_repository=FakeTransactionEventRepository(),
+        account_repository=FakeAccountRepository(SimpleNamespace(id=1, balance=10000)),
+        ledger_service=FakeLedgerService(),
+        transaction_state_service=FakeTransactionStateService(),
+    )
+
+    result = service.process("idem-001", make_request())
+
+    assert result.status_code == 202
+    assert result.body["idempotency_key_status"] == "processing"
+    assert idempotency_service.check_calls == 2
+    assert session.rolled_back is True
 
 
 def test_redis_lock_acquired_runs_existing_process_and_releases():

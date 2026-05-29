@@ -12,10 +12,9 @@ def mask_account_no(account_no: str | None) -> str:
 def mask_idempotency_key(key: str | None) -> str:
     if not key:
         return ""
-    visible = min(8, len(key))
-    if len(key) <= visible:
-        return f"{key[:2]}***"
-    return f"{key[:visible]}***"
+    if len(key) <= 8:
+        return "***"
+    return f"{key[:4]}...{key[-4:]}"
 
 
 def mask_signature(signature: str | None) -> str:
