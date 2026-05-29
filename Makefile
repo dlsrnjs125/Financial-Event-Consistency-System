@@ -39,8 +39,9 @@ help: ## Show this help message
 	@echo "  make local-check       # Check local tools and app structure"
 	@echo "  make dev               # Run FastAPI locally with reload"
 	@echo "  make check             # Run format-check, lint, and tests"
-	@echo "  make final-check       # Format, lint, compile, test, and security log scan before PR"
-	@echo "  make ci-local          # Run the local equivalent of Phase 11 CI gates"
+	@echo "  make format            # Auto-format backend code and tests"
+	@echo "  make final-check       # Non-mutating final validation before PR"
+	@echo "  make ci-local          # Run the fast local equivalent of Phase 11 CI gates"
 	@echo "  make local-bg          # Run Docker Compose stack in background"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
@@ -196,13 +197,25 @@ compile: ## Compile backend Python files
 .PHONY: check
 check: format-check lint test ## Run format-check, lint, and tests
 
+.PHONY: fix
+fix: format ## Auto-format backend code and tests
+
 .PHONY: final-check
-final-check: format lint compile test security-log-check ## Format, lint, compile, test, and security log scan before PR
+final-check: format-check lint compile test security-log-check ## Non-mutating final validation before PR
 
 .PHONY: ci-local
-ci-local: format-check lint test security-log-check compile ## Run local Phase 11 CI gate equivalent
+ci-local: format-check lint test-unit security-log-check compile ## Run fast local Phase 11 CI gate equivalent
 	@echo "Local CI gates passed."
+	@echo "Consistency, migration, and Docker build gates run in GitHub Actions with service containers."
+
+.PHONY: ci-local-full
+ci-local-full: format-check lint test security-log-check compile ## Run local full pytest gate without migration/Docker build
+	@echo "Local full pytest gates passed."
 	@echo "Migration and Docker build gates run in GitHub Actions with PostgreSQL service containers."
+
+.PHONY: migration-smoke
+migration-smoke: ## Verify migrated PostgreSQL consistency constraints
+	PYTHONPATH=$(BACKEND_DIR) $(PYTHON) scripts/check_migration_constraints.py
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging

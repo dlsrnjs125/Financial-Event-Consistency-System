@@ -52,17 +52,21 @@ k6 duplicate storm, Redis Down duplicate storm, peak load는 정합성 검증에
 make ci-local
 make final-check
 make security-log-check
+make migration-smoke
 make k6-verify
 make phase10-redis-down-check
 ```
 
-`make ci-local`은 GitHub Actions의 빠른 로컬 대응 명령이다.
-PostgreSQL service container 기반 migration gate와 Docker build gate는 GitHub Actions에서 최종 확인한다.
+`make ci-local`은 GitHub Actions의 빠른 로컬 대응 명령이며 unit test 중심으로 실행한다.
+PostgreSQL/Redis service container 기반 consistency gate, migration gate, Docker build gate는 GitHub Actions에서 최종 확인한다.
+로컬에서 migration constraint smoke check를 재현하려면 `DATABASE_URL`이 빈 PostgreSQL DB를 가리키는 상태에서 `alembic upgrade head` 후 `make migration-smoke`를 실행한다.
 
 ## 6. 트레이드오프
 
 - 모든 테스트를 PR Gate에 넣지 않는다. 빠른 feedback을 위해 k6 부하 테스트는 수동/야간/릴리즈 전 Gate로 분리한다.
 - `security-log-check`는 구조화 로그 정책 검사이고, `secret-scan`은 저장소 credential 유출 검사다. 둘은 서로 대체하지 않는다.
+- Secret scan action은 CI 재현성을 위해 floating ref(`@main`)가 아닌 version tag(`@v3`)로 고정한다.
+- TruffleHog는 PR Gate 안정성을 위해 `--only-verified`를 사용한다. 오탐은 줄어들지만, unverified secret-like pattern 탐지는 별도 강화 후보로 남긴다.
 - GitHub Actions service container는 PR마다 깨끗한 PostgreSQL/Redis를 제공하지만, 로컬 Docker Compose의 Nginx/Prometheus/Grafana 전체 스택과 완전히 같지는 않다.
 - migration downgrade는 이번 Gate에 포함하지 않는다. 금융 데이터 migration rollback은 별도 backward-compatible migration 정책으로 다룬다.
 - Docker container 실행 smoke test는 Phase 12 Blue-Green/Rollback 시뮬레이션에서 health check 기반으로 확장한다.

@@ -164,43 +164,7 @@ jobs:
           alembic current
 
       - name: Verify model imports and consistency constraints
-        run: |
-          PYTHONPATH=backend python - <<'PY'
-          from sqlalchemy import create_engine, text
-
-          from app.models import Account, IdempotencyRecord, LedgerEntry, TransactionEvent
-
-          engine = create_engine("postgresql://postgres:password@localhost:5432/financial_events")
-          expected_constraints = {
-              "accounts": "uq_accounts_account_no",
-              "idempotency_records": "uq_idempotency_records_key",
-              "transaction_events": "uq_transaction_events_external_event_id",
-              "ledger_entries": "uq_ledger_entries_transaction_event_id",
-          }
-
-          assert Account.__tablename__ == "accounts"
-          assert IdempotencyRecord.__tablename__ == "idempotency_records"
-          assert TransactionEvent.__tablename__ == "transaction_events"
-          assert LedgerEntry.__tablename__ == "ledger_entries"
-
-          with engine.connect() as conn:
-              for table_name, constraint_name in expected_constraints.items():
-                  exists = conn.execute(
-                      text(
-                          """
-                          SELECT 1
-                          FROM pg_constraint c
-                          JOIN pg_class t ON t.oid = c.conrelid
-                          WHERE t.relname = :table_name
-                            AND c.conname = :constraint_name
-                            AND c.contype = 'u'
-                          """
-                      ),
-                      {"table_name": table_name, "constraint_name": constraint_name},
-                  ).scalar_one_or_none()
-                  if exists != 1:
-                      raise AssertionError(f"missing unique constraint: {constraint_name}")
-          PY
+        run: PYTHONPATH=backend python scripts/check_migration_constraints.py
 
   security-log-check:
     runs-on: ubuntu-latest
@@ -224,7 +188,7 @@ jobs:
 
       - name: TruffleHog Secret Scan for Pull Request
         if: github.event_name == 'pull_request'
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3
         with:
           path: ./
           base: ${{ github.event.pull_request.base.sha }}
@@ -233,7 +197,7 @@ jobs:
 
       - name: TruffleHog Secret Scan for Push
         if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3
         with:
           path: ./
           base: ${{ github.event.before }}
@@ -242,7 +206,7 @@ jobs:
 
       - name: TruffleHog Secret Scan for Initial Push
         if: github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000'
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3
         with:
           path: ./
           extra_args: --only-verified
