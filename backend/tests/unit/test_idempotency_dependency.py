@@ -34,4 +34,4 @@ def test_get_idempotency_key_rejects_129_character_key():
 
 def test_mask_idempotency_key_does_not_return_full_key():
     assert mask_idempotency_key("idem-20260528-0001") == "idem...0001"
-    assert mask_idempotency_key("short") == "*****"
+    assert mask_idempotency_key("short") == "***"

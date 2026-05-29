@@ -36,7 +36,7 @@ from app.repositories.account_repository import AccountRepository
 from app.repositories.ledger_entry_repository import LedgerEntryRepository
 from app.repositories.transaction_event_repository import TransactionEventRepository
 from app.schemas.transaction_event import TransactionEventCreateRequest
-from app.security.masking import mask_idempotency_key
+from app.security.masking import mask_account_no, mask_idempotency_key
 from app.services.idempotency_service import IdempotencyService
 from app.services.ledger_service import LedgerService
 from app.services.transaction_state_service import TransactionStateService
@@ -82,7 +82,7 @@ class TransactionEventService:
                     external_event_id=request.external_event_id,
                     event_type=request.event_type.value,
                     idempotency_key_masked=mask_idempotency_key(idempotency_key),
-                    account_no=request.account_no,
+                    account_no_masked=mask_account_no(request.account_no),
                     operation="lock_acquire",
                     dependency="redis",
                     fallback_used=True,
@@ -148,7 +148,7 @@ class TransactionEventService:
                     external_event_id=request.external_event_id,
                     event_type=request.event_type.value,
                     idempotency_key_masked=mask_idempotency_key(idempotency_key),
-                    account_no=request.account_no,
+                    account_no_masked=mask_account_no(request.account_no),
                     operation="transaction_event_process",
                     dependency="postgres",
                     fallback_used=True,
@@ -188,8 +188,8 @@ class TransactionEventService:
                 "transaction_processing_started",
                 external_event_id=request.external_event_id,
                 event_type=request.event_type.value,
-                idempotency_key=idempotency_key,
-                account_no=request.account_no,
+                idempotency_key_masked=mask_idempotency_key(idempotency_key),
+                account_no_masked=mask_account_no(request.account_no),
                 operation="transaction_event_process",
                 dependency="postgres",
                 fallback_used=False,
@@ -222,8 +222,8 @@ class TransactionEventService:
                     external_event_id=request.external_event_id,
                     event_type=request.event_type.value,
                     transaction_status=TransactionStatus.FAILED.value,
-                    idempotency_key=idempotency_key,
-                    account_no=request.account_no,
+                    idempotency_key_masked=mask_idempotency_key(idempotency_key),
+                    account_no_masked=mask_account_no(request.account_no),
                     operation="transaction_event_process",
                     dependency="postgres",
                     fallback_used=False,
@@ -261,8 +261,8 @@ class TransactionEventService:
                 "duplicate_external_event_detected",
                 external_event_id=request.external_event_id,
                 event_type=request.event_type.value,
-                idempotency_key=idempotency_key,
-                account_no=request.account_no,
+                idempotency_key_masked=mask_idempotency_key(idempotency_key),
+                account_no_masked=mask_account_no(request.account_no),
                 operation="duplicate_external_event_check",
                 dependency="postgres",
                 fallback_used=False,
@@ -306,8 +306,8 @@ class TransactionEventService:
                 external_event_id=event.external_event_id,
                 event_type=event.event_type,
                 transaction_status=event.status,
-                idempotency_key=idempotency_key,
-                account_no=request.account_no,
+                idempotency_key_masked=mask_idempotency_key(idempotency_key),
+                account_no_masked=mask_account_no(request.account_no),
                 operation="transaction_event_process",
                 dependency="postgres",
                 fallback_used=False,

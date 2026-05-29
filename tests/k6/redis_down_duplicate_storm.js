@@ -60,7 +60,10 @@ function hasTrackingField(res) {
   }
   return (
     safeJsonValue(res, 'event_id') !== undefined ||
+    safeJsonValue(res, 'external_event_id') !== undefined ||
     safeJsonValue(res, 'idempotency_key_status') !== undefined ||
+    safeJsonValue(res, 'status') === 'PROCESSING' ||
+    safeJsonValue(res, 'code') === 'IdempotencyConflict' ||
     safeJsonValue(res, 'error.code') === 'IdempotencyConflict'
   );
 }

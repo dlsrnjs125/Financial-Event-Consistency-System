@@ -200,12 +200,16 @@ final-check: format lint compile test ## Format, lint, compile, and test before 
 
 .PHONY: security-log-check
 security-log-check: ## Scan logger calls for direct sensitive-field logging; Phase 11 CI gate candidate
-	@echo "Scanning logger calls for sensitive raw fields..."
+	@echo "Scanning structured logs for sensitive raw fields..."
 	@if rg -n "logger\\.(info|warning|error|exception)\\([^\\n]*(account_no|raw_body|signature|secret|idempotency_key)" backend/app; then \
 		echo "Sensitive raw field logging pattern found. Use masked fields/log_event helpers instead."; \
 		exit 1; \
 	fi
-	@echo "No direct sensitive logger patterns found."
+	@if rg -n -U "log_event\\((.|\\n){0,800}(idempotency_key=|account_no=|signature=|secret=|raw_body=)" backend/app; then \
+		echo "Sensitive raw structured log field pattern found. Use masked fields instead."; \
+		exit 1; \
+	fi
+	@echo "No raw sensitive structured log fields found."
 
 # k6 performance tests
 .PHONY: k6-smoke
@@ -308,7 +312,7 @@ phase10-redis-down-check: docker-check ## Run Phase 10 Redis-down duplicate stor
 	@set -e; \
 	$(DOCKER_COMPOSE) stop redis; \
 	$(DOCKER_COMPOSE) ps; \
-	trap '$(DOCKER_COMPOSE) start redis >/dev/null' EXIT; \
+	trap '$(DOCKER_COMPOSE) start redis >/dev/null; $(DOCKER_COMPOSE) ps redis; echo "Readiness check: curl -i $(BASE_URL)/ready"' EXIT; \
 	$(MAKE) k6-redis-down-duplicate-storm; \
 	$(MAKE) k6-verify
 
