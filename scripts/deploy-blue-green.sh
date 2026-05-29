@@ -1,58 +1,132 @@
-#!/bin/bash
-# Deploy Blue-Green
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-BLUE_VERSION=$(docker ps --filter "name=api-blue" --format '{{.Image}}')
-GREEN_VERSION="financial-events:$(git rev-parse --short HEAD)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/deployment-lib.sh
+source "${SCRIPT_DIR}/deployment-lib.sh"
 
-echo "=== Blue-Green Deployment ==="
-echo "Blue: $BLUE_VERSION"
-echo "Green: $GREEN_VERSION"
+COMMAND="${1:-deploy}"
 
-# 1. Build Green image
-docker build -t $GREEN_VERSION ./backend
-
-# 2. Start Green container
-docker-compose -f docker-compose.yml up -d api-green
-
-# 3. Health check Green
-echo "Waiting for Green health check..."
-for i in {1..30}; do
-  if curl -f http://localhost:8001/health > /dev/null 2>&1; then
-    echo "✅ Green health check passed"
-    break
-  fi
-  sleep 1
-done
-
-# 4. Run smoke test on Green
-echo "Running smoke test on Green..."
-k6 run tests/k6/smoke-test.js --vus 10 --duration 10s --out console || {
-  echo "❌ Green smoke test failed, rolling back"
-  docker-compose -f docker-compose.yml down api-green
-  exit 1
+ensure_base_stack() {
+  log "Ensuring Blue, Nginx, PostgreSQL, and Redis are running"
+  compose up -d --build postgres redis "${BLUE_SERVICE}" "${NGINX_SERVICE}"
+  wait_for_endpoint "${BLUE_URL}/health" "Blue /health"
+  wait_for_endpoint "${BASE_URL}/health" "Nginx /health"
+  verify_ready_body "${BLUE_URL}/ready" "Blue"
 }
 
-# 5. Switch traffic (requires manual confirmation)
-read -p "Switch traffic to Green? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  # Update nginx config to point to api-green
-  docker-compose exec nginx bash -c \
-    "sed -i 's/api-blue:8000/api-green:8000/g' /etc/nginx/nginx.conf && \
-     nginx -s reload"
-  
-  echo "✅ Traffic switched to Green"
-  
-  # Monitor for 5 minutes
-  echo "Monitoring for 5 minutes..."
-  sleep 300
-  
-  # Remove Blue
-  docker-compose -f docker-compose.yml down api-blue
-  echo "✅ Deployment completed"
-else
-  echo "Deployment cancelled"
-  docker-compose -f docker-compose.yml down api-green
-fi
+start_green() {
+  require_deploy_tools
+  log "Starting Green service with Docker Compose profile green-deployment"
+  compose_green_profile up -d --build "${GREEN_SERVICE}"
+  compose ps "${GREEN_SERVICE}"
+  wait_for_endpoint "${GREEN_URL}/health" "Green /health"
+  verify_ready_body "${GREEN_URL}/ready" "Green"
+  verify_nginx_can_reach_green
+}
+
+verify_green_before_switch() {
+  log "Verifying Green before traffic switch"
+  run_security_log_check
+  run_migration_smoke
+  run_deployment_smoke "${GREEN_URL}"
+  nginx_test
+}
+
+switch_to_green() {
+  local active_color
+  require_deploy_tools
+  active_color="$(current_active_color)"
+  log "Current active upstream: ${active_color}; target: green"
+
+  if [[ "${active_color}" == "green" ]]; then
+    log "Nginx is already routing to Green"
+    compose ps "${NGINX_SERVICE}" "${BLUE_SERVICE}" "${GREEN_SERVICE}" || true
+    return 0
+  fi
+
+  wait_for_endpoint "${GREEN_URL}/health" "Green /health before switch"
+  verify_ready_body "${GREEN_URL}/ready" "Green before switch"
+  set_active_upstream green
+
+  if ! wait_for_endpoint "${BASE_URL}/health" "Nginx routed /health"; then
+    handle_post_switch_failure
+    return 1
+  fi
+
+  if ! verify_ready_body "${BASE_URL}/ready" "Nginx routed"; then
+    handle_post_switch_failure
+    return 1
+  fi
+
+  if ! run_deployment_smoke "${BASE_URL}"; then
+    handle_post_switch_failure
+    return 1
+  fi
+
+  run_deploy_verify_if_enabled
+  print_observability_hints
+  log "Blue-Green traffic switch completed"
+}
+
+handle_post_switch_failure() {
+  log "Post-switch verification failed"
+  if [[ "${AUTO_ROLLBACK}" == "true" ]]; then
+    log "AUTO_ROLLBACK=true; rolling back to Blue"
+    ROLLBACK_REASON="${ROLLBACK_REASON:-post-switch verification failed}" "${SCRIPT_DIR}/rollback.sh"
+  else
+    log "AUTO_ROLLBACK=false; manual rollback command: make deploy-rollback"
+  fi
+}
+
+print_observability_hints() {
+  cat <<EOF
+
+Deployment observability checklist:
+  Prometheus: ${PROMETHEUS_URL:-http://localhost:9090}
+  Grafana:    ${GRAFANA_URL:-http://localhost:3000}
+  Metrics:
+    financial_http_errors_total
+    financial_http_request_duration_seconds
+    financial_invalid_state_transition_total
+    financial_reconciliation_failures_total
+    financial_redis_fallback_total
+    financial_readiness_dependency_status
+  Logs:
+    docker compose logs -f ${NGINX_SERVICE} ${BLUE_SERVICE} ${GREEN_SERVICE}
+  Consistency:
+    make deploy-verify
+EOF
+}
+
+deploy() {
+  log "Starting Phase 12 Blue-Green deployment simulation"
+  log "Deployment id: ${DEPLOYMENT_ID}"
+  log "Base URL: ${BASE_URL}; Green URL: ${GREEN_URL}"
+  ensure_base_stack
+  start_green
+  verify_green_before_switch
+  switch_to_green
+}
+
+case "${COMMAND}" in
+  deploy)
+    deploy
+    ;;
+  start-green)
+    start_green
+    ;;
+  verify-green)
+    verify_green_before_switch
+    ;;
+  switch-green)
+    switch_to_green
+    ;;
+  *)
+    cat >&2 <<EOF
+Usage: $0 [deploy|start-green|verify-green|switch-green]
+EOF
+    exit 2
+    ;;
+esac

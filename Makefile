@@ -43,6 +43,8 @@ help: ## Show this help message
 	@echo "  make final-check       # Non-mutating final validation before PR"
 	@echo "  make ci-local          # Run the fast local equivalent of Phase 11 CI gates"
 	@echo "  make local-bg          # Run Docker Compose stack in background"
+	@echo "  make deploy-status     # Show Phase 12 Blue-Green deployment status"
+	@echo "  make deploy-blue-green # Run Phase 12 Green verification and traffic switch"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -217,6 +219,14 @@ ci-local-full: format-check lint test security-log-check compile ## Run local fu
 migration-smoke: ## Verify migrated PostgreSQL consistency constraints
 	PYTHONPATH=$(BACKEND_DIR) $(PYTHON) scripts/check_migration_constraints.py
 
+.PHONY: scripts-check
+scripts-check: ## Check shell script syntax
+	bash -n scripts/deployment-lib.sh
+	bash -n scripts/deploy-blue-green.sh
+	bash -n scripts/rollback.sh
+	bash -n scripts/deployment-status.sh
+	bash -n scripts/deployment-smoke.sh
+
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
 	@echo "Scanning structured logs for sensitive raw fields..."
@@ -334,6 +344,55 @@ phase10-redis-down-check: docker-check ## Run Phase 10 Redis-down duplicate stor
 	trap '$(DOCKER_COMPOSE) start redis >/dev/null; $(DOCKER_COMPOSE) ps redis; echo "Readiness check: curl -i $(BASE_URL)/ready"' EXIT; \
 	$(MAKE) k6-redis-down-duplicate-storm; \
 	$(MAKE) k6-verify
+
+# Phase 12 Blue-Green deployment and rollback simulation
+.PHONY: deploy-status
+deploy-status: docker-check ## Show active upstream and Blue/Green service status
+	@BASE_URL=$(BASE_URL) ./scripts/deployment-status.sh
+
+.PHONY: deploy-green
+deploy-green: docker-check ## Start and verify Green without switching traffic
+	@BASE_URL=$(BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh start-green
+	@BASE_URL=http://localhost:8001 ./scripts/deployment-smoke.sh
+
+.PHONY: deploy-switch-green
+deploy-switch-green: docker-check ## Switch Nginx upstream to Green after config validation
+	@BASE_URL=$(BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh switch-green
+
+.PHONY: deploy-blue-green
+deploy-blue-green: docker-check ## Run Green verification, switch Nginx to Green, and post-switch smoke
+	@BASE_URL=$(BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh deploy
+
+.PHONY: deploy-rollback
+deploy-rollback: docker-check ## Roll Nginx upstream back to Blue and verify
+	@BASE_URL=$(BASE_URL) ./scripts/rollback.sh "$${ROLLBACK_REASON:-manual rollback}"
+
+.PHONY: deploy-smoke
+deploy-smoke: ## Run lightweight deployment smoke test through BASE_URL
+	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
+
+.PHONY: deploy-verify
+deploy-verify: k6-verify ## Run post-deployment PostgreSQL consistency verification
+
+.PHONY: phase12-check
+phase12-check: docker-check ## Run Phase 12 Blue-Green switch, rollback, smoke, and consistency checks
+	@$(MAKE) local-bg
+	@$(MAKE) deploy-status
+	@$(MAKE) deploy-green
+	@$(MAKE) deploy-smoke
+	@$(MAKE) deploy-switch-green
+	@$(MAKE) deploy-smoke
+	@$(MAKE) deploy-rollback
+	@$(MAKE) deploy-smoke
+	@$(MAKE) deploy-verify
+
+.PHONY: phase12-rollback-check
+phase12-rollback-check: docker-check ## Verify rollback from Green to Blue without destructive actions
+	@$(MAKE) local-bg
+	@$(MAKE) deploy-green
+	@$(MAKE) deploy-switch-green
+	@ROLLBACK_REASON="phase12 rollback check" $(MAKE) deploy-rollback
+	@$(MAKE) deploy-smoke
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

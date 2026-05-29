@@ -32,6 +32,7 @@ jobs:
         run: |
           make format-check PYTHON=python BLACK=black ISORT=isort RUFF=ruff
           make lint PYTHON=python FLAKE8=flake8 RUFF=ruff
+          make scripts-check
 
   unit-tests:
     runs-on: ubuntu-latest

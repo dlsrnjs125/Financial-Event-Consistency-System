@@ -1,18 +1,40 @@
-#!/bin/bash
-# Rollback to previous version
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-echo "=== Rollback to Blue ==="
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/deployment-lib.sh
+source "${SCRIPT_DIR}/deployment-lib.sh"
 
-# 1. Switch traffic back to Blue
-docker-compose exec nginx bash -c \
-  "sed -i 's/api-green:8000/api-blue:8000/g' /etc/nginx/nginx.conf && \
-   nginx -s reload"
+ROLLBACK_REASON="${1:-${ROLLBACK_REASON:-manual rollback}}"
 
-echo "✅ Traffic switched to Blue"
+log "Starting API traffic rollback to Blue"
+log "Rollback reason: ${ROLLBACK_REASON}"
+log "Rollback scope: API traffic only. DB schema downgrade is not automated."
 
-# 2. Stop Green
-docker-compose down api-green
+require_deploy_tools
 
-echo "✅ Rollback completed"
+active_color="$(current_active_color)"
+if [[ "${active_color}" == "blue" ]]; then
+  log "Nginx is already routing to Blue"
+else
+  set_active_upstream blue
+fi
+
+wait_for_endpoint "${BASE_URL}/health" "Nginx routed Blue /health"
+verify_ready_body "${BASE_URL}/ready" "Nginx routed Blue"
+run_deployment_smoke "${BASE_URL}"
+run_deploy_verify_if_enabled
+
+cat <<EOF
+
+Rollback completed.
+  Active upstream: $(current_active_color)
+  Deployment id: ${DEPLOYMENT_ID}
+  Consistency verification: make deploy-verify
+  Logs: docker compose logs -f ${NGINX_SERVICE} ${BLUE_SERVICE} ${GREEN_SERVICE}
+
+DB migration note:
+  This rollback switches API traffic only. Database rollback is intentionally
+  not automated; schema changes must follow backward-compatible migration policy.
+EOF

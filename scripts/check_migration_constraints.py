@@ -10,10 +10,16 @@ from app.models import Account, IdempotencyRecord, LedgerEntry, TransactionEvent
 
 
 EXPECTED_UNIQUE_CONSTRAINTS = {
-    "accounts": "uq_accounts_account_no",
-    "idempotency_records": "uq_idempotency_records_key",
-    "transaction_events": "uq_transaction_events_external_event_id",
-    "ledger_entries": "uq_ledger_entries_transaction_event_id",
+    "accounts": ("uq_accounts_account_no", ("account_no",)),
+    "idempotency_records": ("uq_idempotency_records_key", ("idempotency_key",)),
+    "transaction_events": (
+        "uq_transaction_events_external_event_id",
+        ("external_event_id",),
+    ),
+    "ledger_entries": (
+        "uq_ledger_entries_transaction_event_id",
+        ("transaction_event_id",),
+    ),
 }
 
 
@@ -31,7 +37,10 @@ def main() -> None:
 
     missing_constraints: list[str] = []
     with engine.connect() as connection:
-        for table_name, constraint_name in EXPECTED_UNIQUE_CONSTRAINTS.items():
+        for table_name, (
+            constraint_name,
+            column_names,
+        ) in EXPECTED_UNIQUE_CONSTRAINTS.items():
             exists = connection.execute(
                 text(
                     """
@@ -45,7 +54,30 @@ def main() -> None:
                 ),
                 {"table_name": table_name, "constraint_name": constraint_name},
             ).scalar_one_or_none()
-            if exists != 1:
+            if exists == 1:
+                continue
+
+            equivalent_unique = connection.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM pg_constraint c
+                    JOIN pg_class t ON t.oid = c.conrelid
+                    JOIN LATERAL (
+                        SELECT array_agg(a.attname ORDER BY a.attnum) AS column_names
+                        FROM unnest(c.conkey) AS ck(attnum)
+                        JOIN pg_attribute a
+                          ON a.attrelid = c.conrelid
+                         AND a.attnum = ck.attnum
+                    ) cols ON true
+                    WHERE t.relname = :table_name
+                      AND c.contype = 'u'
+                      AND cols.column_names::text[] = :column_names
+                    """
+                ),
+                {"table_name": table_name, "column_names": list(column_names)},
+            ).scalar_one_or_none()
+            if equivalent_unique != 1:
                 missing_constraints.append(constraint_name)
 
     if missing_constraints:
