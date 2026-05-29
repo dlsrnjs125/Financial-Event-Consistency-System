@@ -105,6 +105,9 @@ financial-monitoring ansible_host=127.0.0.1 ansible_user=ubuntu
 - secret 값은 playbook에 직접 작성하지 않는다.
 - `.env`는 `.env.example` 기준 필수 키만 검증한다.
 
+Ansible rollback은 데이터베이스를 과거 상태로 되돌리는 작업이 아니다.
+검증된 이전 API/Nginx upstream으로 트래픽을 되돌리는 작업으로 제한한다.
+
 README에는 다음 결과를 남긴다.
 
 - ansible-lint 통과

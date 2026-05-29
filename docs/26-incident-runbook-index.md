@@ -32,6 +32,10 @@ docs/
     high-latency-p99.md
     disk-full.md
     failed-deployment.md
+    consistency-violation.md
+    secret-leak.md
+    backup-restore-failed.md
+    metrics-unavailable.md
 
 reports/
   incidents/
@@ -50,6 +54,8 @@ make drill-nginx-5xx
 make drill-high-latency
 make drill-disk-full
 make drill-failed-deployment
+make drill-consistency-violation
+make drill-secret-leak
 ```
 
 성공 기준:
@@ -72,6 +78,10 @@ make drill-failed-deployment
 | High Latency p99 | [runbooks/high-latency-p99.md](runbooks/high-latency-p99.md) |
 | Disk Full | [runbooks/disk-full.md](runbooks/disk-full.md) |
 | Failed Deployment | [runbooks/failed-deployment.md](runbooks/failed-deployment.md) |
+| Consistency Violation | [runbooks/consistency-violation.md](runbooks/consistency-violation.md) |
+| Secret Leak | [runbooks/secret-leak.md](runbooks/secret-leak.md) |
+| Backup Restore Failed | [runbooks/backup-restore-failed.md](runbooks/backup-restore-failed.md) |
+| Metrics Unavailable | [runbooks/metrics-unavailable.md](runbooks/metrics-unavailable.md) |
 
 ### 공통 템플릿
 
@@ -96,3 +106,30 @@ make drill-failed-deployment
 annotations:
   runbook: "docs/runbooks/redis-down.md"
 ```
+
+### Severity Level
+
+| Severity | 기준 | 예시 |
+|---|---|---|
+| SEV1 | 금융 정합성 위반 또는 핵심 거래 처리 불가 | ledger 중복 반영, PostgreSQL down, secret leak |
+| SEV2 | degraded mode 지속 또는 사용자 요청 실패 증가 | Redis down, Nginx 5xx spike, p99 급증 |
+| SEV3 | 예방 대응 가능한 운영 위험 | disk 85%, backup 지연, dashboard 일부 누락 |
+| SEV4 | 비긴급 개선 항목 | 문서 보완, alert threshold 조정 |
+
+정합성 위반은 성능 저하와 다르게 error budget을 두지 않는다.
+1건 발생 시 SEV1 incident로 분류한다.
+
+### Incident Lifecycle
+
+Runbook은 다음 lifecycle을 기준으로 작성한다.
+
+1. Preparation
+   - dashboard, alert, runbook, backup 준비
+2. Detection & Analysis
+   - alert firing, dashboard 확인, 영향 범위 판단
+3. Containment
+   - rate limit 강화, traffic rollback, admin endpoint 제한, degraded mode 유지
+4. Eradication & Recovery
+   - 원인 제거, 서비스 복구, 정합성 검증
+5. Post-Incident Activity
+   - incident report, 재발 방지 action item, threshold/runbook 수정

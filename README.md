@@ -173,6 +173,13 @@ Redis와 장애 처리:
 
 위 항목은 본 프로젝트의 핵심 구현 범위에서는 제외하고, 향후 운영 고도화 과제로 남긴다.
 
+운영 확장 단계에서는 단순히 exporter와 자동화 스크립트를 추가하는 것이 아니라,
+금융 이벤트 시스템에서 발생 가능한 운영/보안 리스크를 Threat Model로 정의하고,
+SLO/SLI, Secret 관리, 접근 제어, 백업 복구, 정합성 위반 Runbook까지 연결한다.
+
+특히 금융 정합성 위반은 일반적인 성능 저하와 달리 error budget을 허용하지 않는 Critical Incident로 분류한다.
+장애 복구 후에는 ledger/account/idempotency 정합성 검증을 반드시 수행하도록 설계한다.
+
 HMAC Header 예시:
 
 ```http
@@ -824,6 +831,12 @@ make deploy-verify
 - [Windows PowerShell Ops](./docs/24-windows-powershell-ops.md)
 - [Internal Network Security](./docs/25-internal-network-security.md)
 - [Incident Runbook Index](./docs/26-incident-runbook-index.md)
+- [Threat Model](./docs/27-threat-model.md)
+- [Secret Management Policy](./docs/28-secret-management-policy.md)
+- [SLO/SLI/Error Budget](./docs/29-slo-sli-error-budget.md)
+- [Change Management](./docs/30-change-management.md)
+- [Capacity Planning](./docs/31-capacity-planning.md)
+- [Security Checklist](./docs/32-security-checklist.md)
 - [Phase 10 Failure Recovery](./docs/phase-10-failure-recovery.md)
 - [Phase 11 CI/CD Gate](./docs/phase-11-ci-cd-gate.md)
 - [Phase 12 Blue-Green Rollback](./docs/phase-12-blue-green-rollback.md)

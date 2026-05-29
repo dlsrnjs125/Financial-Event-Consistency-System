@@ -119,6 +119,20 @@ log_format financial_json escape=json
 - latency
 - upstream
 
+### Nginx Retry 정책
+
+- `POST /api/v1/transaction-events`는 Nginx 레벨 자동 재시도를 기본적으로 제한한다.
+- 재시도가 필요한 경우 idempotency key와 HMAC timestamp가 있는 요청만 허용한다.
+- 중복 처리는 API/DB 정합성 계층에서 최종 방어한다.
+
+### 추가 보안 설정 후보
+
+- TLS termination 범위 정의
+- security headers 적용
+- request body size limit 설정
+- upstream timeout 설정
+- 499/502/504 해석 기준 문서화
+
 README에는 다음 결과를 남긴다.
 
 - Nginx public/internal endpoint 분리 완료

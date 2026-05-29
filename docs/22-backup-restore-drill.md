@@ -12,6 +12,7 @@ Ops Phase 3의 목표는 `pg_dump` 파일을 만드는 것이 아니라, 별도 
 
 - `pg_dump` 기반 논리 백업
 - 백업 파일 압축
+- 백업 파일 암호화
 - checksum 생성
 - restore 전용 DB 복원
 - 정합성 검증 SQL 실행
@@ -24,6 +25,7 @@ Ops Phase 3의 목표는 `pg_dump` 파일을 만드는 것이 아니라, 별도 
 - cloud snapshot backup은 제외한다.
 - 운영 DB 자동 삭제나 destructive restore는 제외한다.
 - DB schema downgrade rollback은 제외한다.
+- 백업 파일을 외부 저장소에 실제 업로드하는 작업은 제외한다.
 
 ## 4. 파일/디렉터리 변경 계획
 
@@ -39,6 +41,7 @@ scripts/
 backups/
   20260529_020000/
     financial_events_20260529_020000.dump.gz
+    financial_events_20260529_020000.dump.gz.enc
     financial_events_20260529_020000.sha256
     metadata.json
     verify_result.json
@@ -77,12 +80,14 @@ make dr-drill
   "backup_started_at": "2026-05-29T02:00:00+09:00",
   "backup_finished_at": "2026-05-29T02:00:09+09:00",
   "database": "financial_events",
-  "backup_type": "pg_dump_custom",
-  "compressed": true,
+  "backup_type": "logical",
+  "encrypted": true,
   "checksum_algorithm": "sha256",
   "schema_version": "alembic_revision_xxx"
 }
 ```
+
+metadata에는 secret, 계좌번호, raw idempotency key를 절대 남기지 않는다.
 
 ### 스크립트별 책임
 
@@ -93,6 +98,15 @@ make dr-drill
 | `pg_restore.sh` | restore DB 초기화 후 복원 | restore 실패 |
 | `verify_restore.sql` | 정합성 SQL 실행 | 결과 1건 이상 |
 | `cleanup_old_backups.sh` | 보관 기간 초과 파일 삭제 | dry-run 없이 삭제 금지 |
+
+### 백업 보안 기준
+
+- 백업 파일은 암호화한다.
+- 백업 파일 접근 권한은 최소화한다.
+- restore DB는 외부 포트를 열지 않는다.
+- 백업 파일명에 개인정보/계좌번호를 넣지 않는다.
+- metadata에 secret을 넣지 않는다.
+- 삭제는 dry-run 후 수행한다.
 
 ### 정합성 검증 SQL
 

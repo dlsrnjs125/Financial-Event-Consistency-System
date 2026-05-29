@@ -32,6 +32,7 @@ Alert Rule:
 - PostgreSQL connection pressure
 - Nginx 5xx spike
 - disk pressure
+- financial consistency violation
 
 ## 3. 제외 범위
 
@@ -96,6 +97,19 @@ make dashboard-check
 - dashboard provision 누락
 
 ## 6. 완료 기준과 README에 남길 결과
+
+### Cardinality 정책
+
+Prometheus label에는 다음 값을 넣지 않는다.
+
+- account_no
+- raw idempotency_key
+- raw external_event_id
+- event_id
+- request_id
+- 동적 ID가 포함된 request path
+
+고유 요청 추적은 metric label이 아니라 구조화 로그와 trace/request context에서 처리한다.
 
 ### Prometheus Target
 
@@ -183,6 +197,15 @@ groups:
         annotations:
           summary: "PostgreSQL connection pressure detected"
           runbook: "docs/runbooks/postgres-connection-exhausted.md"
+
+      - alert: FinancialConsistencyViolation
+        expr: financial_consistency_violation_total > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Financial consistency violation detected"
+          runbook: "docs/runbooks/consistency-violation.md"
 ```
 
 README에는 다음 결과를 남긴다.
