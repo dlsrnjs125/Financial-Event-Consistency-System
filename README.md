@@ -124,6 +124,7 @@ make deploy-rollback   # Nginx upstream을 Blue로 rollback
 make deploy-smoke      # lightweight 배포 smoke test
 make deploy-verify     # PostgreSQL 정합성 검증
 make phase12-check     # Phase 12 Blue-Green/rollback 통합 검증
+make ops2-demo         # Ops Phase 2 Blue-Green 전환/rollback 재현
 ```
 
 ### 주요 엔드포인트
@@ -239,8 +240,23 @@ make ops1-check
 - `reports/monitoring/ops1-compose-status.md`
 
 상세 캡처와 해석은 [blog 13편](./blog/13-why-infra-metrics-matter.md)에 정리한다.
-Nginx exporter와 rate limit 관측은 Ops Phase 2에서 보강하며, `/metrics`와 exporter endpoint는 운영 환경에서 public endpoint로 열지 않는다.
+Nginx exporter와 rate limit 관측은 후속 Nginx Access Control 단계에서 보강하며, `/metrics`와 exporter endpoint는 운영 환경에서 public endpoint로 열지 않는다.
 실제 p95/p99, RPS, 장애 전후 비교 수치는 이후 k6/장애 재현 결과로만 기록한다.
+
+### Ops Phase 2. Blue-Green Deployment & Rollback Simulation
+
+Phase 12에서 설계한 Blue-Green 전환을 운영자가 재현하기 쉬운 `ops2-*` 명령으로 정리했다.
+Green을 직접 검증한 뒤 Nginx upstream을 전환하고, 문제가 있으면 Blue로 rollback한다.
+
+```bash
+make ops2-start-blue
+make ops2-start-green
+make ops2-switch-green
+make ops2-rollback
+make ops2-demo
+```
+
+상세 절차는 [Deployment Strategy](./docs/09-deployment-strategy.md)와 [blog 11편](./blog/11-blue-green-rollback-simulation.md)에 정리한다.
 
 ---
 

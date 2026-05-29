@@ -4,6 +4,7 @@ APP_MODULE ?= app.main:app
 HOST ?= 0.0.0.0
 PORT ?= 8000
 BASE_URL ?= http://localhost:8080
+GREEN_URL ?= http://localhost:8001
 CLIENT_ID ?= bank-a
 CLIENT_SECRET ?= change-me-secret
 ACCOUNT_NO ?= ACC-001
@@ -48,6 +49,7 @@ help: ## Show this help message
 	@echo "  make deploy-blue-green # Run Phase 12 Green verification and traffic switch"
 	@echo "  make ops1-up           # Run Ops Phase 1 monitoring stack with exporters"
 	@echo "  make ops1-check        # Verify Prometheus targets, metrics, and dashboards"
+	@echo "  make ops2-demo         # Run Ops Phase 2 Blue-Green switch and rollback demo"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -226,7 +228,10 @@ migration-smoke: ## Verify migrated PostgreSQL consistency constraints
 scripts-check: ## Check shell script syntax
 	bash -n scripts/deployment-lib.sh
 	bash -n scripts/deploy-blue-green.sh
+	bash -n scripts/deploy_green.sh
 	bash -n scripts/rollback.sh
+	bash -n scripts/rollback_to_blue.sh
+	bash -n scripts/switch_traffic.sh
 	bash -n scripts/deployment-status.sh
 	bash -n scripts/deployment-smoke.sh
 	bash -n scripts/monitoring/check-prometheus-targets.sh
@@ -449,6 +454,93 @@ phase12-rollback-check: docker-check ## Verify rollback from Green to Blue witho
 	@$(MAKE) deploy-switch-green
 	@ROLLBACK_REASON="phase12 rollback check" $(MAKE) deploy-rollback
 	@$(MAKE) deploy-smoke
+
+# Ops Phase 2 Blue-Green deployment and rollback simulation
+.PHONY: ops2-start-blue
+ops2-start-blue: docker-check ## Start Blue, Nginx, PostgreSQL, and Redis for Ops Phase 2
+	@cp infra/nginx/conf.d/upstream-active.conf.blue infra/nginx/conf.d/upstream-active.conf
+	@printf 'blue\n' > infra/nginx/.active-color
+	$(DOCKER_COMPOSE) up -d --build postgres redis api-blue nginx
+	@echo "Blue/Nginx stack is starting. Verify with: make ops2-check-blue"
+
+.PHONY: ops2-start-green
+ops2-start-green: docker-check ## Start and verify Green service without switching traffic
+	@BASE_URL=$(BASE_URL) GREEN_URL=$(GREEN_URL) ./scripts/deploy_green.sh
+
+.PHONY: ops2-check-blue
+ops2-check-blue: ## Check Nginx routed /health and /ready
+	@set -e; \
+	for endpoint in health ready; do \
+		echo "Waiting for $(BASE_URL)/$$endpoint"; \
+		i=0; \
+		until curl -fsS "$(BASE_URL)/$$endpoint" >/dev/null; do \
+			i=$$((i + 1)); \
+			if [ "$$i" -ge 30 ]; then \
+				echo "$(BASE_URL)/$$endpoint did not become ready"; \
+				exit 1; \
+			fi; \
+			sleep 2; \
+		done; \
+	done
+	@echo "Nginx routed health/ready checks passed: $(BASE_URL)"
+
+.PHONY: ops2-check-green
+ops2-check-green: ## Check Green direct /health and /ready
+	@set -e; \
+	for endpoint in health ready; do \
+		echo "Waiting for $(GREEN_URL)/$$endpoint"; \
+		i=0; \
+		until curl -fsS "$(GREEN_URL)/$$endpoint" >/dev/null; do \
+			i=$$((i + 1)); \
+			if [ "$$i" -ge 30 ]; then \
+				echo "$(GREEN_URL)/$$endpoint did not become ready"; \
+				exit 1; \
+			fi; \
+			sleep 2; \
+		done; \
+	done
+	@echo "Green health/ready checks passed: $(GREEN_URL)"
+
+.PHONY: ops2-switch-green
+ops2-switch-green: docker-check ## Switch Nginx upstream to Green after config validation
+	@./scripts/switch_traffic.sh green
+
+.PHONY: ops2-switch-blue
+ops2-switch-blue: docker-check ## Switch Nginx upstream to Blue after config validation
+	@./scripts/switch_traffic.sh blue
+
+.PHONY: ops2-rollback
+ops2-rollback: docker-check ## Roll Nginx upstream back to Blue and verify health/readiness
+	@BASE_URL=$(BASE_URL) ./scripts/rollback_to_blue.sh
+
+.PHONY: ops2-smoke-green
+ops2-smoke-green: ## Run lightweight smoke test directly against Green
+	@BASE_URL=$(GREEN_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
+
+.PHONY: ops2-status
+ops2-status: docker-check ## Show Blue/Green/Nginx Docker Compose status
+	$(DOCKER_COMPOSE) --profile green-deployment ps nginx api-blue api-green postgres redis
+	@BASE_URL=$(BASE_URL) ./scripts/deployment-status.sh
+
+.PHONY: ops2-logs
+ops2-logs: docker-check ## Follow Ops Phase 2 Nginx and API logs
+	$(DOCKER_COMPOSE) --profile green-deployment logs -f nginx api-blue api-green
+
+.PHONY: ops2-cleanup
+ops2-cleanup: docker-check ## Stop Green container without deleting volumes
+	$(DOCKER_COMPOSE) --profile green-deployment stop api-green
+
+.PHONY: ops2-demo
+ops2-demo: docker-check ## Run Blue start, Green verification, switch, rollback, and checks
+	@$(MAKE) ops2-start-blue
+	@$(MAKE) ops2-check-blue
+	@$(MAKE) ops2-start-green
+	@$(MAKE) ops2-check-green
+	@$(MAKE) ops2-smoke-green
+	@$(MAKE) ops2-switch-green
+	@$(MAKE) ops2-check-blue
+	@$(MAKE) ops2-rollback
+	@$(MAKE) ops2-check-blue
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

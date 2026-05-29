@@ -341,3 +341,46 @@ make phase12-rollback-check
 
 Green 검증 실패나 Nginx config test 실패 시 upstream은 전환하지 않는다.
 전환 후 smoke/readiness 검증이 실패하면 `AUTO_ROLLBACK=true` 기본 정책에 따라 `scripts/rollback.sh`를 호출해 Blue로 되돌린다.
+
+## 14. Ops Phase 2 실행 명령
+
+Ops Phase 2에서는 Phase 12에서 만든 Blue-Green 전환 구조를 운영자가 더 직접적으로 실행할 수 있도록 별도 진입점을 제공한다.
+기존 `deploy-*` 명령은 유지하고, `ops2-*` 명령은 Blue 시작, Green 검증, traffic switch, rollback을 단계별로 재현하는 데 사용한다.
+
+| 명령 | 역할 |
+|---|---|
+| `make ops2-start-blue` | PostgreSQL, Redis, Blue API, Nginx 실행 |
+| `make ops2-start-green` | `green-deployment` profile로 Green 실행 후 `/health`, `/ready`, Nginx 내부 접근 검증 |
+| `make ops2-check-blue` | Nginx 기준 `/health`, `/ready` 확인 |
+| `make ops2-check-green` | Green 직접 endpoint 기준 `/health`, `/ready` 확인 |
+| `make ops2-smoke-green` | Green 대상으로 HMAC POST, idempotency replay, validation failure smoke 실행 |
+| `make ops2-switch-green` | `scripts/switch_traffic.sh green`으로 Nginx upstream을 Green으로 전환 |
+| `make ops2-switch-blue` | `scripts/switch_traffic.sh blue`로 Nginx upstream을 Blue로 전환 |
+| `make ops2-rollback` | `scripts/rollback_to_blue.sh`로 Blue rollback 후 health/readiness 확인 |
+| `make ops2-status` | Blue/Green/Nginx 상태와 active upstream 출력 |
+| `make ops2-cleanup` | Green 컨테이너만 중지 |
+| `make ops2-demo` | Blue 시작부터 Green 전환, Blue rollback까지 한 번에 재현 |
+
+직접 실행 흐름:
+
+```bash
+make ops2-start-blue
+make ops2-check-blue
+make ops2-start-green
+make ops2-check-green
+make ops2-smoke-green
+make ops2-switch-green
+make ops2-check-blue
+make ops2-rollback
+make ops2-check-blue
+```
+
+`scripts/switch_traffic.sh`는 `blue` 또는 `green`만 인자로 허용한다.
+전환 전 현재 active upstream을 출력하고, snippet 교체 후 `nginx -t`가 성공할 때만 reload한다.
+`nginx -t` 또는 reload가 실패하면 이전 snippet과 active color 상태를 복구한다.
+
+`scripts/deploy_green.sh`는 Green 컨테이너를 시작하고 `http://localhost:8001/health`, `http://localhost:8001/ready`, Nginx 컨테이너 내부 `api-green:8000/health` 접근을 확인한다.
+Green이 준비되지 않으면 non-zero exit로 실패하고, `STOP_GREEN_ON_FAILURE=true`일 때 Green 컨테이너를 중지한다.
+
+`scripts/rollback_to_blue.sh --stop-green`은 Blue rollback 이후 Green 컨테이너까지 중지한다.
+기본 rollback은 traffic rollback만 수행하며 DB schema downgrade는 실행하지 않는다.
