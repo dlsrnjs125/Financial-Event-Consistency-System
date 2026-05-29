@@ -60,6 +60,17 @@ redis_data/
 *.log
 logs/
 
+# Operational evidence reports
+reports/**/raw/
+reports/**/tmp/
+*.har
+*.pcap
+
+# Keep curated evidence artifacts small and reviewable.
+!reports/k6/*-summary.json
+!reports/dr-drill/*-result.md
+!reports/incidents/*-result.md
+
 # Docker
 docker-compose.override.yml
 
