@@ -1,9 +1,11 @@
 # Ops Phase 1 Prometheus Target Check
 
-- Date: 2026-05-29T19:22:17Z
-- Git Commit: e2b36fe
+- Date: 2026-05-29T19:38:38Z
+- Tested Commit: 3831236
 - Branch: feature/ops1-infra-metrics-extension
 - Result: PASSED
+
+> Note: The tested commit can differ from the final PR commit because evidence reports are generated before being committed.
 
 | Target | Expected | Status | Note |
 |---|---|---|---|

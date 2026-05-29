@@ -10,8 +10,10 @@ mkdir -p "$(dirname "${REPORT_FILE}")"
   echo "# Ops Phase 1 Docker Compose Status"
   echo
   echo "- Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  echo "- Git Commit: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  echo "- Tested Commit: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
   echo "- Branch: $(git branch --show-current 2>/dev/null || echo unknown)"
+  echo
+  echo "> Note: The tested commit can differ from the final PR commit because evidence reports are generated before being committed."
   echo
   echo '```text'
   ${DOCKER_COMPOSE_MONITORING} ps

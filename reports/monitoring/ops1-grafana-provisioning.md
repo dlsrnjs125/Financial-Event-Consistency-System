@@ -1,9 +1,11 @@
 # Ops Phase 1 Grafana Provisioning Check
 
-- Date: 2026-05-29T19:22:24Z
-- Git Commit: e2b36fe
+- Date: 2026-05-29T19:38:45Z
+- Tested Commit: 3831236
 - Branch: feature/ops1-infra-metrics-extension
 - Result: PASSED
+
+> Note: The tested commit can differ from the final PR commit because evidence reports are generated before being committed.
 
 | File | Expected | Status | Note |
 |---|---|---|---|

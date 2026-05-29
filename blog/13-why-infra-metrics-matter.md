@@ -75,29 +75,68 @@ exporter를 늘리면 관측 범위는 넓어진다.
 
 그래서 이 Phase의 기준은 "모든 지표를 다 모은다"가 아니라 "장애 원인 분리에 필요한 지표부터 모은다"이다.
 
-## 6. 완료 기준
+## 6. Ops Phase 1에서 확인한 것
 
-기획상 완료 기준은 다음 명령으로 정의한다.
+Ops Phase 1 구현에서는 성능 수치를 만들지 않고, 운영 메트릭 수집 기반이 실제로 동작하는지 확인했다.
 
 ```bash
-make infra-up
+make ops1-up
 make metrics-check
-make dashboard-check
+make required-metrics-check
+make grafana-check
+make ops1-check
 ```
 
-`metrics-check`는 Prometheus target이 모두 UP인지 확인하고, `dashboard-check`는 Grafana에서 API/Infra/DB/Redis/Nginx dashboard가 provision되었는지 확인한다.
+확인한 항목은 다음과 같다.
 
-## 7. 남은 한계
+- Prometheus target에서 `api`, `node-exporter`, `cadvisor`, `postgres-exporter`, `redis-exporter`가 `UP` 상태인지 확인했다.
+- `up{job="api"} == 1`, `pg_up == 1`, `redis_up == 1`, `node_cpu_seconds_total`, `container_cpu_usage_seconds_total`이 Prometheus query API에서 조회되는지 확인했다.
+- Grafana datasource가 `http://prometheus:9090`으로 자동 provisioning되는지 확인했다.
+- API, Infra, PostgreSQL, Redis, Nginx dashboard placeholder가 provisioning되는지 확인했다.
+
+결과는 다음 파일에 남긴다.
+
+```text
+reports/monitoring/ops1-prometheus-targets.md
+reports/monitoring/ops1-required-metrics.md
+reports/monitoring/ops1-grafana-provisioning.md
+reports/monitoring/ops1-compose-status.md
+```
+
+## 7. 캡처 증거
+
+Ops Phase 1에서 남길 캡처는 성능 그래프가 아니라 monitoring foundation이 정상 구성되었는지 보여주는 화면이다.
+
+```text
+docs/images/grafana/08-prometheus-targets-up.png
+docs/images/grafana/09-grafana-datasource-provisioning.png
+docs/images/grafana/10-ops1-dashboard-list.png
+docs/images/grafana/11-ops1-required-metrics-query.png
+```
+
+캡처에는 HMAC secret, DB password, Redis password, Authorization header, 계좌번호 원문, idempotency key 원문, raw request body가 노출되지 않아야 한다.
+
+## 8. 아직 측정하지 않은 것
+
+이번 단계에서는 다음 값을 임의로 기록하지 않았다.
+
+- p95/p99
+- RPS/TPS
+- Redis Down 전후 latency 비교
+- DB Pressure 전후 latency 비교
+- Nginx rate limit 전후 비교
+
+이 수치들은 같은 Docker Compose 환경, 같은 k6 scenario, 같은 commit 기준으로 측정한 뒤 별도 결과로 기록한다.
+
+## 9. 남은 한계
 
 로컬 Docker Compose exporter 구성은 운영 환경의 multi-node, managed DB, cloud load balancer를 완전히 대체하지 못한다.
 그래도 API metric만 보던 상태에서 인프라 계층까지 관측 범위를 넓히면, 장애 원인 분리의 기준이 훨씬 명확해진다.
 
-## 8. 실제 구현 후 보강할 내용
+Nginx exporter는 이번 단계에서 무리하게 붙이지 않았다.
+`stub_status` 노출과 내부 접근 제어 정책이 함께 필요하기 때문에 Ops Phase 2에서 Nginx Access Control과 rate limit 관측을 함께 보강한다.
 
-이 글은 Ops Phase 1 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+## 10. 다음 단계
 
-- Prometheus target 스크린샷 또는 target check 결과
-- Grafana API/Infra/PostgreSQL/Redis/Nginx dashboard 캡처
-- Redis down drill 중 `redis_up=0`과 fallback 증가 확인 결과
-- k6 peak test 중 API p99와 DB/Redis/Nginx 지표 비교
-- alert rule firing 결과와 연결 runbook
+다음 단계에서는 Nginx를 단순 reverse proxy가 아니라 외부 금융사 요청과 내부 운영 endpoint를 분리하는 운영 관문으로 다룬다.
+그 과정에서 `/metrics`, `/ready`, `/admin/*` 접근 제어와 rate limit, Nginx log format, Nginx exporter 연동을 함께 검토한다.
