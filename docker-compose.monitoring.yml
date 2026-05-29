@@ -24,7 +24,7 @@ services:
       - "--path.rootfs=/host"
     pid: host
     ports:
-      - "9100:9100"
+      - "127.0.0.1:9100:9100"
     volumes:
       - "/:/host:ro"
     networks:
@@ -36,7 +36,7 @@ services:
     container_name: financial-cadvisor
     privileged: true
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     volumes:
       - "/:/rootfs:ro"
       - "/var/run:/var/run:ro"
@@ -51,8 +51,8 @@ services:
     container_name: financial-postgres-exporter
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-financial_events}?sslmode=disable"
-    ports:
-      - "9187:9187"
+    expose:
+      - "9187"
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,8 +65,8 @@ services:
     container_name: financial-redis-exporter
     command:
       - "--redis.addr=redis://redis:6379"
-    ports:
-      - "9121:9121"
+    expose:
+      - "9121"
     depends_on:
       redis:
         condition: service_started

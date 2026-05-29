@@ -11,7 +11,40 @@ mkdir -p "$(dirname "${REPORT_FILE}")"
 tmp_json="$(mktemp)"
 trap 'rm -f "${tmp_json}"' EXIT
 
-if ! curl -fsS "${PROMETHEUS_URL}/api/v1/targets" -o "${tmp_json}"; then
+target_ready=false
+for _ in $(seq 1 "${PROMETHEUS_TARGET_WAIT_ATTEMPTS:-12}"); do
+  if curl -fsS "${PROMETHEUS_URL}/api/v1/targets" -o "${tmp_json}"; then
+    if python3 - "${tmp_json}" "${REQUIRED_JOBS[*]}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+required = sys.argv[2].split()
+targets = payload.get("data", {}).get("activeTargets", [])
+by_job = {}
+for target in targets:
+    job = target.get("labels", {}).get("job", "")
+    if job:
+        by_job.setdefault(job, []).append(target)
+
+ok = True
+for job in required:
+    job_targets = by_job.get(job, [])
+    if not job_targets or any(t.get("health") != "up" for t in job_targets):
+        ok = False
+        break
+raise SystemExit(0 if ok else 1)
+PY
+    then
+      target_ready=true
+      break
+    fi
+  fi
+  sleep "${PROMETHEUS_TARGET_WAIT_INTERVAL_SECONDS:-3}"
+done
+
+if [[ "${target_ready}" != "true" ]]; then
   {
     echo "# Ops Phase 1 Prometheus Target Check"
     echo ""
@@ -19,9 +52,9 @@ if ! curl -fsS "${PROMETHEUS_URL}/api/v1/targets" -o "${tmp_json}"; then
     echo "- Prometheus URL: ${PROMETHEUS_URL}"
     echo "- Result: FAILED"
     echo ""
-    echo "Prometheus target API is unavailable."
+    echo "Required Prometheus targets did not become healthy in time."
   } >"${REPORT_FILE}"
-  echo "Prometheus target API is unavailable: ${PROMETHEUS_URL}"
+  echo "Required Prometheus targets did not become healthy in time: ${PROMETHEUS_URL}"
   exit 1
 fi
 

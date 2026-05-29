@@ -2,6 +2,9 @@
 set -euo pipefail
 
 GRAFANA_DIR="${GRAFANA_DIR:-infra/monitoring/grafana}"
+GRAFANA_URL="${GRAFANA_URL:-http://localhost:3000}"
+GRAFANA_USER="${GRAFANA_USER:-admin}"
+GRAFANA_PASSWORD="${GRAFANA_PASSWORD:-admin}"
 REPORT_FILE="${REPORT_FILE:-reports/monitoring/ops1-grafana-provisioning.md}"
 REQUIRED_DASHBOARDS=(
   "api-dashboard.json"
@@ -13,16 +16,21 @@ REQUIRED_DASHBOARDS=(
 
 mkdir -p "$(dirname "${REPORT_FILE}")"
 
-python3 - "${GRAFANA_DIR}" "${REPORT_FILE}" "${REQUIRED_DASHBOARDS[@]}" <<'PY'
+python3 - "${GRAFANA_DIR}" "${REPORT_FILE}" "${GRAFANA_URL}" "${GRAFANA_USER}" "${GRAFANA_PASSWORD}" "${REQUIRED_DASHBOARDS[@]}" <<'PY'
+import base64
 import json
 import subprocess
 import sys
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
 grafana_dir = Path(sys.argv[1])
 report_path = Path(sys.argv[2])
-dashboards = sys.argv[3:]
+grafana_url = sys.argv[3].rstrip("/")
+grafana_user = sys.argv[4]
+grafana_password = sys.argv[5]
+dashboards = sys.argv[6:]
 datasource = grafana_dir / "provisioning" / "datasources" / "datasource.yml"
 dashboard_provider = grafana_dir / "provisioning" / "dashboards" / "dashboard.yml"
 dashboard_dir = grafana_dir / "dashboards"
@@ -39,6 +47,19 @@ now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 rows: list[tuple[str, str, str, str]] = []
 failed = False
+
+def get_json(path: str) -> tuple[bool, str]:
+    request = urllib.request.Request(f"{grafana_url}{path}")
+    credentials = f"{grafana_user}:{grafana_password}".encode("utf-8")
+    request.add_header(
+        "Authorization", "Basic " + base64.b64encode(credentials).decode("ascii")
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            json.loads(response.read().decode("utf-8"))
+        return True, "loaded"
+    except Exception as exc:
+        return False, type(exc).__name__
 
 for path, expected in [
     (datasource, "datasource provisioning exists"),
@@ -69,6 +90,16 @@ for name in dashboards:
         rows.append((str(path), "title and at least one panel", "FAIL", "metadata missing"))
     else:
         rows.append((str(path), "title and at least one panel", "PASS", title))
+
+for path, expected in [
+    ("/api/health", "Grafana API health"),
+    ("/api/datasources", "Grafana datasource loaded"),
+    ("/api/search", "Grafana dashboards searchable"),
+]:
+    ok, note = get_json(path)
+    if not ok:
+        failed = True
+    rows.append((f"{grafana_url}{path}", expected, "PASS" if ok else "FAIL", note))
 
 lines = [
     "# Ops Phase 1 Grafana Provisioning Check",

@@ -56,6 +56,8 @@ Ops Phase 1은 성능 수치 측정이 아니라 인프라 metric 수집 기반�
 | Prometheus targets | `make metrics-check` | all required targets UP | TBD | `reports/monitoring/ops1-prometheus-targets.md` |
 | Required metrics | `make required-metrics-check` | required metrics queryable | TBD | `reports/monitoring/ops1-required-metrics.md` |
 | Grafana provisioning | `make grafana-check` | datasource/dashboard valid | TBD | `reports/monitoring/ops1-grafana-provisioning.md` |
+| Prometheus config | `make prometheus-config-check` | config and alert rules valid | TBD | command output |
+| Compose status | `make ops1-compose-status` | monitoring containers running | TBD | `reports/monitoring/ops1-compose-status.md` |
 
 ## 5. Normal Load 결과
 
@@ -177,8 +179,11 @@ Ops Phase 1은 성능 수치 측정이 아니라 인프라 metric 수집 기반�
 | Redis down dashboard | `docs/images/grafana/03-redis-down-dashboard.png` |
 | Prometheus targets | `docs/images/grafana/08-prometheus-targets-up.png` |
 | Grafana datasource | `docs/images/grafana/09-grafana-datasource-provisioning.png` |
+| Ops1 dashboard list | `docs/images/grafana/10-ops1-dashboard-list.png` |
+| Ops1 metric query | `docs/images/grafana/11-ops1-required-metrics-query.png` |
 | Ops1 target report | `reports/monitoring/ops1-prometheus-targets.md` |
 | Ops1 metric report | `reports/monitoring/ops1-required-metrics.md` |
 | Ops1 Grafana report | `reports/monitoring/ops1-grafana-provisioning.md` |
+| Ops1 compose status | `reports/monitoring/ops1-compose-status.md` |
 | k6 normal summary | `reports/k6/normal-load-summary.json` |
 | DR Drill report | `reports/dr-drill/backup-restore-result.md` |

@@ -232,6 +232,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
+	bash -n scripts/monitoring/write-compose-status-report.sh
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -256,10 +257,10 @@ ops1-up: docker-check ## Start app stack with Ops Phase 1 monitoring exporters
 	@echo "  Nginx:          http://localhost:8080"
 	@echo "  Prometheus:     http://localhost:9090"
 	@echo "  Grafana:        http://localhost:3000"
-	@echo "  node-exporter:  http://localhost:9100/metrics"
-	@echo "  cAdvisor:       http://localhost:8081/metrics"
-	@echo "  postgres exp.:  http://localhost:9187/metrics"
-	@echo "  redis exp.:     http://localhost:9121/metrics"
+	@echo "  node-exporter:  http://127.0.0.1:9100/metrics"
+	@echo "  cAdvisor:       http://127.0.0.1:8081/metrics"
+	@echo "  postgres exp.:  internal Docker network only"
+	@echo "  redis exp.:     internal Docker network only"
 	@echo ""
 	@echo "Verify: make ops1-check"
 
@@ -283,8 +284,16 @@ required-metrics-check: ## Verify required metrics are queryable and write evide
 grafana-check: ## Verify Grafana provisioning files and dashboard JSON
 	./scripts/monitoring/check-grafana-dashboards.sh
 
+.PHONY: prometheus-config-check
+prometheus-config-check: docker-check ## Verify Prometheus config and alert rule syntax with promtool
+	$(DOCKER) run --rm --entrypoint promtool -v "$(PWD)/infra/monitoring/prometheus:/etc/prometheus:ro" prom/prometheus:latest check config /etc/prometheus/prometheus.yml
+
+.PHONY: ops1-compose-status
+ops1-compose-status: docker-check ## Write Docker Compose status evidence report
+	DOCKER_COMPOSE_MONITORING='$(DOCKER_COMPOSE_MONITORING)' ./scripts/monitoring/write-compose-status-report.sh
+
 .PHONY: ops1-check
-ops1-check: metrics-check required-metrics-check grafana-check ## Run Ops Phase 1 monitoring verification
+ops1-check: prometheus-config-check metrics-check required-metrics-check grafana-check ops1-compose-status ## Run Ops Phase 1 monitoring verification
 	@echo "Ops Phase 1 monitoring checks passed."
 
 # k6 performance tests

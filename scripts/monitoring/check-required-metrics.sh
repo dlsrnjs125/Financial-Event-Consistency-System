@@ -2,19 +2,36 @@
 set -euo pipefail
 
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
+API_BASE_URL="${API_BASE_URL:-http://localhost:8000}"
 REPORT_FILE="${REPORT_FILE:-reports/monitoring/ops1-required-metrics.md}"
-REQUIRED_METRICS=(
-  "up"
-  "process_cpu_seconds_total"
+REQUIRED_QUERIES=(
+  "up{job=\"api\"} == 1"
+  "up{job=\"node-exporter\"} == 1"
+  "up{job=\"cadvisor\"} == 1"
+  "up{job=\"postgres-exporter\"} == 1"
+  "up{job=\"redis-exporter\"} == 1"
+  "pg_up == 1"
+  "redis_up == 1"
+  "financial_http_requests_total"
   "node_cpu_seconds_total"
   "container_cpu_usage_seconds_total"
-  "pg_up"
-  "redis_up"
+)
+API_EXPOSITION_METRICS=(
+  "financial_readiness_dependency_status"
+  "financial_redis_fallback_total"
 )
 
 mkdir -p "$(dirname "${REPORT_FILE}")"
 
-python3 - "${PROMETHEUS_URL}" "${REPORT_FILE}" "${REQUIRED_METRICS[@]}" <<'PY'
+# Warm application metrics that are created by request handling/readiness checks.
+curl -fsS "${API_BASE_URL}/health" >/dev/null || true
+curl -fsS "${API_BASE_URL}/ready" >/dev/null || true
+api_metrics="$(curl -fsS "${API_BASE_URL}/metrics" || true)"
+
+# Allow Prometheus one scrape interval to collect warmed application metrics.
+sleep "${PROMETHEUS_SCRAPE_WAIT_SECONDS:-6}"
+
+python3 - "${PROMETHEUS_URL}" "${REPORT_FILE}" "${api_metrics}" "${#REQUIRED_QUERIES[@]}" "${REQUIRED_QUERIES[@]}" "${API_EXPOSITION_METRICS[@]}" <<'PY'
 import json
 import subprocess
 import sys
@@ -25,7 +42,10 @@ from pathlib import Path
 
 prometheus_url = sys.argv[1].rstrip("/")
 report_path = Path(sys.argv[2])
-metrics = sys.argv[3:]
+api_metrics = sys.argv[3]
+query_count = int(sys.argv[4])
+queries = sys.argv[5 : 5 + query_count]
+exposition_metrics = sys.argv[5 + query_count :]
 
 def git_value(args: list[str]) -> str:
     try:
@@ -57,10 +77,22 @@ now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 rows = []
 failed = False
-for metric in metrics:
+for metric in queries:
     ok, note = query(metric)
     failed = failed or not ok
     rows.append((metric, "queryable", "PASS" if ok else "FAIL", note))
+
+for metric in exposition_metrics:
+    ok = metric in api_metrics
+    failed = failed or not ok
+    rows.append(
+        (
+            metric,
+            "exposed by API /metrics",
+            "PASS" if ok else "FAIL",
+            "metric definition present" if ok else "not found in API /metrics",
+        )
+    )
 
 lines = [
     "# Ops Phase 1 Required Metrics Check",
@@ -70,7 +102,7 @@ lines = [
     f"- Branch: {branch}",
     f"- Result: {'FAILED' if failed else 'PASSED'}",
     "",
-    "| Metric | Expected | Status | Note |",
+    "| Query | Expected | Status | Note |",
     "|---|---|---|---|",
 ]
 for row in rows:

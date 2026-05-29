@@ -88,6 +88,7 @@ make ops1-check
 - api, node-exporter, cadvisor, postgres-exporter, redis-exporter target 존재
 - nginx-exporter는 Ops Phase 2 후보로 optional/TODO 표시
 - 필수 metric key가 Prometheus API에서 조회됨
+- Prometheus config와 alert rule syntax 검증 통과
 - Grafana dashboard 5개 provision 확인
 
 실패 기준:
@@ -122,6 +123,13 @@ Prometheus label에는 다음 값을 넣지 않는다.
 | postgres-exporter | 9187 | DB connection/lock | DB 병목 추적 불가 |
 | redis-exporter | 9121 | Redis memory/eviction | Redis 장애 원인 추적 불가 |
 | nginx-exporter | 9113 | Nginx connection/status | Ops Phase 2에서 보강 |
+
+로컬 확인 편의를 위해 Prometheus/Grafana는 `127.0.0.1`에 노출한다.
+PostgreSQL/Redis exporter는 host port를 열지 않고 Docker 내부 network에서만 수집한다.
+node-exporter와 cAdvisor도 host 접근은 `127.0.0.1`로 제한한다.
+
+cAdvisor는 로컬 Docker container metric 수집을 위해 host filesystem과 Docker runtime 정보를 read-only로 참조한다.
+이 구성은 로컬 운영 실습용이며, 운영 환경에서는 접근 권한, 네트워크 노출, 수집 범위를 별도로 제한해야 한다.
 
 ### 필수 지표
 
