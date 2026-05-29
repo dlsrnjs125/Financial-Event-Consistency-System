@@ -70,7 +70,7 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./backend/app:/app/app
     networks:
@@ -100,16 +100,16 @@ services:
       HMAC_ENABLED: "true"
       HMAC_ALLOWED_SKEW_SECONDS: 300
       EXTERNAL_CLIENT_SECRETS: bank-a:change-me-secret,broker-b:change-me-secret
-      API_PORT: 8001
+      API_PORT: 8000
       API_WORKERS: 4
       LOG_LEVEL: INFO
     ports:
-      - "8001:8001"
+      - "8001:8000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./backend/app:/app/app
     networks:

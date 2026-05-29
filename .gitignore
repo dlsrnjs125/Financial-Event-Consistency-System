@@ -63,6 +63,11 @@ logs/
 # Docker
 docker-compose.override.yml
 
+# Phase 12 deployment runtime state
+infra/nginx/.active-color
+infra/nginx/conf.d/upstream-active.conf.backup.*
+infra/nginx/conf.d/upstream-active.conf.tmp.*
+
 # Secrets
 secrets.yml
 .secrets/

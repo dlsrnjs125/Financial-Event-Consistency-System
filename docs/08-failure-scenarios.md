@@ -34,7 +34,7 @@ Redis가 중단되어 Lock과 Cache를 사용할 수 없다.
 ### 재현 방법
 
 ```bash
-docker compose stop redis
+make failure-redis-down
 ```
 
 ### 예상 영향
@@ -119,7 +119,7 @@ k6 run tests/k6/peak-load.js
 ### 재현 방법
 
 ```bash
-docker compose restart api
+make failure-api-restart
 ```
 
 또는 처리 중 강제 종료를 시뮬레이션한다.
@@ -207,6 +207,16 @@ Blue-Green 배포 중 Nginx upstream 전환이 실패한다.
 - `nginx -t` 검증 실패 시 reload하지 않는다.
 - 기존 Blue 트래픽은 유지된다.
 - Green 전환 실패 로그를 남긴다.
+
+### 재현 및 복구 명령
+
+```bash
+make deploy-green
+make deploy-switch-green
+make deploy-rollback
+```
+
+Phase 12에서는 `infra/nginx/conf.d/upstream-active.conf` snippet만 교체하고, config test 실패 시 이전 upstream을 복원한다.
 
 ### 성공 기준
 
