@@ -208,11 +208,11 @@ def process_transaction_event(command):
             # 12. COMMIT (모든 변경사항 저장)
             return response
             
-        except Exception as e:
+        except TransactionProcessingError as exc:
             # 모든 변경사항 ROLLBACK
             idempotency_repo.mark_failed(
                 idem.id,
-                error_message=str(e)
+                error_message=exc.safe_message
             )
             raise
 ```
@@ -312,6 +312,29 @@ def test_duplicate_prevention_without_redis():
 
 ---
 
-## 다음 편에서
 
-5편에서는 Redis Lock/Cache를 어디까지 믿어야 하는지, 그리고 Redis 장애 시 동작을 다룹니다.
+## 개발 중 마주친 동시성 문제
+
+PostgreSQL unique constraint를 두면 중복 insert는 막을 수 있다. 하지만 여기서 끝이 아니다. 동시 요청이 들어오면 한 요청은 성공하고 다른 요청은 unique conflict를 만난다. 이때 conflict를 그대로 500으로 올리면 사용자는 서버 장애로 보게 된다.
+
+그래서 conflict 처리 방식을 바꿨다.
+
+1. DB transaction 안에서 이벤트와 Ledger를 생성한다.
+2. unique conflict가 발생하면 transaction을 rollback한다.
+3. 같은 `external_event_id` 또는 idempotency record를 한 번 다시 읽는다.
+4. 이미 처리된 결과가 있으면 duplicate/replay 응답으로 돌려준다.
+5. 실제 DB 장애라면 5xx/503으로 구분한다.
+
+이 흐름은 Redis 장애와도 연결된다. Redis lock이 있으면 DB까지 들어오는 중복 요청을 줄일 수 있지만, Redis가 죽으면 중복 요청이 DB까지 도달한다. 이때 최종 방어선은 PostgreSQL unique constraint여야 한다.
+
+검증은 Redis를 끄고 duplicate storm을 실행한 뒤 SQL로 확인했다.
+
+```bash
+make failure-redis-down
+make k6-redis-down-duplicate-storm
+make k6-verify
+```
+
+Phase 9에서는 Redis Down 중 ledger 중복은 0건이었지만 일부 5xx가 발생했다. 그래서 Phase 10에서 unique conflict 후 read/retry 경로를 보강했다. 이 수정의 핵심은 "중복을 막는 것"과 "중복 요청에 안정적인 응답을 주는 것"을 분리해 본 점이다.
+
+남은 한계는 lock wait과 connection pool이다. unique constraint는 정합성을 지키지만, 동시성이 커지면 latency와 pool 사용량이 증가한다. 이 부분은 PostgreSQL exporter나 SQLAlchemy pool metric이 보강되면 더 정확히 볼 수 있다.

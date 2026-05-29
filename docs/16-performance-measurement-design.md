@@ -1,5 +1,9 @@
 # 16. Performance Measurement Design
 
+Phase 9 이후 성능 측정의 목적은 단순 RPS 최대치를 찾는 것이 아니라, 정합성 한계와 장애 조건에서의 동작을 확인하는 것으로 정리했다.
+Redis Down duplicate storm에서는 p95/p99보다 먼저 중복 Ledger/Event 반영 0건을 확인한다.
+성능 수치는 로컬 Docker Compose 환경의 비교 지표로 해석하며, 운영 절대값은 실제 인프라와 트래픽에서 다시 측정해야 한다.
+
 ## 1. 목적
 
 이 문서는 금융 거래 이벤트 중복 처리 및 정합성 검증 시스템에서 성능을 어떤 기준으로 측정하고, 어떤 설계 판단과 연결할 것인지 정의한다.
@@ -323,8 +327,8 @@ Green 전환 후 5분 이내 5xx rate가 5%를 초과하거나 invalid state tra
 
 | 실험 ID | 변경 내용 | p50 | p95 | p99 | error rate | DB conn | cache hit | duplicate rate | 결론 |
 |---------|-----------|-----|-----|-----|------------|---------|-----------|----------------|------|
-| EXP-001-A | Redis Cache 미사용 | TBD | TBD | TBD | TBD | TBD | TBD | 0% | 기준선 |
-| EXP-001-B | Redis Cache 사용 | TBD | TBD | TBD | TBD | TBD | TBD | 0% | 비교 예정 |
+| EXP-001-A | Redis Cache 미사용 | 61.49ms | 128.88ms | 171.62ms | 0.00% | 미수집 | 해당 없음 | 0% | 기준선 |
+| EXP-001-B | Redis Cache 사용 | 40.32ms | 84.37ms | 119.44ms | 0.00% unexpected | 미수집 | same-key storm 해석 제한 | 0% | p95 감소, DB 조회 완화 |
 
 ---
 

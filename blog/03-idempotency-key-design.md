@@ -192,13 +192,13 @@ def handle_event(idempotency_key, request_body):
         
         return 200 OK with response
         
-    except Exception as e:
+    except TransactionProcessingError as exc:
         # 6. 실패 시 FAILED 상태로 저장
         db.update(
             idempotency_records,
             where=id == idem_record.id,
             status='FAILED',
-            error_message=str(e)
+            error_message=exc.safe_message
         )
         raise
 ```
@@ -281,6 +281,25 @@ Redis Cache를 사용해 p95 latency와 DB query count가 줄어들더라도, Re
 
 ---
 
-## 다음 편에서
 
-4편에서는 PostgreSQL Transaction과 Unique Constraint로 정합성을 최종 보장하는 방법을 다룹니다.
+## 개발 중 바뀐 판단
+
+처음에는 `Idempotency-Key`만 unique로 저장하면 충분하다고 생각할 수 있다. 하지만 같은 key로 다른 body가 들어오는 경우를 생각하면 문제가 생긴다.
+
+예를 들어 첫 요청은 10,000원 입금이고, 두 번째 요청은 같은 key로 50,000원 입금이라면 어떻게 해야 할까? 단순히 key가 같다는 이유로 첫 응답을 replay하면 client는 50,000원 요청이 처리된 것으로 오해할 수 있다. 반대로 두 번째 요청을 새 요청처럼 처리하면 같은 key의 의미가 깨진다.
+
+그래서 idempotency record에는 key뿐 아니라 canonical request hash를 함께 저장했다.
+
+```text
+same key + same body      -> 기존 응답 replay
+same key + different body -> 409 Conflict
+new key                   -> 신규 처리
+```
+
+canonical JSON을 사용한 이유도 여기서 나왔다. JSON key 순서가 바뀌었을 뿐 의미가 같은 요청은 같은 hash를 가져야 한다. 반면 amount, account, event type이 바뀌면 다른 hash가 되어야 한다.
+
+Redis cache를 붙인 뒤에도 기준은 바뀌지 않았다. Redis에 완료 응답을 캐싱하더라도 최종 판단은 DB idempotency record다. cache miss는 장애가 아니고, Redis 장애는 fallback 대상이다.
+
+검증은 같은 key/body 재요청, 같은 key/different body, 완료 응답 replay, 실패 응답 replay를 각각 테스트했다. 이 과정에서 idempotency는 단순 중복 방지가 아니라 "client가 timeout 이후 어떤 응답을 다시 받아야 하는가"의 문제라는 점이 명확해졌다.
+
+남은 한계는 retention 정책이다. idempotency record를 얼마나 오래 보관할지는 외부 금융사의 retry 기간, 감사 요구사항, 저장 비용에 따라 달라진다.

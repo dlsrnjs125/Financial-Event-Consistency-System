@@ -21,6 +21,9 @@
 6️⃣ 결과 → 사용자 잔액이 2배로 증가 (정합성 깨짐)
 ```
 
+이 프로젝트는 정상 요청을 빠르게 저장하는 CRUD 문제가 아니라, 실패 조건을 먼저 정의하고 그 실패 조건에서도 거래 결과가 한 번만 반영되는지 검증하는 문제로 출발했다.
+특히 timeout, retry, duplicate event storm, out-of-order event, 배포 중 재시도는 모두 정상 운영 중 발생할 수 있는 입력으로 본다.
+
 ### 실제 발생하는 금융 문제들
 
 | 문제 | 예시 | 피해 |
@@ -95,6 +98,14 @@
 > 동일한 이벤트가 여러 번 들어와도 결과가 한 번만 반영되고,
 > 
 > 잘못된 순서의 이벤트가 들어와도 거래 상태가 깨지지 않는 것이 핵심이다.
+
+## Phase 12까지의 검증 범위
+
+- Idempotency Key와 `external_event_id`를 분리해 client retry와 event duplicate를 각각 다룬다.
+- PostgreSQL transaction과 unique constraint를 최종 정합성 기준으로 둔다.
+- Redis lock/cache는 DB 부하를 줄이는 최적화 계층으로만 사용한다.
+- Redis Down, DB Down, API Restart, duplicate storm을 Makefile 명령과 k6/SQL로 재현한다.
+- CI/CD Gate와 Blue-Green rollback 시뮬레이션으로 배포 전후 정합성 확인 절차를 고정한다.
 
 ---
 
