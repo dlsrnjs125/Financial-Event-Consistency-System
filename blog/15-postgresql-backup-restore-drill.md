@@ -2,7 +2,8 @@
 
 ## 1. 문제를 어떻게 정의했는가
 
-백업 파일이 존재한다는 사실과 실제로 복구 가능하다는 사실은 다르다. 금융 이벤트 시스템에서는 장애 이후 PostgreSQL을 복원했을 때 거래 원장과 계좌 잔액이 일치해야 한다.
+백업 파일이 존재한다는 사실과 실제로 복구 가능하다는 사실은 다르다.
+금융 이벤트 시스템에서는 장애 이후 PostgreSQL을 복원했을 때 거래 원장과 계좌 잔액이 일치해야 한다.
 
 그래서 백업 Phase의 목표는 `pg_dump` 파일을 만드는 것이 아니라, 별도 restore DB에 복원하고 정합성 SQL까지 실행하는 것이다.
 
@@ -88,4 +89,18 @@ make dr-drill
 
 ## 7. 남은 한계
 
-로컬 논리 백업은 운영 환경의 PITR, WAL archive, managed backup 정책을 대체하지 못한다. 하지만 "백업 파일이 실제로 복구 가능한가"를 검증하는 훈련은 운영 안정성의 기본선이다.
+로컬 논리 백업은 운영 환경의 PITR, WAL archive, managed backup 정책을 대체하지 못한다.
+하지만 "백업 파일이 실제로 복구 가능한가"를 검증하는 훈련은 운영 안정성의 기본선이다.
+
+## 8. 실제 구현 후 보강할 내용
+
+이 글은 Ops Phase 3 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+
+- backup duration
+- restore duration
+- backup file size
+- checksum result
+- duplicated ledger count
+- balance mismatch count
+- orphan idempotency count
+- DR Drill 결과 Markdown

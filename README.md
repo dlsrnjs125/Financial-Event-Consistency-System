@@ -169,7 +169,7 @@ Redis와 장애 처리:
 - OpenTelemetry SDK 기반 분산 추적
 - Redis/PostgreSQL exporter 기반 인프라 내부 metric
 - 운영 환경 기준 alert threshold 재조정
-- Infra Metrics Extension, Nginx Access Control, DR Drill, Ansible, PowerShell, Runbook 기반 운영 확장
+- Ops Phase 기반 Infra Metrics, Nginx Access Control, DR Drill, Ansible, PowerShell, Runbook 운영 확장
 
 위 항목은 본 프로젝트의 핵심 구현 범위에서는 제외하고, 향후 운영 고도화 과제로 남긴다.
 

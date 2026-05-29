@@ -2,7 +2,8 @@
 
 ## 1. 문제를 어떻게 정의했는가
 
-모든 endpoint를 같은 방식으로 열어두면 운영은 편해 보인다. 하지만 `/metrics`, `/ready`, `/admin/reconciliation` 같은 endpoint는 내부 상태와 장애 정보를 노출할 수 있다.
+모든 endpoint를 같은 방식으로 열어두면 운영은 편해 보인다.
+하지만 `/metrics`, `/ready`, `/admin/reconciliation` 같은 endpoint는 내부 상태와 장애 정보를 노출할 수 있다.
 
 그래서 외부 금융사 호출 경로와 내부 운영자 접근 경로를 분리하는 접근 제어 모델을 설계했다.
 
@@ -53,7 +54,10 @@
 
 ## 5. 트레이드오프
 
-접근 제한을 강하게 걸면 운영자가 문제를 확인하기 어려워질 수 있다. 반대로 모든 endpoint를 열어두면 장애 정보와 내부 metric이 외부에 노출될 수 있다. 그래서 endpoint를 public/internal로 나누고, 내부 endpoint도 IP allowlist와 token으로 한 번 더 제한하는 방향이 적절하다.
+접근 제한을 강하게 걸면 운영자가 문제를 확인하기 어려워질 수 있다.
+반대로 모든 endpoint를 열어두면 장애 정보와 내부 metric이 외부에 노출될 수 있다.
+
+그래서 endpoint를 public/internal로 나누고, 내부 endpoint도 IP allowlist와 token으로 한 번 더 제한하는 방향이 적절하다.
 
 ## 6. 완료 기준
 
@@ -64,3 +68,13 @@ Nginx 설정과 문서가 다음 기준을 만족해야 한다.
 - `/ready`는 배포/health check 경로로 제한
 - `/admin/*`는 내부 운영자 접근만 허용
 - 로그에 raw account number, signature, secret이 남지 않음
+
+## 7. 실제 구현 후 보강할 내용
+
+이 글은 Ops Phase 6 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+
+- access matrix 테스트 결과
+- public zone에서 `/metrics` 접근 차단 결과
+- monitoring zone에서 `/metrics` 접근 허용 결과
+- admin audit log 샘플
+- masking/security-log-check 결과

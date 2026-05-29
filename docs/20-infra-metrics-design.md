@@ -1,39 +1,194 @@
-# Infra Metrics Design
+# Ops Phase 1 - Infra Metrics Extension
 
-## 1. 목적
+## 1. 해결하려는 운영 문제
 
-기존 `/metrics` 중심의 애플리케이션 metric만으로는 장애 원인이 API 로직인지, DB connection 고갈인지, Redis 장애인지, 서버 리소스 부족인지 구분하기 어렵다. Infra Metrics Extension은 관측 범위를 API에서 Linux, container, PostgreSQL, Redis, Nginx 계층으로 확장한다.
+기존 `/metrics` 중심의 애플리케이션 metric만으로는 장애 원인이 API 로직인지,
+DB connection 고갈인지, Redis 장애인지, 서버 리소스 부족인지 구분하기 어렵다.
 
-## 2. 추가 exporter 설계
+Ops Phase 1은 관측 범위를 API에서 Linux host, container, PostgreSQL, Redis, Nginx 계층으로 확장한다.
 
-| Exporter | 목적 | 주요 지표 |
-|---|---|---|
-| node-exporter | 서버 리소스 | CPU, memory, disk, load average |
-| cAdvisor | container 상태 | CPU throttling, memory limit, restart count |
-| postgres-exporter | DB 상태 | connection count, lock wait, slow query |
-| redis-exporter | Redis 상태 | connected clients, memory usage, evicted keys |
-| nginx-prometheus-exporter | Proxy 상태 | 2xx/4xx/5xx, active connection, upstream 지표 |
+## 2. 구현 범위
 
-## 3. Dashboard 분리
+추가 exporter:
 
-| Dashboard | 확인할 질문 |
-|---|---|
-| API | 요청량, error rate, p95/p99, Redis fallback |
-| Infra | CPU, memory, disk, container restart |
-| PostgreSQL | connection, lock, transaction duration |
-| Redis | memory, evicted key, command latency |
-| Nginx | status code, upstream latency, rate limit hit |
+- node-exporter
+- cAdvisor
+- postgres-exporter
+- redis-exporter
+- nginx-prometheus-exporter
 
-## 4. Makefile 목표
+Dashboard:
+
+- API dashboard
+- Infra dashboard
+- PostgreSQL dashboard
+- Redis dashboard
+- Nginx dashboard
+
+Alert Rule:
+
+- API p99 latency
+- Redis down but API alive
+- PostgreSQL connection pressure
+- Nginx 5xx spike
+- disk pressure
+
+## 3. 제외 범위
+
+- Cloud provider managed monitoring은 제외한다.
+- exporter 인증/TLS 구성은 초기 로컬 설계 범위에서 제외한다.
+- 장기 metric retention과 remote write는 제외한다.
+- OpenTelemetry metric exporter는 Prometheus custom metric과 혼동하지 않도록 제외한다.
+
+## 4. 파일/디렉터리 변경 계획
+
+```text
+infra/
+  monitoring/
+    prometheus/
+      prometheus.yml
+      alert-rules.yml
+      recording-rules.yml
+    grafana/
+      provisioning/
+        datasources/
+          datasource.yml
+        dashboards/
+          dashboard.yml
+      dashboards/
+        api-dashboard.json
+        infra-dashboard.json
+        postgres-dashboard.json
+        redis-dashboard.json
+        nginx-dashboard.json
+
+docker-compose.monitoring.yml
+
+scripts/
+  monitoring/
+    check-prometheus-targets.sh
+    check-grafana-dashboards.sh
+    check-alert-rules.sh
+```
+
+## 5. 검증 명령어
 
 ```bash
 make infra-up
 make metrics-check
+make alert-rule-check
 make dashboard-check
 ```
 
-`metrics-check`는 Prometheus target이 모두 UP인지 확인하고, `dashboard-check`는 Grafana dashboard provision 상태를 확인한다.
+성공 기준:
 
-## 5. README 요약 문장
+- Prometheus target 중 down 상태가 0개
+- api, node-exporter, cadvisor, postgres-exporter, redis-exporter, nginx-exporter target 존재
+- 필수 metric key가 Prometheus API에서 조회됨
+- alert rule syntax 검증 통과
+- Grafana dashboard 5개 provision 확인
 
-기존 애플리케이션 메트릭만으로는 장애 원인이 API 로직인지, DB 커넥션 고갈인지, Redis 장애인지, 서버 리소스 부족인지 구분하기 어렵다고 판단했다. 따라서 node-exporter, postgres-exporter, redis-exporter, nginx exporter를 추가해 금융 이벤트 처리 시스템의 운영 관측 범위를 애플리케이션에서 인프라 계층까지 확장한다.
+실패 기준:
+
+- target down 1개 이상
+- 필수 metric key 누락
+- Prometheus API 호출 실패
+- dashboard provision 누락
+
+## 6. 완료 기준과 README에 남길 결과
+
+### Prometheus Target
+
+| Target | Port | 목적 | 실패 시 의미 |
+|---|---:|---|---|
+| api | 8000 | FastAPI custom metric | 애플리케이션 metric 수집 실패 |
+| node-exporter | 9100 | Host CPU/Memory/Disk | 서버 리소스 관측 불가 |
+| cAdvisor | 8080 | Container CPU/Memory | 컨테이너 병목 추적 불가 |
+| postgres-exporter | 9187 | DB connection/lock | DB 병목 추적 불가 |
+| redis-exporter | 9121 | Redis memory/eviction | Redis 장애 원인 추적 불가 |
+| nginx-exporter | 9113 | Nginx connection/status | Proxy 계층 장애 추적 불가 |
+
+### 필수 지표
+
+API:
+
+- `http_requests_total`
+- `http_request_duration_seconds_bucket`
+- `financial_redis_fallback_total`
+- `financial_db_transaction_retry_total`
+- `financial_idempotency_hit_total`
+
+PostgreSQL:
+
+- `pg_up`
+- `pg_stat_activity_count`
+- `pg_locks_count`
+- `pg_stat_database_xact_commit`
+- `pg_stat_database_xact_rollback`
+- `pg_stat_database_deadlocks`
+
+Redis:
+
+- `redis_up`
+- `redis_connected_clients`
+- `redis_memory_used_bytes`
+- `redis_evicted_keys_total`
+- `redis_commands_duration_seconds_total`
+
+Nginx:
+
+- `nginx_up`
+- `nginx_connections_active`
+- `nginx_http_requests_total`
+- `upstream_response_time`
+- `rate_limit_rejected_total`
+
+Container/Host:
+
+- `container_cpu_usage_seconds_total`
+- `container_memory_usage_bytes`
+- `container_oom_events_total`
+- `node_filesystem_avail_bytes`
+- `node_load1`
+
+### Alert Rule 초안
+
+```yaml
+groups:
+  - name: financial-event-infra-alerts
+    rules:
+      - alert: ApiHighP99Latency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p99 latency is high"
+          runbook: "docs/runbooks/high-latency-p99.md"
+
+      - alert: RedisDownButApiAlive
+        expr: redis_up == 0 and up{job="api"} == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis is down, API should enter degraded mode"
+          runbook: "docs/runbooks/redis-down.md"
+
+      - alert: PostgresConnectionPressure
+        expr: pg_stat_activity_count > 80
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL connection pressure detected"
+          runbook: "docs/runbooks/postgres-connection-exhausted.md"
+```
+
+README에는 다음 결과를 남긴다.
+
+- Prometheus Targets: api, node-exporter, cadvisor, postgres-exporter, redis-exporter, nginx-exporter 모두 UP
+- Grafana Dashboards: API/Infra/PostgreSQL/Redis/Nginx 5개 provision 확인
+- Redis down 상태에서 `redis_up=0`, `financial_redis_fallback_total` 증가 확인
+- DB connection pressure 상황에서 alert rule firing 확인
+- k6 peak test 중 API p99와 DB/Redis/Nginx 지표를 함께 캡처
