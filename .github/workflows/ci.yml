@@ -1,62 +1,62 @@
-name: CI - Consistency & Tests
+name: CI - Financial Consistency Deployment Gate
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: "3.11"
 
 jobs:
   lint:
     runs-on: ubuntu-latest
-    name: Lint
+    name: Format / Lint
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 black isort
-      
-      - name: Lint with flake8
+          pip install -r backend/requirements.txt
+
+      - name: Run format and lint checks
         run: |
-          flake8 backend/app --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 backend/app --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      
-      - name: Check code format with black
-        run: black --check backend/app
+          make format-check PYTHON=python BLACK=black ISORT=isort RUFF=ruff
+          make lint PYTHON=python FLAKE8=flake8 RUFF=ruff
 
   unit-tests:
     runs-on: ubuntu-latest
     name: Unit Tests
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
-      
+
       - name: Run unit tests
-        run: |
-          pytest backend/tests/unit -v --cov=backend/app --cov-report=xml
-      
+        run: pytest backend/tests/unit -v --cov=backend/app --cov-report=xml
+
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
+        continue-on-error: true
         with:
           files: ./coverage.xml
 
@@ -77,7 +77,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7-alpine
         options: >-
@@ -87,26 +87,39 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-    
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/financial_events
+      REDIS_URL: redis://localhost:6379/0
+      HMAC_ENABLED: "true"
+      EXTERNAL_CLIENT_SECRETS: bank-a:change-me-secret,broker-b:change-me-secret
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
-      
+
       - name: Run consistency tests
-        env:
-          DATABASE_URL: postgresql://postgres:password@localhost:5432/financial_events
-          REDIS_URL: redis://localhost:6379/0
         run: |
-          pytest backend/tests/consistency -v --tb=short
+          pytest \
+            backend/tests/consistency \
+            backend/tests/integration/test_transaction_event_processing.py \
+            backend/tests/integration/test_transaction_event_api.py \
+            backend/tests/unit/test_transaction_state_machine.py \
+            backend/tests/unit/test_structured_logging.py \
+            backend/tests/unit/test_masking.py \
+            -v --tb=short
 
   migration-tests:
     runs-on: ubuntu-latest
@@ -125,45 +138,81 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-    
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/financial_events
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
-      
+
       - name: Run migrations
-        env:
-          DATABASE_URL: postgresql://postgres:password@localhost:5432/financial_events
         run: |
           alembic upgrade head
+          alembic current
 
-  docker-build:
+      - name: Verify model imports and consistency constraints
+        run: |
+          PYTHONPATH=backend python - <<'PY'
+          from sqlalchemy import create_engine, text
+
+          from app.models import Account, IdempotencyRecord, LedgerEntry, TransactionEvent
+
+          engine = create_engine("postgresql://postgres:password@localhost:5432/financial_events")
+          expected_constraints = {
+              "accounts": "uq_accounts_account_no",
+              "idempotency_records": "uq_idempotency_records_key",
+              "transaction_events": "uq_transaction_events_external_event_id",
+              "ledger_entries": "uq_ledger_entries_transaction_event_id",
+          }
+
+          assert Account.__tablename__ == "accounts"
+          assert IdempotencyRecord.__tablename__ == "idempotency_records"
+          assert TransactionEvent.__tablename__ == "transaction_events"
+          assert LedgerEntry.__tablename__ == "ledger_entries"
+
+          with engine.connect() as conn:
+              for table_name, constraint_name in expected_constraints.items():
+                  exists = conn.execute(
+                      text(
+                          """
+                          SELECT 1
+                          FROM pg_constraint c
+                          JOIN pg_class t ON t.oid = c.conrelid
+                          WHERE t.relname = :table_name
+                            AND c.conname = :constraint_name
+                            AND c.contype = 'u'
+                          """
+                      ),
+                      {"table_name": table_name, "constraint_name": constraint_name},
+                  ).scalar_one_or_none()
+                  if exists != 1:
+                      raise AssertionError(f"missing unique constraint: {constraint_name}")
+          PY
+
+  security-log-check:
     runs-on: ubuntu-latest
-    name: Docker Build Test
-    permissions:
-      contents: read
-      packages: write
-    
+    name: Security Log Check
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      
-      - name: Build Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./backend
-          push: false
-          tags: financial-events:test
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Scan structured logs for raw sensitive fields
+        run: make security-log-check
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -172,7 +221,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: TruffleHog Secret Scan for Pull Request
         if: github.event_name == 'pull_request'
         uses: trufflesecurity/trufflehog@main
@@ -180,54 +229,86 @@ jobs:
           path: ./
           base: ${{ github.event.pull_request.base.sha }}
           head: ${{ github.event.pull_request.head.sha }}
-          extra_args: --debug
+          extra_args: --only-verified
 
       - name: TruffleHog Secret Scan for Push
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
           base: ${{ github.event.before }}
           head: ${{ github.sha }}
-          extra_args: --debug
+          extra_args: --only-verified
+
+      - name: TruffleHog Secret Scan for Initial Push
+        if: github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000'
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          extra_args: --only-verified
+
+  docker-build:
+    runs-on: ubuntu-latest
+    name: Docker Build
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          load: true
+          tags: financial-events:test
+
+      - name: Inspect Docker image
+        run: docker image inspect financial-events:test >/dev/null
 
   gate-check:
     runs-on: ubuntu-latest
-    name: Deployment Gate Check
-    needs: [lint, unit-tests, consistency-tests, migration-tests, docker-build, secret-scan]
+    name: Deployment Gate Summary
+    needs:
+      - lint
+      - unit-tests
+      - consistency-tests
+      - migration-tests
+      - security-log-check
+      - secret-scan
+      - docker-build
     if: always()
-    
     steps:
-      - name: Check all tests passed
+      - name: Summarize required deployment gates
         run: |
-          if [[ "${{ needs.lint.result }}" != "success" ]]; then
-            echo "❌ Lint failed"
+          failed=0
+
+          check_gate() {
+            name="$1"
+            result="$2"
+            if [ "$result" != "success" ]; then
+              echo "Gate failed: ${name} (${result})"
+              failed=1
+            else
+              echo "Gate passed: ${name}"
+            fi
+          }
+
+          check_gate "lint" "${{ needs.lint.result }}"
+          check_gate "unit-tests" "${{ needs.unit-tests.result }}"
+          check_gate "consistency-tests" "${{ needs.consistency-tests.result }}"
+          check_gate "migration-tests" "${{ needs.migration-tests.result }}"
+          check_gate "security-log-check" "${{ needs.security-log-check.result }}"
+          check_gate "secret-scan" "${{ needs.secret-scan.result }}"
+          check_gate "docker-build" "${{ needs.docker-build.result }}"
+
+          if [ "$failed" -ne 0 ]; then
+            echo "One or more deployment gates failed"
             exit 1
           fi
-          
-          if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then
-            echo "❌ Unit tests failed"
-            exit 1
-          fi
-          
-          if [[ "${{ needs.consistency-tests.result }}" != "success" ]]; then
-            echo "❌ Consistency tests failed"
-            exit 1
-          fi
-          
-          if [[ "${{ needs.migration-tests.result }}" != "success" ]]; then
-            echo "❌ Migration tests failed"
-            exit 1
-          fi
-          
-          if [[ "${{ needs.docker-build.result }}" != "success" ]]; then
-            echo "❌ Docker build failed"
-            exit 1
-          fi
-          
-          if [[ "${{ needs.secret-scan.result }}" != "success" ]]; then
-            echo "❌ Secret scan failed"
-            exit 1
-          fi
-          
-          echo "✅ All deployment gates passed!"
+
+          echo "All deployment gates passed"

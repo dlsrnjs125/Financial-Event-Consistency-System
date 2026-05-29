@@ -39,7 +39,8 @@ help: ## Show this help message
 	@echo "  make local-check       # Check local tools and app structure"
 	@echo "  make dev               # Run FastAPI locally with reload"
 	@echo "  make check             # Run format-check, lint, and tests"
-	@echo "  make final-check       # Format, lint, compile, and test before PR"
+	@echo "  make final-check       # Format, lint, compile, test, and security log scan before PR"
+	@echo "  make ci-local          # Run the local equivalent of Phase 11 CI gates"
 	@echo "  make local-bg          # Run Docker Compose stack in background"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
@@ -196,16 +197,21 @@ compile: ## Compile backend Python files
 check: format-check lint test ## Run format-check, lint, and tests
 
 .PHONY: final-check
-final-check: format lint compile test ## Format, lint, compile, and test before PR
+final-check: format lint compile test security-log-check ## Format, lint, compile, test, and security log scan before PR
+
+.PHONY: ci-local
+ci-local: format-check lint test security-log-check compile ## Run local Phase 11 CI gate equivalent
+	@echo "Local CI gates passed."
+	@echo "Migration and Docker build gates run in GitHub Actions with PostgreSQL service containers."
 
 .PHONY: security-log-check
-security-log-check: ## Scan logger calls for direct sensitive-field logging; Phase 11 CI gate candidate
+security-log-check: ## Scan backend app logs for direct sensitive-field logging
 	@echo "Scanning structured logs for sensitive raw fields..."
-	@if rg -n "logger\\.(info|warning|error|exception)\\([^\\n]*(account_no|raw_body|signature|secret|idempotency_key)" backend/app; then \
+	@if rg -n "logger\\.(info|warning|error|exception)\\([^\\n]*(account_no|raw_body|signature|secret|idempotency_key|password|token)" backend/app; then \
 		echo "Sensitive raw field logging pattern found. Use masked fields/log_event helpers instead."; \
 		exit 1; \
 	fi
-	@if rg -n -U "log_event\\((.|\\n){0,800}(idempotency_key=|account_no=|signature=|secret=|raw_body=)" backend/app; then \
+	@if rg -n -U "log_event\\([^)]*(idempotency_key=|account_no=|signature=|secret=|raw_body=|password=|token=)" backend/app; then \
 		echo "Sensitive raw structured log field pattern found. Use masked fields instead."; \
 		exit 1; \
 	fi

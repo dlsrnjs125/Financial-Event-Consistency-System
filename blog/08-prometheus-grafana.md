@@ -56,7 +56,7 @@ redis_lock_acquire_failed_total
 ```
 
 Redis 서버 내부 지표는 Redis exporter가 필요합니다.
-현재는 애플리케이션에서 기록하는 Redis lock/cache/fallback 결과 metric을 우선 확인하고, Redis exporter scrape는 Phase 11 이후 운영 관측 보강 항목으로 둡니다.
+현재는 애플리케이션에서 기록하는 Redis lock/cache/fallback 결과 metric을 우선 확인하고, Redis exporter scrape는 Phase 12 이후 운영 관측 보강 항목으로 둡니다.
 
 Phase 10 이후 Redis fallback 관측에는 다음 애플리케이션 metric을 사용합니다.
 

@@ -151,7 +151,7 @@ Phase 10에서는 DB unique conflict rollback 후 read/retry 경로와 Redis fal
 단일 API 프로세스와 로컬 Docker Desktop I/O 조건에서는 DB connection을 늘리는 것보다 트랜잭션 범위, row lock 대기, 컨테이너 리소스 제한을 함께 봐야 한다.
 현재 애플리케이션 메트릭에는 SQLAlchemy pool checked-out/overflow 사용량이 직접 export되지 않아 DB connection usage는 실제 수치로 기록하지 못했다.
 PostgreSQL exporter 또는 SQLAlchemy pool gauge 추가가 필요하지만, 이는 Phase 9 결과의 후속 관측 보완 항목으로 남긴다.
-Prometheus scrape도 현재 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 11 이후 운영 관측 보강 항목으로 남긴다.
+Phase 11에서는 배포 Gate를 우선 고도화했으므로 `api-green`, Redis exporter, PostgreSQL exporter 기반 인프라 내부 지표는 Phase 12 이후 운영 관측 보강 항목으로 남긴다.
 
 ## Transaction 범위 비교
 
