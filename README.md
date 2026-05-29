@@ -20,7 +20,7 @@
 
 Phase 9 측정에서는 Redis 장애 상황에서도 PostgreSQL 기준 중복 반영은 0건이었다.
 Phase 10에서는 Redis Down duplicate storm에서 확인된 일부 5xx를 보완하기 위해 Redis fallback, DB unique conflict retry, 장애 재현 명령을 추가했다.
-GitHub Actions 기반 배포 Gate 자동화는 Phase 11 범위다.
+Phase 11에서는 GitHub Actions 기반 배포 Gate를 고도화해 PR 병합 전 정합성, 보안 로그, secret scan, migration, Docker build를 자동 검증한다.
 
 ---
 
@@ -110,7 +110,9 @@ make help          # 사용 가능한 명령 확인
 make local-check   # 로컬 개발 환경 확인
 make dev           # FastAPI reload 서버 실행
 make check         # format-check, lint, test 실행
-make final-check   # PR 전 format, lint, compile, test 전체 실행
+make format        # 코드 자동 포맷
+make final-check   # 코드 수정 없이 PR 전 최종 검증
+make ci-local      # Phase 11 빠른 로컬 Gate 검증
 make local-bg      # Docker Compose 스택 백그라운드 실행
 make local-stop    # Docker Compose 스택 중지
 ```
@@ -126,7 +128,7 @@ GET /api/v1/transaction-events/{event_id}
 GET /api/v1/accounts/{account_no}/balance
 ```
 
-현재 구현 상태는 Phase 10 기준이다.
+현재 구현 상태는 Phase 11 기준이다.
 
 핵심 거래 처리:
 
@@ -322,9 +324,13 @@ make check
 ### 개발 마무리 점검
 ```bash
 make final-check
+make ci-local
 ```
 
-모든 개발 작업은 PR 생성 전 `make final-check`로 포맷팅, 린트, Python 컴파일, 테스트를 확인한다.
+코드 자동 정리는 `make format`으로 수행한다.
+모든 개발 작업은 PR 생성 전 `make final-check`로 코드 수정 없이 formatter drift, 린트, Python 컴파일, 전체 테스트, 민감 로그 검사를 확인한다.
+GitHub Actions와 유사한 순서로 빠르게 확인하려면 `make ci-local`을 실행한다.
+`make ci-local`은 빠른 feedback을 위해 unit test 중심으로 실행하고, PostgreSQL/Redis service container 기반 consistency/migration Gate는 GitHub Actions에서 최종 확인한다.
 
 ### 부하 테스트 (k6)
 
@@ -504,29 +510,76 @@ BASE_URL=http://localhost:8080 CLIENT_ID=bank-a CLIENT_SECRET=change-me-secret k
 실제 duplicate processing rate는 `make k6-verify`로 PostgreSQL 검증 쿼리를 실행해 판단한다.
 테스트 후 Prometheus/Grafana 지표와 `make k6-verify` 결과를 함께 확인하고,
 Phase 9 성능 비교 결과는 [Phase 9 Performance Results](./docs/performance/phase-9-results.md)에 기록되어 있고, Redis Down fallback 보완 결과는 [Phase 10 Failure Recovery](./docs/phase-10-failure-recovery.md)에 기록되어 있다.
-CI/CD gate 적용은 Phase 11 범위다.
-`security-log-check`는 logger 직접 호출과 `log_event()` 구조화 로그에서 `account_no`, `raw_body`, `signature`, `secret`, `idempotency_key` 같은 민감 필드가 raw keyword로 들어가는 패턴을 찾는 로컬 보안 점검 타겟이다.
-현재 `final-check`에는 강제 포함하지 않으며, Phase 11 CI Gate 후보로 둔다.
+CI/CD gate 고도화 결과는 [Phase 11 CI/CD Gate](./docs/phase-11-ci-cd-gate.md)에 기록되어 있다.
+`security-log-check`는 logger 직접 호출과 `log_event()` 구조화 로그에서 `account_no`, `raw_body`, `signature`, `secret`, `idempotency_key`, `password`, `token` 같은 민감 필드가 raw keyword로 들어가는 패턴을 찾는 보안 점검 타겟이다.
+Phase 11부터 `security-log-check`는 `make final-check`와 GitHub Actions 필수 Gate에 포함된다.
 
 ---
 
-## 🔄 CI/CD 파이프라인 설계 방향
+## 🔄 CI/CD Deployment Gate
 
-현재는 `make final-check`, `make phase9-check`, `make k6-verify`, `make security-log-check` 기반의 로컬 검증을 제공한다.
-GitHub Actions에서 모든 PR을 정합성/마이그레이션/보안 Gate로 자동 차단하는 작업은 Phase 11에서 구현한다.
+Phase 11에서는 기존 `.github/workflows/ci.yml`을 금융 이벤트 정합성 배포 Gate로 고도화했다.
+PR이 `main` 또는 `develop`에 병합되기 전 format/lint, unit test, PostgreSQL+Redis consistency test, PostgreSQL migration test, security-log-check, secret scan, Docker build를 통과해야 한다.
 
-Phase 11 목표 파이프라인은 다음과 같다:
+GitHub Actions job 구성:
+
+| Gate | CI Job | Purpose |
+|------|--------|---------|
+| Format/Lint | `lint` | `black`, `isort`, `flake8`, `ruff` 기반 코드 품질 검증 |
+| Unit Test | `unit-tests` | 도메인/서비스 단위 테스트와 coverage xml 생성 |
+| Consistency Test | `consistency-tests` | PostgreSQL + Redis service container에서 consistency, idempotency, 상태 전이 회귀 검증 |
+| Migration Test | `migration-tests` | PostgreSQL에서 `alembic upgrade head`, revision, unique constraint smoke check |
+| Security Log Check | `security-log-check` | 운영 코드 구조화 로그의 raw 민감 필드 노출 방지 |
+| Secret Scan | `secret-scan` | TruffleHog 기반 repository credential 유출 검사 |
+| Docker Build | `docker-build` | `backend/Dockerfile` image build와 inspect |
+| Gate Summary | `gate-check` | 모든 필수 job 결과를 종합하고 실패 job을 명확히 출력 |
+
+로컬 명령과 CI job 대응:
+
+| Local Command | CI Job | Purpose |
+|---------------|--------|---------|
+| `make format-check` | `lint` | formatter drift 확인 |
+| `make lint` | `lint` | 정적 분석 |
+| `make test-unit` | `unit-tests` | 단위 테스트 |
+| `make test-consistency` | `consistency-tests` | 정합성 회귀 검증 |
+| `alembic upgrade head` + `make migration-smoke` | `migration-tests` | PostgreSQL migration과 unique constraint smoke 검증 |
+| `make security-log-check` | `security-log-check` | 민감 로그 검사 |
+| `docker build -t financial-events:test ./backend` | `docker-build` | 배포 이미지 검증 |
+| `make ci-local` | local equivalent | format/lint/unit/security-log/compile 빠른 로컬 Gate |
+
+Gate 흐름:
 
 ```
-[PR 생성]
+[Pull Request]
     ↓
-[Lint] → [Unit Test] → [Integration Test] → [Consistency Test]
+[Format / Lint]
     ↓
-[Migration Test] → [Docker Build] → [Secret Scan]
+[Unit Test]
     ↓
-[모든 테스트 통과] → ✅ 배포 승인
-[하나라도 실패] → ❌ 배포 거부
+[Consistency Test]
+    ↓
+[Migration Test]
+    ↓
+[Security Log Check]
+    ↓
+[Secret Scan]
+    ↓
+[Docker Build]
+    ↓
+[Deployment Gate Summary]
+    ↓
+merge 허용 또는 차단
 ```
+
+k6 smoke/normal/peak/duplicate/Redis Down duplicate storm은 PR 필수 Gate가 아니다.
+부하 테스트는 실행 시간이 길고 환경 편차가 크기 때문에 수동 local gate, 릴리즈 전 성능 Gate, 또는 nightly workflow 후보로 분리한다.
+PR Gate에서는 빠른 consistency test와 idempotency regression test로 중복 반영 0건, 상태 전이 차단, Redis fallback 회귀를 검증한다.
+
+`security-log-check`와 `secret-scan`은 역할이 다르다.
+`security-log-check`는 운영 코드의 구조화 로그에서 raw idempotency key, account number, signature, secret 같은 민감 필드를 직접 남기는 패턴을 막는다.
+`secret-scan`은 repository에 실제 credential이 들어갔는지 검사한다.
+Secret scan action은 CI 재현성을 위해 floating ref(`@main`)나 존재하지 않는 major tag가 아니라 TruffleHog `v3.95.3` commit SHA로 고정한다.
+TruffleHog는 PR Gate 안정성을 위해 `--only-verified`를 사용한다. 오탐은 줄어들지만, unverified secret-like pattern 탐지는 별도 강화 후보로 남긴다.
 
 ---
 
@@ -552,7 +605,7 @@ http://localhost:9090
 4. `http://localhost:3000`에서 `Financial Event Consistency System` dashboard 확인
 
 현재 Prometheus scrape 대상은 Prometheus 자체와 FastAPI `api-server` 중심이다.
-`api-green`, Redis exporter, PostgreSQL exporter scrape는 Phase 11 이후 운영 관측 보강 항목이다.
+`api-green`, Redis exporter, PostgreSQL exporter scrape는 Phase 12 이후 운영 관측 보강 항목이다.
 
 ### 주요 대시보드
 
