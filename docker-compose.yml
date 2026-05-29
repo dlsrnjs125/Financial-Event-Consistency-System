@@ -141,7 +141,7 @@ services:
     environment:
       - TZ=Asia/Seoul
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/grafana/alerts/financial-event-alert-rules.yml:/etc/prometheus/financial-event-alert-rules.yml:ro
@@ -165,7 +165,7 @@ services:
       GF_INSTALL_PLUGINS: grafana-piechart-panel
       TZ: Asia/Seoul
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro

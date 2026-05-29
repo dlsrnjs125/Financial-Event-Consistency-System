@@ -1,0 +1,55 @@
+groups:
+  - name: financial-event-ops1-infra-alerts
+    interval: 30s
+    rules:
+      - alert: ApiTargetDown
+        expr: up{job="api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API metrics target is down"
+          runbook: "docs/runbooks/metrics-unavailable.md"
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis is down or unavailable"
+          runbook: "docs/runbooks/redis-down.md"
+
+      - alert: PostgresExporterDown
+        expr: up{job="postgres-exporter"} == 0 or pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL exporter or PostgreSQL health metric is down"
+          runbook: "docs/runbooks/postgres-connection-exhausted.md"
+
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(financial_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p99 latency is high"
+          runbook: "docs/runbooks/high-latency-p99.md"
+
+      - alert: MetricsUnavailable
+        expr: |
+          sum(up{job=~"api|node-exporter|cadvisor|postgres-exporter|redis-exporter"}) < 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "One or more required metrics targets are unavailable"
+          runbook: "docs/runbooks/metrics-unavailable.md"
+
+      # TODO: add ConsistencyViolation after a bounded application metric exists.

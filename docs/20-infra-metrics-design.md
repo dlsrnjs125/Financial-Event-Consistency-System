@@ -15,7 +15,7 @@ Ops Phase 1은 관측 범위를 API에서 Linux host, container, PostgreSQL, Red
 - cAdvisor
 - postgres-exporter
 - redis-exporter
-- nginx-prometheus-exporter
+- nginx-prometheus-exporter는 Ops Phase 2에서 `stub_status`와 내부 접근 제어를 함께 설계한다.
 
 Dashboard:
 
@@ -69,24 +69,26 @@ scripts/
   monitoring/
     check-prometheus-targets.sh
     check-grafana-dashboards.sh
-    check-alert-rules.sh
+    check-required-metrics.sh
 ```
 
 ## 5. 검증 명령어
 
 ```bash
-make infra-up
+make ops1-up
 make metrics-check
-make alert-rule-check
-make dashboard-check
+make required-metrics-check
+make grafana-check
+make ops1-check
 ```
 
 성공 기준:
 
 - Prometheus target 중 down 상태가 0개
-- api, node-exporter, cadvisor, postgres-exporter, redis-exporter, nginx-exporter target 존재
+- api, node-exporter, cadvisor, postgres-exporter, redis-exporter target 존재
+- nginx-exporter는 Ops Phase 2 후보로 optional/TODO 표시
 - 필수 metric key가 Prometheus API에서 조회됨
-- alert rule syntax 검증 통과
+- Prometheus config와 alert rule syntax 검증 통과
 - Grafana dashboard 5개 provision 확인
 
 실패 기준:
@@ -120,7 +122,14 @@ Prometheus label에는 다음 값을 넣지 않는다.
 | cAdvisor | 8080 | Container CPU/Memory | 컨테이너 병목 추적 불가 |
 | postgres-exporter | 9187 | DB connection/lock | DB 병목 추적 불가 |
 | redis-exporter | 9121 | Redis memory/eviction | Redis 장애 원인 추적 불가 |
-| nginx-exporter | 9113 | Nginx connection/status | Proxy 계층 장애 추적 불가 |
+| nginx-exporter | 9113 | Nginx connection/status | Ops Phase 2에서 보강 |
+
+로컬 확인 편의를 위해 Prometheus/Grafana는 `127.0.0.1`에 노출한다.
+PostgreSQL/Redis exporter는 host port를 열지 않고 Docker 내부 network에서만 수집한다.
+node-exporter와 cAdvisor도 host 접근은 `127.0.0.1`로 제한한다.
+
+cAdvisor는 로컬 Docker container metric 수집을 위해 host filesystem과 Docker runtime 정보를 read-only로 참조한다.
+이 구성은 로컬 운영 실습용이며, 운영 환경에서는 접근 권한, 네트워크 노출, 수집 범위를 별도로 제한해야 한다.
 
 ### 필수 지표
 
@@ -156,6 +165,10 @@ Nginx:
 - `nginx_http_requests_total`
 - `upstream_response_time`
 - `rate_limit_rejected_total`
+
+Nginx 지표는 이번 Ops Phase 1에서 dashboard TODO로 남긴다.
+Nginx exporter는 `stub_status` 노출과 `/metrics` 내부 접근 제어가 함께 필요하므로
+Ops Phase 2에서 접근 제어와 rate limit 정책을 다룰 때 연결한다.
 
 Container/Host:
 
@@ -210,8 +223,7 @@ groups:
 
 README에는 다음 결과를 남긴다.
 
-- Prometheus Targets: api, node-exporter, cadvisor, postgres-exporter, redis-exporter, nginx-exporter 모두 UP
+- Prometheus Targets: api, node-exporter, cadvisor, postgres-exporter, redis-exporter 모두 UP
 - Grafana Dashboards: API/Infra/PostgreSQL/Redis/Nginx 5개 provision 확인
-- Redis down 상태에서 `redis_up=0`, `financial_redis_fallback_total` 증가 확인
-- DB connection pressure 상황에서 alert rule firing 확인
-- k6 peak test 중 API p99와 DB/Redis/Nginx 지표를 함께 캡처
+- Nginx dashboard는 Ops Phase 2 exporter 연동 TODO로 표시
+- 실제 Redis down, DB pressure, k6 peak 수치는 후속 장애 재현/측정 단계에서 기록

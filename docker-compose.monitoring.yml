@@ -1,0 +1,78 @@
+services:
+  prometheus:
+    volumes:
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - api-blue
+      - node-exporter
+      - cadvisor
+      - postgres-exporter
+      - redis-exporter
+
+  grafana:
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: financial-node-exporter
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    ports:
+      - "127.0.0.1:9100:9100"
+    volumes:
+      - "/:/host:ro"
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: financial-cadvisor
+    privileged: true
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:ro"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: financial-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-financial_events}?sslmode=disable"
+    expose:
+      - "9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: financial-redis-exporter
+    command:
+      - "--redis.addr=redis://redis:6379"
+    expose:
+      - "9121"
+    depends_on:
+      redis:
+        condition: service_started
+    networks:
+      - financial-network
+    restart: unless-stopped
+
+  # TODO(Ops Phase 2): add nginx-prometheus-exporter after Nginx stub_status
+  # and internal access control are designed together.

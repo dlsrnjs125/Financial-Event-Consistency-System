@@ -1,0 +1,52 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "TODO(Ops Phase 2): wire Nginx exporter after stub_status and internal access controls are designed together.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "content": "Ops Phase 1 Nginx dashboard placeholder\\n\\nRequired future panels:\\n- 2xx/4xx/5xx\\n- 429 Count\\n- upstream_response_time\\n- request_time\\n- denied internal endpoint access\\n\\nNginx exporter is deferred to Ops Phase 2.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.0.0",
+      "title": "Nginx Metrics TODO",
+      "type": "text"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "financial-event",
+    "ops-phase-1",
+    "nginx"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Financial Event Nginx Dashboard",
+  "uid": "financial-event-nginx-dashboard",
+  "version": 1,
+  "weekStart": ""
+}

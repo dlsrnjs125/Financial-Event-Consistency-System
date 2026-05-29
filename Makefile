@@ -21,6 +21,7 @@ RUFF ?= .venv/bin/ruff
 DOCKER ?= docker
 DOCKER_COMPOSE ?= docker compose
 DOCKER_COMPOSE_PERF ?= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.perf.yml
+DOCKER_COMPOSE_MONITORING ?= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.monitoring.yml
 K6 ?= k6
 
 # Paths
@@ -45,6 +46,8 @@ help: ## Show this help message
 	@echo "  make local-bg          # Run Docker Compose stack in background"
 	@echo "  make deploy-status     # Show Phase 12 Blue-Green deployment status"
 	@echo "  make deploy-blue-green # Run Phase 12 Green verification and traffic switch"
+	@echo "  make ops1-up           # Run Ops Phase 1 monitoring stack with exporters"
+	@echo "  make ops1-check        # Verify Prometheus targets, metrics, and dashboards"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -226,6 +229,10 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/rollback.sh
 	bash -n scripts/deployment-status.sh
 	bash -n scripts/deployment-smoke.sh
+	bash -n scripts/monitoring/check-prometheus-targets.sh
+	bash -n scripts/monitoring/check-required-metrics.sh
+	bash -n scripts/monitoring/check-grafana-dashboards.sh
+	bash -n scripts/monitoring/write-compose-status-report.sh
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -239,6 +246,55 @@ security-log-check: ## Scan backend app logs for direct sensitive-field logging
 		exit 1; \
 	fi
 	@echo "No raw sensitive structured log fields found."
+
+# Ops Phase 1 Infra Metrics Extension
+.PHONY: ops1-up
+ops1-up: docker-check ## Start app stack with Ops Phase 1 monitoring exporters
+	$(DOCKER_COMPOSE_MONITORING) up --build -d
+	@echo ""
+	@echo "Ops Phase 1 service URLs:"
+	@echo "  API blue:       http://localhost:8000"
+	@echo "  Nginx:          http://localhost:8080"
+	@echo "  Prometheus:     http://localhost:9090"
+	@echo "  Grafana:        http://localhost:3000"
+	@echo "  node-exporter:  http://127.0.0.1:9100/metrics"
+	@echo "  cAdvisor:       http://127.0.0.1:8081/metrics"
+	@echo "  postgres exp.:  internal Docker network only"
+	@echo "  redis exp.:     internal Docker network only"
+	@echo ""
+	@echo "Verify: make ops1-check"
+
+.PHONY: ops1-down
+ops1-down: docker-check ## Stop app and Ops Phase 1 monitoring stack
+	$(DOCKER_COMPOSE_MONITORING) down
+
+.PHONY: ops1-logs
+ops1-logs: docker-check ## Follow Ops Phase 1 monitoring service logs
+	$(DOCKER_COMPOSE_MONITORING) logs -f prometheus grafana node-exporter cadvisor postgres-exporter redis-exporter
+
+.PHONY: metrics-check
+metrics-check: ## Verify Prometheus required targets and write evidence report
+	./scripts/monitoring/check-prometheus-targets.sh
+
+.PHONY: required-metrics-check
+required-metrics-check: ## Verify required metrics are queryable and write evidence report
+	./scripts/monitoring/check-required-metrics.sh
+
+.PHONY: grafana-check
+grafana-check: ## Verify Grafana provisioning files and dashboard JSON
+	./scripts/monitoring/check-grafana-dashboards.sh
+
+.PHONY: prometheus-config-check
+prometheus-config-check: docker-check ## Verify Prometheus config and alert rule syntax with promtool
+	$(DOCKER) run --rm --entrypoint promtool -v "$(PWD)/infra/monitoring/prometheus:/etc/prometheus:ro" prom/prometheus:latest check config /etc/prometheus/prometheus.yml
+
+.PHONY: ops1-compose-status
+ops1-compose-status: docker-check ## Write Docker Compose status evidence report
+	DOCKER_COMPOSE_MONITORING='$(DOCKER_COMPOSE_MONITORING)' ./scripts/monitoring/write-compose-status-report.sh
+
+.PHONY: ops1-check
+ops1-check: prometheus-config-check metrics-check required-metrics-check grafana-check ops1-compose-status ## Run Ops Phase 1 monitoring verification
+	@echo "Ops Phase 1 monitoring checks passed."
 
 # k6 performance tests
 .PHONY: k6-smoke

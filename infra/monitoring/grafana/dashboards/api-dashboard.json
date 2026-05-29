@@ -1,0 +1,52 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "TODO: refine API request rate, p50/p95/p99, 4xx/5xx, Redis fallback, and DB retry panels after Ops load evidence is collected.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "content": "Ops Phase 1 API dashboard placeholder\\n\\nRequired panels:\\n- Request Rate\\n- p50/p95/p99 Latency\\n- 4xx/5xx Rate\\n- Redis Fallback Total\\n- DB Retry Total",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.0.0",
+      "title": "API Metrics TODO",
+      "type": "text"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "financial-event",
+    "ops-phase-1",
+    "api"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Financial Event API Dashboard",
+  "uid": "financial-event-api-dashboard",
+  "version": 1,
+  "weekStart": ""
+}
