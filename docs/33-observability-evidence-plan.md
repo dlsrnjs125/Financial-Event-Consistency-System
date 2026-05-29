@@ -88,7 +88,7 @@ docs/images/grafana/
   06-alert-firing-consistency-violation.png
   07-alert-firing-redis-down.png
   08-prometheus-targets-up.png
-  09-dashboard-provisioning.png
+  09-grafana-datasource-provisioning.png
 ```
 
 캡처는 화면 미관보다 증거성을 우선한다.
@@ -180,6 +180,15 @@ reports/k6/
   duplicate-storm-summary.json
   redis-down-summary.json
   nginx-rate-limit-summary.json
+```
+
+Ops Phase 1 monitoring foundation 결과:
+
+```text
+reports/monitoring/
+  ops1-prometheus-targets.md
+  ops1-required-metrics.md
+  ops1-grafana-provisioning.md
 ```
 
 기록할 API 성능 수치:

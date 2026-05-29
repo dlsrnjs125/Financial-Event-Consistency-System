@@ -46,7 +46,18 @@
 `duplicate ledger`, `account balance mismatch`, `invalid state transition`,
 `orphan idempotency record`가 1건이라도 발생하면 Critical로 기록한다.
 
-## 4. Normal Load 결과
+## 4. Ops Phase 1 - Monitoring Foundation Result
+
+Ops Phase 1은 성능 수치 측정이 아니라 인프라 metric 수집 기반을 구축하는 단계다.
+실제 p95/p99/RPS 수치는 후속 k6/장애 재현 결과로 기록한다.
+
+| Check | Command | Expected | Actual | Evidence |
+|---|---|---|---|---|
+| Prometheus targets | `make metrics-check` | all required targets UP | TBD | `reports/monitoring/ops1-prometheus-targets.md` |
+| Required metrics | `make required-metrics-check` | required metrics queryable | TBD | `reports/monitoring/ops1-required-metrics.md` |
+| Grafana provisioning | `make grafana-check` | datasource/dashboard valid | TBD | `reports/monitoring/ops1-grafana-provisioning.md` |
+
+## 5. Normal Load 결과
 
 | Metric | Value |
 |---|---:|
@@ -59,7 +70,7 @@
 | timeout count | TBD |
 | duplicate ledger count | 0 |
 
-## 5. Peak Load 결과
+## 6. Peak Load 결과
 
 | Metric | Value |
 |---|---:|
@@ -73,7 +84,7 @@
 | Nginx upstream latency | TBD |
 | duplicate ledger count | 0 |
 
-## 6. Duplicate Storm 결과
+## 7. Duplicate Storm 결과
 
 | Metric | Value |
 |---|---:|
@@ -85,7 +96,7 @@
 | duplicate external event count | 0 |
 | orphan idempotency count | 0 |
 
-## 7. Redis Down 결과
+## 8. Redis Down 결과
 
 | Metric | Normal | Redis Down | 해석 |
 |---|---:|---:|---|
@@ -96,7 +107,7 @@
 | DB retry count | TBD | TBD | DB 부하 전이 |
 | duplicate ledger count | 0 | 0 | 정합성 유지 |
 
-## 8. DB Pressure 결과
+## 9. DB Pressure 결과
 
 | Metric | Value |
 |---|---:|
@@ -109,7 +120,7 @@
 | API p99 | TBD |
 | 5xx rate | TBD |
 
-## 9. Nginx Burst / Rate Limit 결과
+## 10. Nginx Burst / Rate Limit 결과
 
 | Metric | Rate Limit Off | Rate Limit On | 해석 |
 |---|---:|---:|---|
@@ -120,7 +131,7 @@
 | API p99 | TBD | TBD | tail latency |
 | 5xx rate | TBD | TBD | 장애 확산 |
 
-## 10. DR Drill 결과
+## 11. DR Drill 결과
 
 | Metric | Value |
 |---|---:|
@@ -134,7 +145,7 @@
 | balance mismatch count | 0 |
 | orphan idempotency count | 0 |
 
-## 11. 정합성 검증 SQL 결과
+## 12. 정합성 검증 SQL 결과
 
 | Check | Expected | Actual | Result |
 |---|---:|---:|---|
@@ -144,7 +155,7 @@
 | orphan idempotency record | 0 | TBD | TBD |
 | stale processing event | 0 | TBD | TBD |
 
-## 12. 성공/실패 판정
+## 13. 성공/실패 판정
 
 | 항목 | 성공 기준 | 실패 기준 | Result |
 |---|---|---|---|
@@ -157,7 +168,7 @@
 | DR Drill | checksum/restore/SQL 검증 성공 | restore 또는 checksum 실패 | TBD |
 | 정합성 | 위반 0건 | 위반 >= 1건 | TBD |
 
-## 13. 첨부 자료
+## 14. 첨부 자료
 
 | Evidence | Path |
 |---|---|
@@ -165,5 +176,9 @@
 | Peak dashboard | `docs/images/grafana/02-peak-load-dashboard.png` |
 | Redis down dashboard | `docs/images/grafana/03-redis-down-dashboard.png` |
 | Prometheus targets | `docs/images/grafana/08-prometheus-targets-up.png` |
+| Grafana datasource | `docs/images/grafana/09-grafana-datasource-provisioning.png` |
+| Ops1 target report | `reports/monitoring/ops1-prometheus-targets.md` |
+| Ops1 metric report | `reports/monitoring/ops1-required-metrics.md` |
+| Ops1 Grafana report | `reports/monitoring/ops1-grafana-provisioning.md` |
 | k6 normal summary | `reports/k6/normal-load-summary.json` |
 | DR Drill report | `reports/dr-drill/backup-restore-result.md` |
