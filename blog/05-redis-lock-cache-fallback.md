@@ -124,10 +124,17 @@ if count > MAX_REQUESTS_PER_MINUTE:
 ## Redis 장애 Fallback 코드 (Python)
 
 ```python
-from typing import Optional, Dict, Any
 import logging
+from typing import Optional, Dict, Any
+
+from redis.exceptions import ConnectionError, RedisError, TimeoutError
 
 logger = logging.getLogger(__name__)
+
+def mask_idempotency_key(value: str) -> str:
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
 
 class IdempotencyManager:
     def __init__(self, redis_client, db_session):
@@ -145,8 +152,17 @@ class IdempotencyManager:
             key = f"lock:idempotency:{idempotency_key}"
             result = self.redis.set(key, "locked", nx=True, ex=10)
             return bool(result)
-        except Exception as e:
-            logger.warning(f"Redis lock acquisition failed: {e}")
+        except (ConnectionError, TimeoutError, RedisError) as exc:
+            logger.warning(
+                "redis_lock_fallback",
+                extra={
+                    "dependency": "redis",
+                    "operation": "lock_acquire",
+                    "fallback_used": True,
+                    "error_type": type(exc).__name__,
+                    "idempotency_key_masked": mask_idempotency_key(idempotency_key),
+                },
+            )
             # Redis 장애 → PostgreSQL로 처리
             return None  # None = fallback to DB
     
@@ -158,10 +174,26 @@ class IdempotencyManager:
             key = f"cache:idempotency:{idempotency_key}"
             cached = self.redis.get(key)
             if cached:
-                logger.info(f"Cache hit for {idempotency_key}")
+                logger.info(
+                    "idempotency_cache_hit",
+                    extra={
+                        "dependency": "redis",
+                        "operation": "cache_get",
+                        "idempotency_key_masked": mask_idempotency_key(idempotency_key),
+                    },
+                )
                 return json.loads(cached)
-        except Exception as e:
-            logger.warning(f"Redis cache retrieval failed: {e}")
+        except (ConnectionError, TimeoutError, RedisError) as exc:
+            logger.warning(
+                "redis_cache_get_fallback",
+                extra={
+                    "dependency": "redis",
+                    "operation": "cache_get",
+                    "fallback_used": True,
+                    "error_type": type(exc).__name__,
+                    "idempotency_key_masked": mask_idempotency_key(idempotency_key),
+                },
+            )
             # Redis 장애 → DB 조회로 fallback
         
         return None
@@ -174,8 +206,17 @@ class IdempotencyManager:
             key = f"cache:idempotency:{idempotency_key}"
             self.redis.setex(key, 3600, json.dumps(result))
             return True
-        except Exception as e:
-            logger.warning(f"Redis cache save failed: {e}")
+        except (ConnectionError, TimeoutError, RedisError) as exc:
+            logger.warning(
+                "redis_cache_set_fallback",
+                extra={
+                    "dependency": "redis",
+                    "operation": "cache_set",
+                    "fallback_used": True,
+                    "error_type": type(exc).__name__,
+                    "idempotency_key_masked": mask_idempotency_key(idempotency_key),
+                },
+            )
             # Redis 장애 → 무시하고 진행
             return False
     
@@ -228,7 +269,16 @@ class IdempotencyManager:
         
         if lock_acquired is False:
             # Lock 획득 실패 (처리 중)
-            logger.info(f"Lock not acquired, likely processing: {idempotency_key}")
+            logger.info(
+                "redis_lock_not_acquired",
+                extra={
+                    "dependency": "redis",
+                    "operation": "lock_acquire",
+                    "result": "rejected",
+                    "reason": "lock_not_acquired",
+                    "idempotency_key_masked": mask_idempotency_key(idempotency_key),
+                },
+            )
             return 202  # Accepted
         
         try:
@@ -240,8 +290,14 @@ class IdempotencyManager:
             
             return result
             
-        except Exception as e:
-            logger.error(f"Processing failed: {e}")
+        except TransactionProcessingError as exc:
+            logger.error(
+                "transaction_processing_failed",
+                extra={
+                    "error_type": type(exc).__name__,
+                    "idempotency_key_masked": mask_idempotency_key(idempotency_key),
+                },
+            )
             raise
 ```
 
@@ -359,6 +415,28 @@ Redis Lock과 Cache는 DB 부하와 중복 요청 응답시간을 줄이는 데 
 
 ---
 
-## 다음 편에서
 
-6편에서는 상태 전이를 자동화된 테스트로 고정하는 방법을 다룹니다.
+## 개발 중 실제로 발견한 문제와 수정
+
+처음에는 Redis lock/cache를 중복 요청 완화 계층으로 붙였기 때문에, Redis가 내려가면 성능은 떨어지더라도 DB unique constraint가 최종 방어선을 해줄 것이라고 봤다. Phase 9 Redis Down 실행에서 실제로 중복 Ledger는 0건이었다. 하지만 일부 5xx가 발생했다. 이 결과는 "정합성은 유지됐지만 Redis 장애가 API 가용성으로 번졌다"는 의미였다.
+
+이후 수정한 기준은 세 가지였다.
+
+1. Redis connection error/timeout은 fallback 대상이다. 요청 처리는 DB transaction과 idempotency record 기준으로 계속한다.
+2. Redis lock 미획득은 장애가 아니다. 같은 key가 이미 처리 중이라는 신호이므로 `rejected`, `lock_not_acquired`로 기록한다.
+3. Redis cache miss는 failure가 아니다. Redis get 자체가 성공했고 값이 없을 뿐이므로 cache result metric으로 분리한다.
+
+이 구분을 하지 않으면 Grafana에서 duplicate storm을 Redis 장애처럼 해석하거나, cache miss가 많은 정상 상황을 장애로 오해할 수 있다.
+
+검증은 다음 흐름으로 했다.
+
+```bash
+make failure-redis-down
+make phase10-redis-down-check
+make failure-redis-up
+make k6-verify
+```
+
+최종 판단 기준은 HTTP 200 비율만이 아니었다. Redis가 없어도 PostgreSQL 기준 duplicate ledger/event count가 0건인지, 그리고 Redis 장애 단독으로 5xx가 확산되지 않는지를 함께 봤다.
+
+남은 한계도 있다. 로컬 단일 Redis 컨테이너의 down/up은 운영 Redis cluster의 failover, network partition, replication lag를 모두 설명하지 못한다. 다만 이 프로젝트에서는 Redis가 실패해도 최종 정합성이 DB에 남는 구조를 먼저 고정했다.

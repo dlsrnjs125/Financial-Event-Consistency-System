@@ -273,6 +273,27 @@ event_state_histories
 
 ---
 
-## 다음 편에서
 
-3편에서는 Idempotency Key로 어떻게 중복 요청을 방어하는지, 그리고 같은 키로 다른 요청이 오는 상황까지 다룹니다.
+## 개발 중 발견한 설계 포인트
+
+처음 도메인 모델을 잡을 때 가장 쉬운 접근은 `TransactionEvent` row 하나에 모든 결과를 넣는 방식이었다. 하지만 그렇게 하면 잔액이 왜 바뀌었는지 추적하기 어렵다. 그래서 거래 이벤트와 원장을 분리했다.
+
+- `TransactionEvent`는 외부에서 들어온 이벤트와 처리 상태를 나타낸다.
+- `LedgerEntry`는 실제 잔액 변경의 근거다.
+- `Account.balance`는 현재 조회 성능을 위한 값이지만, 신뢰 근거는 Ledger다.
+- `IdempotencyRecord`는 client retry에 대한 응답 재사용 기준이다.
+- `EventStateHistory`는 상태가 어떤 경로로 바뀌었는지 남긴다.
+
+상태 머신도 같은 이유로 필요했다. 이벤트 처리를 단순 update로 두면 `COMPLETED -> PROCESSING` 같은 되돌아가는 전이가 실수로 허용될 수 있다. 장애 복구나 retry 처리에서 이런 전이가 섞이면 "완료된 거래가 다시 처리 중으로 돌아가는" 이상한 상태가 생긴다.
+
+그래서 상태 변경은 반드시 `TransactionStateMachine`을 통과하도록 했다. 금지 전이는 unit test로 고정했다.
+
+```text
+COMPLETED -> PROCESSING  차단
+FAILED -> COMPLETED      차단
+SETTLED -> CANCELLED     차단
+```
+
+이후 복구 worker를 고민하면서 또 다른 race condition도 보였다. 여러 worker가 같은 FAILED 이벤트를 동시에 조회하고 PROCESSING으로 바꾸면 중복 복구가 발생할 수 있다. 이 경우에는 단순 `SELECT FOR UPDATE`보다 `FOR UPDATE SKIP LOCKED` 또는 조건부 update가 더 적합하다.
+
+이 설계는 현재 핵심 처리 흐름에서는 상태 전이 회귀를 막는 데 사용했고, 분산 복구 worker 고도화는 향후 확장 지점으로 남겼다.

@@ -22,6 +22,11 @@
 | F-006 | Nginx 전환 실패 | 기존 Blue 유지 또는 rollback |
 | F-007 | 같은 Idempotency-Key 다른 Body | 409 Conflict |
 | F-008 | Ledger와 Balance 불일치 | Reconciliation 실패 탐지 |
+| F-009 | Redis Timeout | fallback metric/log와 DB 기준 처리 |
+| F-010 | Duplicate Event Storm | 중복 Ledger/Event 0건 |
+| F-011 | Green readiness 실패 | 전환 전 Blue 유지 |
+| F-012 | Nginx reload 실패 | backup snippet restore |
+| F-013 | Blue-Green 전환 후 smoke 실패 | Blue rollback 후 smoke/verify |
 
 ---
 
@@ -217,6 +222,30 @@ make deploy-rollback
 ```
 
 Phase 12에서는 `infra/nginx/conf.d/upstream-active.conf` snippet만 교체하고, config test 실패 시 이전 upstream을 복원한다.
+
+## Phase 10~12 장애 대응 형식
+
+새 장애 시나리오는 다음 항목으로 기록한다.
+
+- 장애 상황:
+- 예상 원인:
+- 사용자 영향:
+- 탐지 방법:
+- 대응 방법:
+- 재발 방지:
+- 확인 명령:
+
+## Phase 12 추가 시나리오 요약
+
+| 장애 | 사용자 영향 | 탐지 방법 | 대응 방법 | 확인 명령 |
+|---|---|---|---|---|
+| Redis Timeout | 응답 지연 증가 가능, 정합성은 DB 기준 유지 | Redis fallback log/metric | Redis lock/cache 생략 후 DB transaction 처리 | `make phase10-redis-down-check` |
+| Duplicate Event Storm | DB 부하 증가 가능 | k6 duplicate, SQL 검증 | unique constraint conflict 후 기존 결과 재조회 | `make k6-duplicate && make k6-verify` |
+| PostgreSQL 장애 | 신규 거래 처리 실패 | `/ready` 503, dependency metric | DB 복구, API rollback 효과와 DB 장애 구분 | `make failure-db-down` |
+| Green readiness 실패 | 전환 전이므로 사용자 영향 없음 | `make deploy-green` | Green 로그 확인, upstream 전환 중단 | `make deploy-status` |
+| Nginx reload 실패 | 실제 트래픽과 상태 파일 drift 위험 | deploy script reload 실패 로그 | backup snippet과 active color 복구 | `make deploy-switch-green` |
+| 전환 후 smoke 실패 | 일부 요청 실패 가능 | `make deploy-smoke`, 5xx metric | `make deploy-rollback` 후 `make deploy-verify` | `make phase12-check` |
+| rollback 후 정합성 검증 실패 | 금융 정합성 사고 가능 | `verify-consistency.sql` | 추가 트래픽 중단, reconciliation 수행 | `make deploy-verify` |
 
 ### 성공 기준
 

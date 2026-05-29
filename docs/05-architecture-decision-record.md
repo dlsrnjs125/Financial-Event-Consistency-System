@@ -385,3 +385,63 @@
 
 - 설계 결론:
   - 이 프로젝트의 관측성은 서버가 살아 있는지 확인하는 수준을 넘어서, 금융 이벤트가 중복 없이 정확히 처리되고 있는지 확인하는 데 초점을 둔다.
+
+## ADR-011. CI/CD Gate: GitHub Actions
+
+- 선택한 기술:
+  - GitHub Actions
+  - `make final-check`
+  - `make security-log-check`
+  - PostgreSQL/Redis service container 기반 consistency/migration test
+
+- 고려한 대안:
+  - 로컬 수동 검증만 사용
+  - Jenkins
+  - 모든 k6 성능 테스트를 PR Gate에 포함
+
+- 선택 배경:
+  - 정합성 회귀는 main 병합 전에 차단되어야 한다.
+  - 그러나 PR마다 duplicate storm, peak load 같은 heavy k6 테스트를 실행하면 피드백이 느려지고 CI 비용이 커진다.
+  - 빠른 unit/consistency/migration/security/docker build Gate와 수동/릴리즈 전 heavy performance Gate를 분리하는 것이 적절했다.
+
+- 감수한 trade-off:
+  - PR Gate만으로 운영 부하 전체를 검증하지는 못한다.
+  - service container와 Docker Compose 로컬 환경은 완전히 동일하지 않다.
+
+- 보완 전략:
+  - PR에서는 빠른 consistency regression과 migration smoke를 실행한다.
+  - k6 heavy test는 `make k6-*`, `make phase10-redis-down-check` 같은 수동 명령으로 분리한다.
+  - `security-log-check`는 구조화 로그의 raw 민감 필드 노출을 막고, secret scan은 repository credential leak을 별도로 탐지한다.
+
+- 실제 검증:
+  - `lint`, `unit-tests`, `consistency-tests`, `migration-tests`, `security-log-check`, `secret-scan`, `docker-build`, `gate-check`를 CI Gate로 연결했다.
+
+## ADR-012. Blue-Green Deployment Simulation
+
+- 선택한 기술:
+  - Docker Compose profile
+  - Nginx upstream snippet 교체
+  - deployment smoke와 rollback script
+
+- 고려한 대안:
+  - Rolling deployment
+  - Canary deployment
+  - Kubernetes rollout
+
+- 선택 배경:
+  - 이 프로젝트의 목표는 운영 orchestrator 전체를 재현하는 것이 아니라, 배포 전 Green 검증과 실패 시 traffic rollback 절차를 명령으로 고정하는 것이다.
+  - Blue를 유지한 상태에서 Green `/health`, `/ready`, smoke, consistency 검증을 수행하고, 이상이 없을 때만 Nginx upstream을 전환한다.
+
+- 감수한 trade-off:
+  - Docker Compose 기반 시뮬레이션은 Kubernetes probe/rollout과 다르다.
+  - Green smoke는 실제 Ledger를 생성하므로 smoke 전용 계좌가 필요하다.
+  - DB schema rollback은 자동화하지 않는다.
+
+- 보완 전략:
+  - `nginx -t` 성공 후 reload한다.
+  - reload 실패 시 backup snippet과 active color를 복구한다.
+  - Green host port와 container port를 구분하고, Nginx 컨테이너 내부에서 `api-green:8000` 접근을 검증한다.
+  - rollback은 API traffic rollback으로 제한하고, migration은 backward-compatible 원칙으로 관리한다.
+
+- 실제 검증:
+  - `make phase12-check`로 Green 실행, Nginx 전환, Blue rollback, smoke, PostgreSQL duplicate verification을 연결했다.

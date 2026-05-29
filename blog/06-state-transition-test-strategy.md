@@ -161,6 +161,28 @@ jobs:
 
 ---
 
-## 다음 편에서
 
-7편에서는 k6로 실제 중복 이벤트 폭주 상황을 재현합니다.
+## 테스트를 설계 문서처럼 사용한 이유
+
+상태 전이는 문서로만 관리하면 코드와 쉽게 어긋난다. 그래서 상태 전이표에 있는 허용/금지 케이스를 unit test로 옮겼다.
+
+정상 경로만 테스트하면 부족했다. 실제 장애는 대부분 금지 전이에서 드러난다.
+
+```text
+COMPLETED -> PROCESSING
+FAILED -> COMPLETED
+SETTLED -> CANCELLED
+```
+
+이런 전이는 정상 UI나 정상 API 흐름에서는 잘 발생하지 않는다. 하지만 retry, duplicate event, cancel event, 복구 worker가 섞이면 실수로 호출될 수 있다.
+
+그래서 테스트 기준을 다음처럼 나눴다.
+
+- domain unit test: 상태 머신 순수 규칙 검증
+- service unit test: idempotency decision과 상태 변경 흐름 검증
+- integration test: API 응답과 DB 상태가 함께 맞는지 검증
+- consistency test: 중복 요청 후 Ledger와 event row가 중복되지 않는지 검증
+
+CI Gate에 상태 전이 테스트를 넣은 이유도 여기에 있다. 잘못된 상태 전이를 허용하는 코드는 배포 전에 실패해야 한다. 운영에서 invalid transition이 발생하면 `financial_invalid_state_transition_total` metric과 구조화 로그로 추적할 수 있게 했다.
+
+남은 한계는 분산 복구 worker다. 여러 worker가 같은 FAILED 이벤트를 동시에 claim하면 단순 상태 머신만으로는 부족하고, PostgreSQL의 조건부 update나 `FOR UPDATE SKIP LOCKED` 같은 claim 전략이 필요하다.

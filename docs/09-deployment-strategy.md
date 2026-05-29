@@ -132,6 +132,10 @@ make deploy-blue-green
 `nginx -t`가 실패하면 reload하지 않고 이전 snippet을 복구한다.
 `nginx reload`가 실패하는 경우에도 이전 snippet과 active color를 되돌려 실제 트래픽 상태와 표시 상태가 어긋나지 않도록 한다.
 
+`make deploy-smoke`는 실제 거래 이벤트를 생성한다.
+운영에 가까운 환경에서는 `SMOKE_ACCOUNT_NO`로 smoke 전용 계좌를 지정하고, smoke 데이터가 정산/분석 지표와 섞이지 않도록 분리한다.
+`RUN_MIGRATION_SMOKE=true`일 때 실행되는 `migration-smoke`는 migration을 새로 수행하는 명령이 아니라, 현재 적용된 schema와 unique constraint가 기대와 일치하는지 확인하는 검증 명령이다.
+
 ---
 
 ## 6. Rollback 조건

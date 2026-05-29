@@ -17,6 +17,15 @@
 현재 구현 범위의 trace는 `X-Trace-ID`/`X-Request-ID`와 구조화 로그를 연결하는 상관관계 추적이다.
 W3C `traceparent`/`tracestate` 전파와 OpenTelemetry SDK 기반 분산 추적은 아직 구현하지 않았으며, 후속 고도화 항목으로 둔다.
 
+## Phase 12 기준 관측성 정리
+
+- Prometheus는 집계 지표를 담당한다. HTTP latency/error, transaction event 처리 결과, idempotency decision, Redis fallback, HMAC failure, invalid state transition, readiness dependency status를 확인한다.
+- 구조화 로그는 요청 단위 분석을 담당한다. `trace_id`, `request_id`, `event_id`, masked `idempotency_key`, masked `account_no`, operation, dependency, fallback 여부를 함께 남긴다.
+- Grafana는 로컬 검증용 dashboard와 alert rule 초안이다. 운영 임계값은 장시간 운영 데이터와 exporter 보강 후 조정한다.
+- Prometheus label에는 `trace_id`, `request_id`, `event_id`, `idempotency_key` 같은 고유 식별자를 넣지 않는다. 고유값은 cardinality를 폭증시키므로 로그 추적에만 사용한다.
+- Redis lock 미획득은 장애가 아니라 중복 요청 방어 결과이므로 `rejected/lock_not_acquired`로 기록한다.
+- cache miss는 Redis failure가 아니다. Redis get 성공과 cache miss는 분리해 해석한다.
+
 ---
 
 ## 2. 일반 인프라 메트릭과 도메인 메트릭 구분

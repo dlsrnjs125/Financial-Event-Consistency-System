@@ -111,37 +111,23 @@ Blue-Green 배포로 문제 발생 시 즉시 원상복구
 
 ---
 
-## 포트폴리오 관점에서 강조할 포인트
+## 설계 과정에서 남은 기준
 
-### 1. 도메인 이해
-```
-"금융 이벤트 처리"라는 구체적인 문제를 깊이 있게 이해
-```
+### 1. 문제를 먼저 좁힌다
 
-### 2. 설계 판단의 명확성
-```
-"왜 Redis를 정합성 기준으로 두지 않았는가?"
-→ 트레이드오프 설명 가능
-```
+처음부터 모든 금융 시스템을 만들려고 하지 않았다. 외부 시스템 retry, timeout, 중복 이벤트, 잘못된 상태 전이처럼 정합성이 깨지는 입력을 먼저 정의했다.
 
-### 3. 테스트 전략
-```
-단위 테스트 + 통합 테스트 + 정합성 테스트 + 부하 테스트
-→ 다층 방어선 구성
-```
+### 2. 최종 기준을 하나로 둔다
 
-### 4. CI/CD 파이프라인
-```
-정합성 테스트를 배포 Gate로 설정
-→ 잘못된 코드가 배포되지 않음
-```
+Redis, metric, log는 모두 보조 수단이다. 중복 반영 여부는 PostgreSQL transaction, unique constraint, LedgerEntry 기준으로 판단했다.
 
-### 5. 모니터링 + 장애 재현
-```
-Prometheus/Grafana로 관측
-docker-compose로 실제 장애 재현
-→ 운영 관점의 고민이 드러남
-```
+### 3. 검증 명령을 남긴다
+
+설계 문서만으로는 부족했다. `make phase10-redis-down-check`, `make final-check`, `make phase12-check`처럼 같은 장애와 검증을 반복할 수 있는 명령을 남겼다.
+
+### 4. 배포와 rollback도 정합성 검증의 일부다
+
+배포는 새 컨테이너가 뜨는 것으로 끝나지 않는다. Green smoke, Nginx internal upstream 확인, rollback 후 `deploy-verify`까지 통과해야 배포 절차가 닫힌다.
 
 ---
 
@@ -182,6 +168,35 @@ docker-compose로 실제 장애 재현
 
 ---
 
+## AI 활용 및 검증 과정
+
+AI는 설계 초안, 테스트 시나리오 발굴, 코드 리뷰 체크리스트 작성에 보조 도구로 사용했다. 최종 반영 여부는 현재 코드 구조, 테스트 결과, 실제 재현 가능성 기준으로 판단했다.
+
+특히 다음 항목은 제안 내용을 그대로 받아들이지 않고, 코드와 명령으로 다시 확인한 뒤 반영했다.
+
+- Redis readiness policy를 PostgreSQL hard dependency와 Redis degraded dependency로 분리
+- `idempotency_key`, `account_no` raw logging 제거와 masking helper 적용
+- `security-log-check`와 secret scan 역할 분리
+- `final-check`를 non-mutating 검증 명령으로 정리
+- Nginx reload 실패 시 upstream backup restore 추가
+- Green host port와 container port를 구분하고 Nginx 내부 upstream을 `api-green:8000`으로 검증
+
+이 과정에서 AI는 누락된 장애 시나리오를 찾는 데 유용했지만, 실제 완료 기준은 `make final-check`, `make phase12-check`, k6/SQL 검증, 로그/메트릭 확인 결과였다.
+
+## 가장 크게 바뀐 설계 기준
+
+처음에는 Redis lock을 잘 사용하면 중복 요청 대부분을 앞단에서 막을 수 있다고 생각했다. 하지만 Redis Down duplicate storm을 재현하자 기준이 달라졌다. Redis는 성능 최적화 계층일 뿐이고, 정합성의 최종 기준은 PostgreSQL transaction과 unique constraint여야 했다.
+
+또 하나의 변화는 "성공한 배포"의 정의였다. 컨테이너가 뜨고 Nginx가 reload되면 배포가 끝났다고 볼 수 없다. Green 검증, Nginx 내부 upstream 확인, 전환 후 smoke, rollback 후 verify까지 통과해야 배포 절차가 안전하다고 볼 수 있다.
+
+이 프로젝트를 정리하면서 남은 기준은 다음과 같다.
+
+- 장애는 문서로만 정의하지 않고 명령으로 재현한다.
+- Redis 장애와 DB 장애는 readiness 정책에서 다르게 다룬다.
+- metric은 집계 관측용, 로그는 개별 요청 추적용으로 나눈다.
+- CI Gate는 빠른 회귀 차단에 집중하고, heavy performance test는 별도 Gate로 분리한다.
+- rollback은 DB를 되돌리는 것이 아니라 traffic을 안전한 버전으로 되돌리는 절차다.
+
 ## 저작권 및 라이선스
 
-이 프로젝트는 학습 목적의 포트폴리오 프로젝트입니다.
+이 프로젝트는 학습과 기술 검증을 목적으로 작성했다.

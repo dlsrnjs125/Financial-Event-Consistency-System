@@ -11,17 +11,19 @@
 성능 문제가 발생하면 다음 순서로 확인한다.
 
 ```text
-1. 에러율 확인
-2. p95/p99 latency 확인
-3. 특정 endpoint 문제인지 확인
-4. DB connection pool 확인
-5. DB transaction duration 확인
-6. Redis up/down 및 cache hit ratio 확인
-7. duplicate event 증가 여부 확인
-8. invalid state transition 증가 여부 확인
-9. 최근 배포 버전 확인
-10. 로그에서 trace_id 기준으로 요청 흐름 추적
+1. p95/p99 latency와 5xx error rate 확인
+2. 특정 endpoint 또는 배포 직후 문제인지 확인
+3. DB query/connection pool/transaction duration 확인
+4. Redis fallback, lock rejected, cache hit/miss 확인
+5. duplicate event와 invalid state transition 증가 여부 확인
+6. reconciliation failure 확인
+7. 최근 Blue-Green 전환 또는 rollback 여부 확인
+8. 구조화 로그에서 trace_id/request_id/event_id 기준으로 요청 흐름 추적
 ```
+
+Phase 9~10에서 확인한 기준은 다음과 같다.
+성능 지표가 튀더라도 중복 Ledger/Event가 0건이면 정합성은 유지된 것이다.
+반대로 p95가 안정적이어도 duplicate ledger가 1건이라도 발생하면 성능 테스트는 실패로 판단한다.
 
 ---
 

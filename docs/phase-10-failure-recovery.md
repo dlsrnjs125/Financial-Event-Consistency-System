@@ -7,6 +7,10 @@ Redis를 최종 정합성 저장소가 아니라 중복 요청 완화와 응답 
 
 목표는 장애 상황을 반복 재현하고, 장애 발생 중에도 동일 금융 이벤트와 동일 idempotency request가 중복 반영되지 않는지 검증 가능하게 만드는 것이다.
 
+Phase 12 기준 Docker Compose orchestration도 이 정책과 맞춘다.
+API 컨테이너는 PostgreSQL을 `service_healthy` hard dependency로 기다리지만, Redis는 `service_started`만 요구한다.
+Redis가 unhealthy여도 컨테이너 시작 자체를 막지 않고, 애플리케이션 `/ready`가 `mode="degraded"`로 상태를 노출한다.
+
 ## 2. 장애 시나리오
 
 ### 2.1 Redis Down
@@ -139,10 +143,10 @@ Redis는 빠른 lock/cache 계층이지만 장애, eviction, timeout, 재시작 
 | Scenario | Expected | Actual | Duplicate Ledger Count | 5xx Count | p95 | Result |
 |---|---|---|---:|---:|---:|---|
 | Redis Down duplicate storm | fallback 처리, 중복 Ledger 0건 | 5013 requests, 200/409 only, 5xx 0건 | 0 | 0 | 651.15ms | PASS |
-| Redis Timeout | fallback 처리, Redis timeout metric 기록 | TBD | TBD | TBD | TBD | TBD |
-| Duplicate Event Storm | replay/processing/conflict 응답, 중복 Ledger 0건 | TBD | TBD | TBD | TBD | TBD |
-| PostgreSQL Connection Failure | readiness 503, 거래 성공 처리 없음 | TBD | TBD | TBD | TBD | TBD |
-| API Restart During Processing | 재시도 시 idempotency/unique constraint로 방어 | TBD | TBD | TBD | TBD | TBD |
+| Redis Timeout | fallback 처리, Redis timeout metric 기록 | 별도 장시간 지연 주입 실험 필요 | - | - | - | TODO |
+| Duplicate Event Storm | replay/processing/conflict 응답, 중복 Ledger 0건 | Phase 9 duplicate storm에서 중복 0건 확인 | 0 | 0 | 70.57ms | PASS |
+| PostgreSQL Connection Failure | readiness 503, 거래 성공 처리 없음 | `make failure-db-down`으로 수동 재현 | - | - | - | MANUAL |
+| API Restart During Processing | 재시도 시 idempotency/unique constraint로 방어 | `make failure-api-restart`로 수동 재현 | - | - | - | MANUAL |
 
 2026-05-29 KST 로컬 Docker Compose 환경에서 `api-blue` 재시작 후 Redis를 중지하고 `grafana/k6` 컨테이너로 `tests/k6/redis_down_duplicate_storm.js`를 실행했다.
 결과는 5013 requests, p95 651.15ms, p99 2.28s, `server_error_rate` 0.00%, `unexpected_response_rate` 0.00%였고, PostgreSQL 검증에서 duplicated ledger/event count는 모두 0이었다.
