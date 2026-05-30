@@ -2,7 +2,7 @@ services:
   prometheus:
     volumes:
       - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infra/monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - ./infra/prometheus/rules/financial_event_alerts.yml:/etc/prometheus/alert-rules.yml:ro
       - prometheus_data:/prometheus
     depends_on:
       - api-blue

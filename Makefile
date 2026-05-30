@@ -54,6 +54,7 @@ help: ## Show this help message
 	@echo "  make ops2-demo         # Run Ops Phase 2 Blue-Green switch and rollback demo"
 	@echo "  make ops4-demo         # Run Ops Phase 4 PostgreSQL backup/restore DR drill"
 	@echo "  make ops5-demo         # Run Ops Phase 5 failure recovery runbook drill"
+	@echo "  make ops6-demo         # Run Ops Phase 6 alerting/runbook verification"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -245,6 +246,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/postgres_restore_drill.sh
 	bash -n scripts/postgres_dr_drill.sh
 	bash -n scripts/ops5_failure_recovery_drill.sh
+	bash -n scripts/ops6_alert_rule_validation.sh
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -262,6 +264,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/postgres_restore_drill.sh
 	test -x scripts/postgres_dr_drill.sh
 	test -x scripts/ops5_failure_recovery_drill.sh
+	test -x scripts/ops6_alert_rule_validation.sh
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -785,6 +788,46 @@ ops5-demo: docker-check ## Start stack, precheck, run full Ops Phase 5 drill, an
 	@$(MAKE) ops5-check
 	@$(MAKE) ops5-drill
 	@cat reports/ops/ops5-failure-recovery-drill.md
+
+# Ops Phase 6 Alerting & Incident Response Runbook
+.PHONY: ops6-up
+ops6-up: docker-check ## Start app and monitoring stack for Ops Phase 6 alert validation
+	$(DOCKER_COMPOSE_MONITORING) up --build -d
+	@echo "Ops Phase 6 monitoring stack is running."
+	@echo "Prometheus: http://localhost:9090"
+	@echo "Grafana:    http://localhost:3000"
+
+.PHONY: ops6-check
+ops6-check: docker-check ## Check Ops Phase 6 API, Prometheus, and Grafana readiness
+	@set -e; \
+	for url in "$(BASE_URL)/health" "$(INTERNAL_BASE_URL)/ready" "http://localhost:9090/-/ready" "http://localhost:3000/api/health"; do \
+		echo "Waiting for $$url"; \
+		i=0; \
+		until curl -fsS "$$url" >/dev/null 2>&1; do \
+			i=$$((i + 1)); \
+			if [ "$$i" -ge 30 ]; then \
+				echo "$$url did not become ready"; \
+				exit 1; \
+			fi; \
+			sleep 2; \
+		done; \
+	done
+	@echo "Ops Phase 6 readiness checks passed."
+
+.PHONY: ops6-alert-rules
+ops6-alert-rules: docker-check ## Validate Ops Phase 6 Prometheus alert rule syntax
+	@PROMETHEUS_API_CHECK=false ./scripts/ops6_alert_rule_validation.sh
+
+.PHONY: ops6-drill
+ops6-drill: docker-check ## Validate alert rules and Prometheus rule loading, then write Ops6 report
+	@PROMETHEUS_API_CHECK=true ./scripts/ops6_alert_rule_validation.sh
+
+.PHONY: ops6-demo
+ops6-demo: docker-check ## Start stack, validate alert rules, check rule loading, and print report
+	@$(MAKE) ops6-up
+	@$(MAKE) ops6-check
+	@$(MAKE) ops6-drill
+	@cat reports/ops/ops6-alerting-incident-runbook.md
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

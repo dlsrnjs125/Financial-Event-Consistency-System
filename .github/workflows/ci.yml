@@ -283,6 +283,30 @@ jobs:
           grep -q "| Idempotency violation count | 0 |" reports/ops/ops5-failure-recovery-drill.md
           grep -q "| Total drill duration seconds |" reports/ops/ops5-failure-recovery-drill.md
 
+  ops6-alerting-runbook-check:
+    runs-on: ubuntu-latest
+    name: Ops6 Alerting Runbook Check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Ops6 script syntax
+        run: |
+          bash -n scripts/ops6_alert_rule_validation.sh
+          test -x scripts/ops6_alert_rule_validation.sh
+
+      - name: Validate Ops6 alert rules and report
+        run: |
+          PROMETHEUS_API_CHECK=false ./scripts/ops6_alert_rule_validation.sh
+          test -f reports/ops/ops6-alerting-incident-runbook.md
+          grep -q "# Ops Phase 6 - Alerting & Incident Response Runbook" reports/ops/ops6-alerting-incident-runbook.md
+          grep -q "| Alert rule file exists | PASS |" reports/ops/ops6-alerting-incident-runbook.md
+          grep -q "| YAML parse | PASS |" reports/ops/ops6-alerting-incident-runbook.md
+          grep -q "| promtool check rules | PASS |" reports/ops/ops6-alerting-incident-runbook.md
+          grep -q "| Prometheus rule load check | SKIPPED |" reports/ops/ops6-alerting-incident-runbook.md
+          grep -q "FinancialApiDown" reports/ops/ops6-alerting-incident-runbook.md
+          grep -q "FinancialPostgresDown" reports/ops/ops6-alerting-incident-runbook.md
+          grep -q "FinancialReconciliationFailureDetected" reports/ops/ops6-alerting-incident-runbook.md
+
   gate-check:
     runs-on: ubuntu-latest
     name: Deployment Gate Summary
@@ -296,6 +320,7 @@ jobs:
       - docker-build
       - ops4-dr-drill
       - ops5-failure-recovery-drill
+      - ops6-alerting-runbook-check
     if: always()
     steps:
       - name: Summarize required deployment gates
@@ -322,6 +347,7 @@ jobs:
           check_gate "docker-build" "${{ needs.docker-build.result }}"
           check_gate "ops4-dr-drill" "${{ needs.ops4-dr-drill.result }}"
           check_gate "ops5-failure-recovery-drill" "${{ needs.ops5-failure-recovery-drill.result }}"
+          check_gate "ops6-alerting-runbook-check" "${{ needs.ops6-alerting-runbook-check.result }}"
 
           if [ "$failed" -ne 0 ]; then
             echo "One or more deployment gates failed"
