@@ -238,6 +238,25 @@ jobs:
       - name: Inspect Docker image
         run: docker image inspect financial-events:test >/dev/null
 
+  ops4-dr-drill:
+    runs-on: ubuntu-latest
+    name: Ops4 PostgreSQL DR Drill
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start DR database stack
+        run: docker compose up -d postgres postgres-restore
+
+      - name: Run Ops4 DR drill
+        run: make ops4-drill
+
+      - name: Verify DR report
+        run: |
+          test -f reports/dr/ops4-postgres-restore-drill.md
+          grep -q "DR Drill" reports/dr/ops4-postgres-restore-drill.md
+          grep -q "PASS" reports/dr/ops4-postgres-restore-drill.md
+          grep -q "sequence_position_lag_count=0" reports/dr/ops4-postgres-restore-drill.md
+
   gate-check:
     runs-on: ubuntu-latest
     name: Deployment Gate Summary
@@ -249,6 +268,7 @@ jobs:
       - security-log-check
       - secret-scan
       - docker-build
+      - ops4-dr-drill
     if: always()
     steps:
       - name: Summarize required deployment gates
@@ -273,6 +293,7 @@ jobs:
           check_gate "security-log-check" "${{ needs.security-log-check.result }}"
           check_gate "secret-scan" "${{ needs.secret-scan.result }}"
           check_gate "docker-build" "${{ needs.docker-build.result }}"
+          check_gate "ops4-dr-drill" "${{ needs.ops4-dr-drill.result }}"
 
           if [ "$failed" -ne 0 ]; then
             echo "One or more deployment gates failed"

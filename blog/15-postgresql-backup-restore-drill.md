@@ -94,15 +94,22 @@ report 작성까지 한 번에 실행하는 wrapper다.
 | ledger/account mismatch | 0 |
 | duplicated idempotency key | 0 |
 | account balance mismatch | 0 |
+| sequence position lag | 0 |
 
 특히 `completed_event_without_ledger_count`는 거래가 성공 상태인데 원장 반영이
 없는 경우를 잡는다. 반대로 `orphan_ledger_count`는 원장이 이벤트 없이 남은
 경우를 잡는다.
 
+`sequence_position_lag_count`는 restore 후 sequence가 `MAX(id)`보다 낮아
+복구 직후 첫 insert가 PK 충돌로 실패할 수 있는 상태를 잡는다.
+
 검증 SQL은 실제 row data를 출력하지 않는다.
 report에는 count와 PASS/FAIL만 남긴다.
 dump에는 계좌/거래 데이터가 들어갈 수 있기 때문에 `backups/postgres/*.dump`와
 `*.sha256`은 git에 커밋하지 않는다.
+
+DR Drill은 count가 0인지뿐 아니라, 필수 검증 항목이 모두 실행되었는지도 확인한다.
+또 restore duration과 전체 drill duration을 report에 남겨 RTO 기준도 확인한다.
 
 ## 6. 재현 명령
 
@@ -136,6 +143,8 @@ curated evidence report다.
 - backup retention policy
 - dump encryption
 - 대용량 restore time/RTO 측정 고도화
+- 초기 잔액 + ledger 누적합 기반의 전체 reconciliation
+- ledger chain 연속성 검증
 
 먼저 필요한 것은 복잡한 백업 플랫폼이 아니라,
 "백업이 실제로 복구되고 정합성까지 유지되는가"를 반복해서 확인할 수 있는

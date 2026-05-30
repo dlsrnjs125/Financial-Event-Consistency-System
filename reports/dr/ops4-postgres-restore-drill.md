@@ -19,6 +19,8 @@ checksum 파일은 실행 시 로컬에서 생성되며, 이 report에는 checks
 count-only 정합성 결과만 남긴다.
 `Backup 생성` 항목은 전체 DR Drill에서는 `PASS`, 기존 dump를 복원한
 restore-only 실행에서는 `EXISTING_DUMP`로 기록된다.
+DR Drill은 정합성 위반 count가 0인지뿐 아니라, 필수 검증 항목이 모두
+실행되었는지도 검증한다.
 
 ## 결과 요약
 
@@ -35,19 +37,34 @@ restore-only 실행에서는 `EXISTING_DUMP`로 기록된다.
 | Completed event without ledger | 0 |
 | Ledger account mismatch | 0 |
 | Duplicated idempotency key | 0 |
+| Sequence position lag | 0 |
 | Account balance consistency | PASS |
 | Restore duration seconds | 1 |
 | DR drill duration seconds | 2 |
 | DR Drill | PASS |
 
+## RTO Evidence
+
+| 항목 | 값 |
+|---|---:|
+| Restore started at | 2026-05-30T17:23:10Z |
+| Restore finished at | 2026-05-30T17:23:11Z |
+| Restore duration seconds | 1 |
+| DR drill duration seconds | 2 |
+| RTO target seconds | 600 |
+| RTO result | PASS |
+
 ## 복구 대상
 
 - Source DB: postgres / financial_events
 - Restore DB: postgres-restore / financial_events_restore
-- Backup file: `financial_events_20260530T194900.dump`
+- Backup file: `financial_events_20260531T022309.dump`
 - Backup size: `24K`
-- DR drill started at: `2026-05-30T10:49:00Z`
-- Restore started at: `2026-05-30T10:49:01Z`
+- DR drill started at: `2026-05-30T17:23:09Z`
+- Restore started at: `2026-05-30T17:23:10Z`
+
+로컬 포트폴리오 evidence에서는 재현성을 위해 dump 파일 basename만 기록한다.
+운영 환경에서는 파일명도 masking하거나 별도 backup id로 대체한다.
 
 ## 운영 원칙
 
@@ -66,6 +83,7 @@ duplicated_idempotency_key_count=0
 duplicated_ledger_event_count=0
 ledger_account_mismatch_count=0
 orphan_ledger_count=0
+sequence_position_lag_count=0
 ```
 
 ## 한계

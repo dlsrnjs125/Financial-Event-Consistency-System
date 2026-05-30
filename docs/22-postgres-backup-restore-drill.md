@@ -62,13 +62,20 @@ count만 반환한다.
 | ledger/account mismatch | 0 |
 | duplicated idempotency key | 0 |
 | account balance mismatch | 0 |
+| sequence position lag | 0 |
 
 `completed_event_without_ledger_count`는 `COMPLETED` 또는 `SETTLED` 상태의
 거래 이벤트가 ledger 없이 남는 경우를 잡는다.
 
+`sequence_position_lag_count`는 restore 후 sequence 값이 각 테이블의 `MAX(id)`보다
+낮아 신규 insert에서 PK 충돌이 날 수 있는 상태를 잡는다.
+
 `account.balance`는 ledger가 존재하는 계좌에 대해 최신
 `ledger_entries.balance_after`와 일치해야 한다.
 초기 seed balance처럼 ledger 생성 전 잔액은 ledger sum으로 역산하지 않는다.
+
+DR Drill은 count가 모두 0인지뿐 아니라, 위 필수 검증 항목이 결과에 모두
+포함되었는지도 확인한다.
 
 ## 6. 운영 DB에 직접 Restore하지 않는 이유
 
@@ -107,7 +114,25 @@ PR에 report를 포함할 때는 실제 증거로 남길 실행 결과인지 확
 `Backup 생성` 항목은 전체 DR Drill에서는 `PASS`, 기존 dump를 복원한
 restore-only 실행에서는 `EXISTING_DUMP`로 기록된다.
 
-## 9. 명령
+로컬 포트폴리오 evidence에서는 재현성을 위해 dump 파일 basename만 기록한다.
+운영 환경에서는 파일명도 masking하거나 별도 backup id로 대체한다.
+
+## 9. RTO Evidence
+
+report는 restore 시작/종료 시각, restore duration, 전체 DR drill duration,
+RTO target을 기록한다.
+
+기본 RTO target은 600초이며 `RTO_TARGET_SECONDS` 환경변수로 조정할 수 있다.
+restore duration이 target을 초과하면 DR Drill은 실패한다.
+
+## 10. CI Gate
+
+PR Gate는 lightweight Ops Phase 4 DR Drill job을 실행한다.
+이 job은 Docker Compose로 `postgres`, `postgres-restore`를 실행한 뒤
+`make ops4-drill`을 호출해 backup, checksum, restore, consistency SQL,
+report 생성을 검증한다.
+
+## 11. 명령
 
 ```bash
 make ops4-up
@@ -121,7 +146,7 @@ make ops4-demo
 `make ops4-restore`는 `DUMP_FILE`이 없으면 `backups/postgres/*.dump` 중
 최신 파일을 사용한다.
 
-## 10. 이번 Phase 제외 범위
+## 12. 이번 Phase 제외 범위
 
 PITR/WAL archiving은 이번 Phase에서 제외한다.
 로컬 Docker Compose DR Drill의 목표는 논리 백업의 복구 가능성과 정합성 검증을
@@ -131,7 +156,12 @@ PITR/WAL archiving은 이번 Phase에서 제외한다.
 WAL archive 기반 특정 시점 복구는 운영 환경별 스토리지와 보안 정책이 필요하므로
 후속 고도화 범위로 남긴다.
 
-## 11. 향후 확장 계획
+현재 account balance 검증은 최신 `ledger_entries.balance_after`와
+`accounts.balance`의 일치 여부를 확인한다.
+초기 잔액 + ledger 누적합 기반의 전체 reconciliation과 ledger chain 검증은
+후속 Phase에서 보완한다.
+
+## 13. 향후 확장 계획
 
 - S3/Object Storage 업로드와 immutable backup bucket 적용
 - backup retention policy와 lifecycle rule

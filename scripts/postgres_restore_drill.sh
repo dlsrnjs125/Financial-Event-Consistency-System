@@ -11,6 +11,18 @@ BACKUP_CREATED_IN_THIS_RUN="${BACKUP_CREATED_IN_THIS_RUN:-false}"
 REPORT_FILE="${DR_REPORT_FILE:-${ROOT_DIR}/reports/dr/ops4-postgres-restore-drill.md}"
 CONSISTENCY_SQL="${CONSISTENCY_SQL:-${ROOT_DIR}/scripts/sql/dr_consistency_check.sql}"
 COMPOSE_CMD="${DOCKER_COMPOSE:-docker compose}"
+RTO_TARGET_SECONDS="${RTO_TARGET_SECONDS:-600}"
+
+required_checks=(
+    duplicated_external_event_count
+    duplicated_ledger_event_count
+    orphan_ledger_count
+    completed_event_without_ledger_count
+    ledger_account_mismatch_count
+    duplicated_idempotency_key_count
+    account_balance_mismatch_count
+    sequence_position_lag_count
+)
 
 run_compose() {
     ${COMPOSE_CMD} "$@"
@@ -132,8 +144,19 @@ check_output="$(
 )"
 
 restore_end_epoch="$(date +%s)"
+restore_finished_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 restore_duration_seconds="$((restore_end_epoch - restore_start_epoch))"
 dr_drill_duration_seconds="$((restore_end_epoch - dr_drill_start_epoch))"
+
+for required_check in "${required_checks[@]}"; do
+    if ! printf '%s\n' "$check_output" | awk -F= -v key="$required_check" '
+        $1 == key { found = 1 }
+        END { exit !found }
+    '; then
+        echo "Missing required DR check: ${required_check}" >&2
+        exit 1
+    fi
+done
 
 dr_status="PASS"
 while IFS='=' read -r check_name check_value; do
@@ -162,10 +185,17 @@ completed_event_without_ledger_count="$(printf '%s\n' "$check_output" | awk -F= 
 account_balance_mismatch_count="$(printf '%s\n' "$check_output" | awk -F= '$1=="account_balance_mismatch_count"{print $2}')"
 ledger_account_mismatch_count="$(printf '%s\n' "$check_output" | awk -F= '$1=="ledger_account_mismatch_count"{print $2}')"
 duplicated_idempotency_key_count="$(printf '%s\n' "$check_output" | awk -F= '$1=="duplicated_idempotency_key_count"{print $2}')"
+sequence_position_lag_count="$(printf '%s\n' "$check_output" | awk -F= '$1=="sequence_position_lag_count"{print $2}')"
 
 account_balance_result="PASS"
 if [ "${account_balance_mismatch_count:-1}" != "0" ]; then
     account_balance_result="FAIL"
+fi
+
+rto_result="PASS"
+if [ "$restore_duration_seconds" -gt "$RTO_TARGET_SECONDS" ]; then
+    rto_result="FAIL"
+    dr_status="FAIL"
 fi
 
 cat > "$REPORT_FILE" <<EOF
@@ -190,6 +220,8 @@ checksum 파일은 실행 시 로컬에서 생성되며, 이 report에는 checks
 count-only 정합성 결과만 남긴다.
 \`Backup 생성\` 항목은 전체 DR Drill에서는 \`PASS\`, 기존 dump를 복원한
 restore-only 실행에서는 \`EXISTING_DUMP\`로 기록된다.
+DR Drill은 정합성 위반 count가 0인지뿐 아니라, 필수 검증 항목이 모두
+실행되었는지도 검증한다.
 
 ## 결과 요약
 
@@ -206,10 +238,22 @@ restore-only 실행에서는 \`EXISTING_DUMP\`로 기록된다.
 | Completed event without ledger | ${completed_event_without_ledger_count:-N/A} |
 | Ledger account mismatch | ${ledger_account_mismatch_count:-N/A} |
 | Duplicated idempotency key | ${duplicated_idempotency_key_count:-N/A} |
+| Sequence position lag | ${sequence_position_lag_count:-N/A} |
 | Account balance consistency | ${account_balance_result} |
 | Restore duration seconds | ${restore_duration_seconds} |
 | DR drill duration seconds | ${dr_drill_duration_seconds} |
 | DR Drill | ${dr_status} |
+
+## RTO Evidence
+
+| 항목 | 값 |
+|---|---:|
+| Restore started at | ${restore_started_at} |
+| Restore finished at | ${restore_finished_at} |
+| Restore duration seconds | ${restore_duration_seconds} |
+| DR drill duration seconds | ${dr_drill_duration_seconds} |
+| RTO target seconds | ${RTO_TARGET_SECONDS} |
+| RTO result | ${rto_result} |
 
 ## 복구 대상
 
@@ -219,6 +263,9 @@ restore-only 실행에서는 \`EXISTING_DUMP\`로 기록된다.
 - Backup size: \`${backup_size}\`
 - DR drill started at: \`${dr_drill_started_at}\`
 - Restore started at: \`${restore_started_at}\`
+
+로컬 포트폴리오 evidence에서는 재현성을 위해 dump 파일 basename만 기록한다.
+운영 환경에서는 파일명도 masking하거나 별도 backup id로 대체한다.
 
 ## 운영 원칙
 
@@ -256,6 +303,8 @@ echo "duplicated_ledger_event_count=${duplicated_ledger_event_count:-N/A}"
 echo "orphan_ledger_count=${orphan_ledger_count:-N/A}"
 echo "completed_event_without_ledger_count=${completed_event_without_ledger_count:-N/A}"
 echo "account_balance_mismatch_count=${account_balance_mismatch_count:-N/A}"
+echo "sequence_position_lag_count=${sequence_position_lag_count:-N/A}"
 echo "restore_duration_seconds=${restore_duration_seconds}"
 echo "dr_drill_duration_seconds=${dr_drill_duration_seconds}"
+echo "rto_result=${rto_result}"
 echo "report_file=${REPORT_FILE}"

@@ -189,6 +189,8 @@ README와 blog에는 대표 수치와 캡처만 요약한다.
 ### Ops Phase 4. PostgreSQL Backup / Restore DR Drill
 
 PostgreSQL 백업 파일을 생성하는 것에 그치지 않고, 별도 `postgres-restore` DB에 복원한 뒤 ledger/event/account/idempotency 정합성 검증 SQL을 실행한다.
+DR Drill은 정합성 위반 count가 0인지뿐 아니라, 필수 검증 항목이 모두 실행되었는지도 검증한다.
+복원 성공은 테이블 존재만으로 판단하지 않고, 복구 후 신규 이벤트를 정상 insert할 수 있도록 sequence position까지 확인한다.
 
 ```bash
 make ops4-demo
@@ -199,6 +201,9 @@ make ops4-demo
 - `reports/dr/ops4-postgres-restore-drill.md`
 - `docs/22-postgres-backup-restore-drill.md`
 - `blog/15-postgresql-backup-restore-drill.md`
+
+로컬 evidence report에는 재현성을 위해 dump 파일 basename만 기록한다.
+운영 환경에서는 파일명도 masking하거나 별도 backup id로 대체한다.
 
 HMAC Header 예시:
 
