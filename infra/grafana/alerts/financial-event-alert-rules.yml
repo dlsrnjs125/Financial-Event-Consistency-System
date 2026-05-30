@@ -65,13 +65,13 @@ groups:
           description: "A forbidden transaction state transition was rejected."
 
       - alert: ReconciliationFailureDetected
-        expr: financial_reconciliation_failures_total > 0
+        expr: increase(financial_reconciliation_failures_total[5m]) > 0
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "Reconciliation failure detected"
-          description: "Ledger and account balance reconciliation failure metric is non-zero."
+          description: "A ledger and account balance reconciliation failure was observed in the last 5 minutes."
 
       - alert: DuplicateProcessingDetected
         expr: sum(rate(financial_duplicate_external_event_total[5m])) > 0
