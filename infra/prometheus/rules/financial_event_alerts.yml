@@ -54,7 +54,8 @@ groups:
 
       - alert: FinancialRedisDown
         expr: |
-          redis_up == 0
+          up{job="redis-exporter"} == 0
+          or redis_up == 0
           or financial_readiness_dependency_status{dependency="redis"} == 0
         for: 1m
         labels:
@@ -100,7 +101,7 @@ groups:
           action: "Identify the event flow from logs, verify no ledger duplication occurred, and run consistency checks."
 
       - alert: FinancialReconciliationFailureDetected
-        expr: financial_reconciliation_failures_total > 0
+        expr: increase(financial_reconciliation_failures_total[5m]) > 0
         for: 1m
         labels:
           severity: critical
@@ -109,6 +110,6 @@ groups:
           runbook: docs/24-alerting-incident-response-runbook.md
         annotations:
           summary: "Ledger/account reconciliation failure was detected"
-          description: "A reconciliation failure metric is non-zero."
+          description: "A reconciliation failure was observed in the last 5 minutes."
           impact: "This is a critical financial consistency signal and is more severe than ordinary availability degradation."
           action: "Pause risky traffic, preserve evidence, run consistency SQL, and start the consistency incident runbook."

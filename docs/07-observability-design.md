@@ -302,11 +302,11 @@ Prometheus에서는 API가 노출하는 `financial_http_errors_total`, `financia
 |-------|------|--------|
 | APIHighErrorRate | 5xx rate > 5% for 3m | Critical |
 | APILatencyHigh | p95 > 1s for 5m | Warning |
-| RedisDown | redis_up == 0 for 1m | Critical |
+| RedisDown | up{job="redis-exporter"} == 0 or redis_up == 0 for 1m | Warning |
 | DBConnectionPoolHigh | pool usage > 85% for 5m | Warning |
 | InvalidStateTransitionDetected | invalid transition > 0 | Critical |
 | IdempotencyConflictSpike | conflict > 10/min | Warning |
-| ReconciliationFailed | reconciliation_failed_total > 0 | Critical |
+| ReconciliationFailed | increase(financial_reconciliation_failures_total[5m]) > 0 | Critical |
 | DuplicateEventSpike | duplicate event rate > 30% for 5m | Warning |
 | DBTransactionSlow | transaction p95 > 500ms for 5m | Warning |
 

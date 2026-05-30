@@ -26,6 +26,7 @@ DOCKER_COMPOSE ?= docker compose
 DOCKER_COMPOSE_PERF ?= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.perf.yml
 DOCKER_COMPOSE_MONITORING ?= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.monitoring.yml
 K6 ?= k6
+PROMTOOL_IMAGE ?= prom/prometheus:v2.54.1
 
 # Paths
 BACKEND_DIR ?= backend
@@ -318,7 +319,10 @@ grafana-check: ## Verify Grafana provisioning files and dashboard JSON
 
 .PHONY: prometheus-config-check
 prometheus-config-check: docker-check ## Verify Prometheus config and alert rule syntax with promtool
-	$(DOCKER) run --rm --entrypoint promtool -v "$(PWD)/infra/monitoring/prometheus:/etc/prometheus:ro" prom/prometheus:latest check config /etc/prometheus/prometheus.yml
+	$(DOCKER) run --rm --entrypoint promtool \
+		-v "$(PWD)/infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+		-v "$(PWD)/infra/prometheus/rules/financial_event_alerts.yml:/etc/prometheus/alert-rules.yml:ro" \
+		$(PROMTOOL_IMAGE) check config /etc/prometheus/prometheus.yml
 
 .PHONY: ops1-compose-status
 ops1-compose-status: docker-check ## Write Docker Compose status evidence report
@@ -816,11 +820,11 @@ ops6-check: docker-check ## Check Ops Phase 6 API, Prometheus, and Grafana readi
 
 .PHONY: ops6-alert-rules
 ops6-alert-rules: docker-check ## Validate Ops Phase 6 Prometheus alert rule syntax
-	@PROMETHEUS_API_CHECK=false ./scripts/ops6_alert_rule_validation.sh
+	@PROMTOOL_IMAGE=$(PROMTOOL_IMAGE) PROMETHEUS_API_CHECK=false ./scripts/ops6_alert_rule_validation.sh
 
 .PHONY: ops6-drill
 ops6-drill: docker-check ## Validate alert rules and Prometheus rule loading, then write Ops6 report
-	@PROMETHEUS_API_CHECK=true ./scripts/ops6_alert_rule_validation.sh
+	@PROMTOOL_IMAGE=$(PROMTOOL_IMAGE) PROMETHEUS_API_CHECK=true ./scripts/ops6_alert_rule_validation.sh
 
 .PHONY: ops6-demo
 ops6-demo: docker-check ## Start stack, validate alert rules, check rule loading, and print report
