@@ -9,6 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "financial-event-api"
     app_env: str = "local"
+    deployment_color: str = "local"
+    instance_id: str = "local"
     debug: bool = False
     api_prefix: str = "/api/v1"
     database_url: str = "postgresql://postgres:password@localhost:5432/financial_events"

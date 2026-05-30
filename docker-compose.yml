@@ -55,6 +55,8 @@ services:
       IDEMPOTENCY_CACHE_ENABLED: ${IDEMPOTENCY_CACHE_ENABLED:-true}
       APP_NAME: financial-event-api
       APP_ENV: development
+      DEPLOYMENT_COLOR: blue
+      INSTANCE_ID: api-blue
       DEBUG: "true"
       API_PREFIX: /api/v1
       METRICS_ENABLED: "true"
@@ -94,6 +96,8 @@ services:
       IDEMPOTENCY_CACHE_ENABLED: ${IDEMPOTENCY_CACHE_ENABLED:-true}
       APP_NAME: financial-event-api
       APP_ENV: development
+      DEPLOYMENT_COLOR: green
+      INSTANCE_ID: api-green
       DEBUG: "true"
       API_PREFIX: /api/v1
       METRICS_ENABLED: "true"
