@@ -39,18 +39,18 @@ DR Drill은 정합성 위반 count가 0인지뿐 아니라, 필수 검증 항목
 | Duplicated idempotency key | 0 |
 | Sequence position lag | 0 |
 | Account balance consistency | PASS |
-| Restore duration seconds | 1 |
-| DR drill duration seconds | 2 |
+| Restore duration seconds | 2 |
+| DR drill duration seconds | 3 |
 | DR Drill | PASS |
 
 ## RTO Evidence
 
 | 항목 | 값 |
 |---|---:|
-| Restore started at | 2026-05-30T17:23:10Z |
-| Restore finished at | 2026-05-30T17:23:11Z |
-| Restore duration seconds | 1 |
-| DR drill duration seconds | 2 |
+| Restore started at | 2026-05-30T17:36:51Z |
+| Restore finished at | 2026-05-30T17:36:53Z |
+| Restore duration seconds | 2 |
+| DR drill duration seconds | 3 |
 | RTO target seconds | 600 |
 | RTO result | PASS |
 
@@ -58,10 +58,10 @@ DR Drill은 정합성 위반 count가 0인지뿐 아니라, 필수 검증 항목
 
 - Source DB: postgres / financial_events
 - Restore DB: postgres-restore / financial_events_restore
-- Backup file: `financial_events_20260531T022309.dump`
+- Backup file: `financial_events_20260531T023650.dump`
 - Backup size: `24K`
-- DR drill started at: `2026-05-30T17:23:09Z`
-- Restore started at: `2026-05-30T17:23:10Z`
+- DR drill started at: `2026-05-30T17:36:50Z`
+- Restore started at: `2026-05-30T17:36:51Z`
 
 로컬 포트폴리오 evidence에서는 재현성을 위해 dump 파일 basename만 기록한다.
 운영 환경에서는 파일명도 masking하거나 별도 backup id로 대체한다.

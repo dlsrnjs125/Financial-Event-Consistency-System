@@ -37,6 +37,11 @@ postgres/financial_events
   -> reports/dr/ops4-postgres-restore-drill.md
 ```
 
+![make ops4-demo 실행 결과](../docs/images/ops4-01-demo-pass.png)
+
+`make ops4-demo` 실행 결과. 백업 생성, checksum 검증, restore DB 복원,
+정합성 SQL 실행, DR report 생성까지 한 번에 검증했다.
+
 ## 3. 운영 DB에 복원하지 않는다
 
 가장 중요한 원칙은 단순하다.
@@ -111,6 +116,12 @@ dump에는 계좌/거래 데이터가 들어갈 수 있기 때문에 `backups/po
 DR Drill은 count가 0인지뿐 아니라, 필수 검증 항목이 모두 실행되었는지도 확인한다.
 또 restore duration과 전체 drill duration을 report에 남겨 RTO 기준도 확인한다.
 
+![DR Drill report 결과 요약](../docs/images/ops4-02-dr-report-summary.png)
+
+DR Drill report에는 백업/복원 성공 여부뿐 아니라 이벤트 중복, 원장 중복,
+orphan ledger, 완료 이벤트의 원장 누락, 계좌-원장 불일치, idempotency key 중복,
+sequence position lag까지 count-only evidence로 남겼다.
+
 ## 6. 재현 명령
 
 전체 흐름은 한 명령으로 재현한다.
@@ -133,7 +144,29 @@ make ops4-drill
 이 report는 template이 아니라 로컬 Docker Compose 환경에서 실행한
 curated evidence report다.
 
-## 7. 이번 단계에서 일부러 하지 않은 것
+## 7. RTO 목표를 report에 남긴 이유
+
+DR Drill은 복구 가능성뿐 아니라 복구 시간을 함께 봐야 한다.
+그래서 report에는 restore started/finished, restore duration,
+전체 DR drill duration, RTO target, RTO result를 남긴다.
+
+![RTO evidence](../docs/images/ops4-03-rto-evidence.png)
+
+RTO evidence. restore duration과 전체 DR drill duration을 기록하고,
+목표 시간인 600초 이내 복구 여부를 PASS/FAIL로 판정했다.
+
+## 8. GitHub Actions 배포 Gate에 DR Drill 포함하기
+
+로컬에서 `make ops4-demo`가 성공하는 것만으로는 PR Gate가 되지 않는다.
+그래서 GitHub Actions에 `Ops4 PostgreSQL DR Drill` job을 추가하고,
+`postgres`, `postgres-restore`를 올린 뒤 `make ops4-drill`을 실행하도록 했다.
+
+![GitHub Actions Ops4 DR Drill Gate](../docs/images/ops4-04-github-actions-dr-gate.png)
+
+GitHub Actions에서 Ops4 DR Drill을 배포 Gate로 실행한 결과.
+PostgreSQL 복구 훈련이 PR 병합 전 자동 검증되도록 구성했다.
+
+## 9. 이번 단계에서 일부러 하지 않은 것
 
 이번 Phase는 로컬 Docker Compose 기반 논리 백업 복구 훈련이다.
 그래서 다음은 후속 고도화 범위로 남겼다.

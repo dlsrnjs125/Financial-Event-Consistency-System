@@ -253,8 +253,9 @@ jobs:
       - name: Verify DR report
         run: |
           test -f reports/dr/ops4-postgres-restore-drill.md
-          grep -q "DR Drill" reports/dr/ops4-postgres-restore-drill.md
-          grep -q "PASS" reports/dr/ops4-postgres-restore-drill.md
+          grep -q "| DR Drill | PASS |" reports/dr/ops4-postgres-restore-drill.md
+          grep -q "| RTO result | PASS |" reports/dr/ops4-postgres-restore-drill.md
+          grep -q "| Sequence position lag | 0 |" reports/dr/ops4-postgres-restore-drill.md
           grep -q "sequence_position_lag_count=0" reports/dr/ops4-postgres-restore-drill.md
 
   gate-check:
