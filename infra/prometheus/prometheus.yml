@@ -23,5 +23,5 @@ scrape_configs:
   - job_name: 'api-server'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['api-blue:8000']
+      - targets: ['nginx:8081']
     scrape_interval: 5s

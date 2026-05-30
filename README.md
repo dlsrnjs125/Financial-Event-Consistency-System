@@ -218,7 +218,7 @@ financial_reconciliation_failures_total
 
 Grafana dashboard와 alert rule은 로컬 검증용 초안이다.
 Phase 9/10에서 k6 측정값과 Redis fallback 결과를 기록했지만, 운영 임계값은 장시간 운영 데이터와 exporter 보강 후 조정한다.
-`docker compose up -d` 실행 후 `http://localhost:8000/metrics`에서 API metric을 확인하고,
+`docker compose up -d` 실행 후 `http://localhost:8081/metrics`에서 internal Nginx 경유 API metric을 확인하고,
 `http://localhost:9090`에서 Prometheus target 상태를 확인하며,
 `http://localhost:3000`에서 Grafana dashboard 초안을 확인할 수 있다.
 
@@ -260,6 +260,20 @@ make ops2-demo-full
 ```
 
 상세 절차는 [Deployment Strategy](./docs/09-deployment-strategy.md)와 [blog 11편](./blog/11-blue-green-rollback-simulation.md)에 정리한다.
+
+### Ops Phase 3. Nginx Access Control
+
+Public Nginx는 allowlist 방식으로 `GET /health`와 `POST /api/v1/transaction-events`만 허용한다. `/metrics`, `/ready`, `/docs`, `/redoc`, `/openapi.json`은 차단하고, internal Nginx 경로에서만 운영 진단 endpoint를 허용한다.
+
+```bash
+make ops3-demo
+```
+
+대표 증거:
+
+- `reports/security/ops3-nginx-access-control.md`
+
+상세 정책은 [Nginx Access Control](./docs/21-nginx-access-control.md)과 [blog 14편](./blog/14-nginx-as-financial-ops-gateway.md)에 정리한다.
 
 ---
 
@@ -741,11 +755,11 @@ http://localhost:9090
 로컬 확인 기준:
 
 1. `docker compose up -d`
-2. `http://localhost:8000/metrics`에서 `financial_*` metric 확인
+2. `http://localhost:8081/metrics`에서 internal Nginx 경유 `financial_*` metric 확인
 3. `http://localhost:9090/targets`에서 `api-server` target UP 확인
 4. `http://localhost:3000`에서 `Financial Event Consistency System` dashboard 확인
 
-현재 Prometheus scrape 대상은 Prometheus 자체와 FastAPI `api-server` 중심이다.
+현재 Prometheus scrape 대상은 Prometheus 자체와 internal Nginx `nginx:8081/metrics` 경유 FastAPI metric이다.
 Nginx active upstream과 Blue/Green 컨테이너 상태는 `make deploy-status`와 Docker Compose 상태로 확인한다.
 `api-green`, Redis exporter, PostgreSQL exporter scrape는 Phase 12 이후 운영 관측 보강 항목이다.
 
@@ -819,7 +833,7 @@ make local-status
 docker compose restart redis
 
 # 검증: 정합성은 유지되는가?
-curl http://localhost:8000/metrics | grep financial_duplicate_external_event_total
+curl http://localhost:8081/metrics | grep financial_redis_fallback_total
 ```
 
 ### PostgreSQL 연결 문제

@@ -31,7 +31,8 @@ cat <<EOF
 
 Endpoint checks:
   Nginx health: curl -i ${BASE_URL}/health
-  Nginx ready:  curl -i ${BASE_URL}/ready
+  Public ready:  curl -i ${BASE_URL}/ready
+  Internal ready: curl -i ${INTERNAL_BASE_URL}/ready
   Blue health:  curl -i ${BLUE_URL}/health
   Blue ready:   curl -i ${BLUE_URL}/ready
   Green health: curl -i ${GREEN_URL}/health
@@ -43,9 +44,14 @@ Observability:
   Logs:       docker compose logs -f ${NGINX_SERVICE} ${BLUE_SERVICE} ${GREEN_SERVICE}
 EOF
 
-curl -fsS "${BASE_URL}/health" >/dev/null 2>&1 && echo "Nginx /health: ok" || echo "Nginx /health: unavailable"
+curl -fsS "${BASE_URL}/health" >/dev/null 2>&1 && echo "Public Nginx /health: ok" || echo "Public Nginx /health: unavailable"
 if curl -fsS "${BASE_URL}/ready" >/dev/null 2>&1; then
-  echo "Nginx /ready: ok"
+  echo "Public Nginx /ready: exposed"
 else
-  echo "Nginx /ready: unavailable"
+  echo "Public Nginx /ready: blocked"
+fi
+if curl -fsS "${INTERNAL_BASE_URL}/ready" >/dev/null 2>&1; then
+  echo "Internal Nginx /ready: ok"
+else
+  echo "Internal Nginx /ready: unavailable"
 fi

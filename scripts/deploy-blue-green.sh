@@ -55,12 +55,12 @@ switch_to_green() {
     return 1
   fi
 
-  if ! verify_ready_body "${BASE_URL}/ready" "Nginx routed"; then
+  if ! verify_ready_body "${INTERNAL_BASE_URL}/ready" "Nginx routed internal"; then
     handle_post_switch_failure
     return 1
   fi
 
-  if ! run_deployment_smoke "${BASE_URL}"; then
+  if ! run_deployment_smoke "${BASE_URL}" "${INTERNAL_BASE_URL}"; then
     handle_post_switch_failure
     return 1
   fi
@@ -103,7 +103,7 @@ EOF
 deploy() {
   log "Starting Phase 12 Blue-Green deployment simulation"
   log "Deployment id: ${DEPLOYMENT_ID}"
-  log "Base URL: ${BASE_URL}; Green URL: ${GREEN_URL}"
+  log "Base URL: ${BASE_URL}; Internal URL: ${INTERNAL_BASE_URL}; Green URL: ${GREEN_URL}"
   ensure_base_stack
   start_green
   verify_green_before_switch

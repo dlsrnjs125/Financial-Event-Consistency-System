@@ -127,6 +127,7 @@ Prometheus label에는 다음 값을 넣지 않는다.
 로컬 확인 편의를 위해 Prometheus/Grafana는 `127.0.0.1`에 노출한다.
 PostgreSQL/Redis exporter는 host port를 열지 않고 Docker 내부 network에서만 수집한다.
 node-exporter와 cAdvisor도 host 접근은 `127.0.0.1`로 제한한다.
+Ops Phase 3 이후 local host binding은 internal Nginx가 `127.0.0.1:8081`을 사용하므로 cAdvisor는 `127.0.0.1:8082`로 확인한다.
 
 cAdvisor는 로컬 Docker container metric 수집을 위해 host filesystem과 Docker runtime 정보를 read-only로 참조한다.
 이 구성은 로컬 운영 실습용이며, 운영 환경에서는 접근 권한, 네트워크 노출, 수집 범위를 별도로 제한해야 한다.
@@ -167,8 +168,8 @@ Nginx:
 - `rate_limit_rejected_total`
 
 Nginx 지표는 이번 Ops Phase 1에서 dashboard TODO로 남긴다.
-Nginx exporter는 `stub_status` 노출과 `/metrics` 내부 접근 제어가 함께 필요하므로
-Ops Phase 2에서 접근 제어와 rate limit 정책을 다룰 때 연결한다.
+Ops Phase 3에서 `/metrics`, `/ready`, `stub_status`의 public/internal 경계를 먼저 분리했다.
+nginx-prometheus-exporter 연동은 internal `nginx_status`만 사용하도록 후속 작업에서 연결한다.
 
 Container/Host:
 

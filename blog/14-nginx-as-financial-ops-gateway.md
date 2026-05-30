@@ -1,86 +1,104 @@
-# 14편. Nginx를 금융 이벤트 시스템의 운영 관문으로 설계하기
+# 14편. Nginx Access Control: 운영 endpoint를 public API와 분리하기
 
-## 1. 문제를 어떻게 정의했는가
+## 1. 이번 단계에서 추가한 것은 기능이 아니다
 
-Phase 12까지 Nginx는 Blue-Green traffic switch 역할을 했다.
-하지만 금융 이벤트 시스템에서 Nginx는 단순 reverse proxy보다 더 큰 의미를 가진다.
+이번 단계의 핵심은 API 기능을 추가한 것이 아니라, 운영 endpoint의 노출 범위를 분리한 것이다.
 
-외부 금융사 요청과 내부 운영자 요청이 같은 통로로 들어오면,
-운영 편의성은 높아질 수 있지만 보안과 장애 대응 기준은 흐려진다.
+`/health`는 단순 생존 확인이지만 `/ready`와 `/metrics`는 내부 dependency와 서비스 상태를 노출할 수 있으므로 public Nginx에서는 차단하고 internal 경로에서만 접근하도록 구성했다.
 
-그래서 Nginx를 첫 번째 운영 통제 지점으로 정의했다.
+금융 이벤트 시스템에서 외부에 열어야 하는 것은 거래 이벤트 수신 API다. 운영자가 장애 분석에 쓰는 endpoint까지 같은 public 경로로 열 필요는 없다.
 
 ```text
-외부 금융사 -> public endpoint -> transaction event API
-운영자/VPN -> internal endpoint -> ready/metrics/admin
-Prometheus -> internal network -> metrics
+외부 금융사 -> public Nginx 8080 -> /health, /api/v1/transaction-events
+운영자/Prometheus -> internal Nginx 8081 -> /health, /ready, /metrics
 ```
 
-## 2. 외부 API와 내부 API를 나누는 이유
+## 2. `/metrics`를 public으로 열지 않는 이유
 
-`POST /api/v1/transaction-events`는 외부 금융사가 호출하는 endpoint다. HMAC, timestamp, idempotency key, rate limit이 중요하다.
+Prometheus metric은 단순 숫자처럼 보이지만 시스템 구조를 많이 알려준다.
 
-반대로 `/metrics`, `/ready`, `/admin/reconciliation`은 운영자가 시스템 상태를 확인하기 위한 endpoint다.
-이 endpoint를 외부에 그대로 열면 내부 상태, metric 이름, 장애 정보를 노출할 수 있다.
+- 어떤 dependency를 쓰는지
+- Redis fallback이 발생했는지
+- readiness dependency 이름이 무엇인지
+- 어떤 API path와 status가 증가하는지
+- 배포 직후 error/latency가 튀는지
 
-따라서 endpoint는 기능이 아니라 접근 주체 기준으로 나눠야 한다.
+공격자는 이런 정보를 보고 장애 타이밍이나 약한 지점을 추측할 수 있다. 그래서 metric 수집은 필요하지만, public reverse proxy에서는 차단해야 한다.
 
-| Endpoint | 접근 주체 | 정책 |
-|---|---|---|
-| Transaction Event API | 외부 금융사 | HMAC + rate limit |
-| Metrics | Prometheus | 내부 network |
-| Ready | 배포 시스템/Nginx | 제한 접근 |
-| Admin | 운영자 | IP allowlist + admin token |
+이번 구성에서는 Prometheus가 public `8080/metrics`가 아니라 Docker network 내부의 `nginx:8081/metrics`를 scrape한다.
 
-## 3. Rate Limit 설계
+## 3. `/ready`를 public으로 열지 않는 이유
 
-외부 금융사 retry는 정상 동작일 수 있지만, 짧은 시간에 과도하게 몰리면 DB와 Redis에 부담을 준다.
-Rate limit은 요청을 무조건 막기 위한 장치가 아니라, 시스템을 보호하면서 idempotency가 동작할 시간을 벌기 위한 장치다.
+`/ready`는 `/health`보다 훨씬 많은 운영 정보를 담는다.
 
-```nginx
-limit_req_zone $binary_remote_addr zone=event_api:10m rate=20r/s;
+이 프로젝트의 readiness는 PostgreSQL을 hard dependency로 보고, Redis는 degraded dependency로 본다. 즉 `/ready`에는 다음 판단이 들어간다.
 
-location /api/v1/transaction-events {
-    limit_req zone=event_api burst=50 nodelay;
-    proxy_pass http://api_backend;
-}
+- PostgreSQL 연결 가능 여부
+- Redis 정상 또는 degraded 여부
+- API가 traffic을 받을 준비가 되었는지
+
+이 정보는 배포 시스템과 운영자에게는 필요하지만 외부 클라이언트에게는 필요하지 않다. public에는 `/health`만 열어 reverse proxy와 upstream 생존 확인에 사용하고, readiness는 internal 경로로 제한했다.
+
+## 4. 구현 방식
+
+Nginx는 같은 upstream snippet을 공유하되 server block을 나눴다.
+
+```text
+listen 8080: public traffic
+listen 8081: internal operations traffic
 ```
 
-rate limit이 발생하면 운영자는 Nginx log, API idempotency metric, Redis lock rejected metric을 함께 봐야 한다.
-단순히 429만 증가했다고 장애로 볼 수는 없다.
-외부 시스템 retry storm을 정상적으로 완화한 결과일 수 있기 때문이다.
+Blue-Green 전환은 기존처럼 `infra/nginx/conf.d/upstream-active.conf`만 교체한다. Access Control 단계가 배포 전환 구조를 건드리면 rollback 리허설이 깨질 수 있기 때문이다.
 
-## 4. Nginx log에 남겨야 할 것
+Docker Compose에서는 다음처럼 internal port를 loopback에만 bind했다.
 
-장애 대응에서는 Nginx와 API 로그를 연결해야 한다.
-그래서 Nginx access log에는 `trace_id`, `request_id`, `upstream_response_time`, `status`, `request_time`을 남기는 것이 중요하다.
+```yaml
+ports:
+  - "8080:8080"
+  - "127.0.0.1:8081:8081"
+```
 
-반대로 HMAC signature, raw request body, account number 원문은 남기지 않는다. 추적 가능성과 민감정보 보호는 함께 설계해야 한다.
+로컬에서는 운영자가 `localhost:8081`로 확인할 수 있지만, 운영 환경에서는 이 port를 public interface에 열지 않는 것이 전제다.
 
-## 5. 트레이드오프
+## 5. 검증 명령
 
-Nginx에서 접근 제어를 강화하면 API 서버의 부담은 줄어든다.
-하지만 정책이 Nginx와 API에 흩어지면 운영자가 어느 계층에서 차단됐는지 헷갈릴 수 있다.
-
-따라서 Nginx는 네트워크/경로/속도 제한을 담당하고,
-API는 HMAC, request validation, idempotency 같은 application-level 정책을 담당하도록 역할을 분리한다.
-
-## 6. 완료 기준
+검증은 `make ops3-demo`로 재현한다.
 
 ```bash
-make nginx-test
-make rate-limit-test
-make admin-access-test
+make ops3-demo
 ```
 
-Nginx config test, rate limit 동작, internal endpoint 접근 제한이 모두 재현되어야 한다.
+이 명령은 다음을 확인한다.
 
-## 7. 실제 구현 후 보강할 내용
+| Endpoint | Public 8080 | Internal 8081 | 판단 |
+|---|---:|---:|---|
+| `/health` | 200 | 200 | OK |
+| `/ready` | 403/404 | 200 | OK |
+| `/metrics` | 403/404 | 200 | OK |
+| `/docs`, `/redoc`, `/openapi.json` | 403/404 | not used | OK |
+| unknown path | 404 | not used | OK |
+| `/api/v1/transaction-events` | HMAC required | not used | OK |
 
-이 글은 Ops Phase 2 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+public Nginx는 allowlist 방식이다. 허용되는 endpoint는 `GET /health`와 `POST /api/v1/transaction-events`뿐이며, `/ready`, `/metrics`, `/docs`, `/redoc`, `/openapi.json`, 정의되지 않은 모든 경로는 Nginx 레벨에서 차단한다.
 
-- public/internal endpoint 테스트 결과
-- `/metrics`, `/ready`, `/admin/*` 외부 접근 차단 결과
-- rate limit 초과 시 429 반환 결과
-- Nginx JSON access log 샘플
-- HMAC signature와 raw account number가 로그에 남지 않는지 확인한 결과
+public `/metrics`나 public `/ready`가 200이면 실패한다. 반대로 internal `/metrics`는 200이어야 하고, `financial_http_requests_total` 같은 custom metric을 확인할 수 있어야 한다.
+
+## 6. 기존 Blue-Green 흐름과의 연결
+
+이번 단계는 “막는 작업”이라서 정상 기능까지 같이 막을 위험이 있다.
+
+그래서 public `/ready`를 막은 뒤에도 다음 회귀를 따로 확인한다.
+
+```bash
+make ops3-demo
+make ops2-demo
+make deploy-smoke
+```
+
+Ops Phase 2의 Blue-Green script는 public `/health`와 public transaction smoke를 확인하고, readiness는 internal `8081/ready`로 확인하도록 분리했다.
+
+## 7. 남은 운영 보완점
+
+로컬 Docker Compose의 loopback binding은 접근 제어의 첫 단계일 뿐이다. 실제 운영에서는 internal endpoint를 VPN, 사내망, security group, mTLS, basic auth, IP allowlist 같은 추가 경계 뒤에 둬야 한다.
+
+또한 `/health`에 포함된 `deployment_color`, `instance_id`는 Blue-Green 리허설을 위한 로컬 검증 정보다. 운영 환경에서는 public 응답에서 제거하거나, 내부 진단 endpoint 또는 제한된 header로 분리할 수 있다.

@@ -42,7 +42,7 @@ else
 fi
 
 wait_for_endpoint "${BASE_URL}/health" "Nginx Blue /health"
-verify_ready_body "${BASE_URL}/ready" "Nginx Blue"
+verify_ready_body "${INTERNAL_BASE_URL}/ready" "Nginx Blue internal"
 
 if [[ "${STOP_GREEN}" == "true" ]]; then
   log "Stopping Green service after rollback"

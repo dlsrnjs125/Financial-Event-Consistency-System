@@ -4,6 +4,7 @@ APP_MODULE ?= app.main:app
 HOST ?= 0.0.0.0
 PORT ?= 8000
 BASE_URL ?= http://localhost:8080
+INTERNAL_BASE_URL ?= http://localhost:8081
 GREEN_URL ?= http://localhost:8001
 CLIENT_ID ?= bank-a
 CLIENT_SECRET ?= change-me-secret
@@ -99,6 +100,7 @@ local-bg: docker-check ## Start Docker Compose stack in background
 	@echo "  API blue:    http://localhost:8000"
 	@echo "  API green:   http://localhost:8001"
 	@echo "  Nginx:       http://localhost:8080"
+	@echo "  Nginx int.:  http://localhost:8081"
 	@echo "  Prometheus:  http://localhost:9090"
 	@echo "  Grafana:     http://localhost:3000"
 	@echo ""
@@ -235,6 +237,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/switch_traffic.sh
 	bash -n scripts/deployment-status.sh
 	bash -n scripts/deployment-smoke.sh
+	bash -n scripts/check_nginx_access_control.sh
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -247,6 +250,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/switch_traffic.sh
 	test -x scripts/deployment-status.sh
 	test -x scripts/deployment-smoke.sh
+	test -x scripts/check_nginx_access_control.sh
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -272,7 +276,7 @@ ops1-up: docker-check ## Start app stack with Ops Phase 1 monitoring exporters
 	@echo "  Prometheus:     http://localhost:9090"
 	@echo "  Grafana:        http://localhost:3000"
 	@echo "  node-exporter:  http://127.0.0.1:9100/metrics"
-	@echo "  cAdvisor:       http://127.0.0.1:8081/metrics"
+	@echo "  cAdvisor:       http://127.0.0.1:8082/metrics"
 	@echo "  postgres exp.:  internal Docker network only"
 	@echo "  redis exp.:     internal Docker network only"
 	@echo ""
@@ -418,28 +422,28 @@ phase10-redis-down-check: docker-check ## Run Phase 10 Redis-down duplicate stor
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status
 deploy-status: docker-check ## Show active upstream and Blue/Green service status
-	@BASE_URL=$(BASE_URL) ./scripts/deployment-status.sh
+	@BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) ./scripts/deployment-status.sh
 
 .PHONY: deploy-green
 deploy-green: docker-check ## Start and verify Green without switching traffic
-	@BASE_URL=$(BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh start-green
+	@BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh start-green
 	@BASE_URL=http://localhost:8001 ./scripts/deployment-smoke.sh
 
 .PHONY: deploy-switch-green
 deploy-switch-green: docker-check ## Switch Nginx upstream to Green after config validation
-	@BASE_URL=$(BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh switch-green
+	@BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh switch-green
 
 .PHONY: deploy-blue-green
 deploy-blue-green: docker-check ## Run Green verification, switch Nginx to Green, and post-switch smoke
-	@BASE_URL=$(BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh deploy
+	@BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) GREEN_URL=http://localhost:8001 ./scripts/deploy-blue-green.sh deploy
 
 .PHONY: deploy-rollback
 deploy-rollback: docker-check ## Roll Nginx upstream back to Blue and verify
-	@BASE_URL=$(BASE_URL) ./scripts/rollback.sh "$${ROLLBACK_REASON:-manual rollback}"
+	@BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) ./scripts/rollback.sh "$${ROLLBACK_REASON:-manual rollback}"
 
 .PHONY: deploy-smoke
 deploy-smoke: ## Run lightweight deployment smoke test through BASE_URL
-	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
+	@BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
 
 .PHONY: deploy-verify
 deploy-verify: k6-verify ## Run post-deployment PostgreSQL consistency verification
@@ -469,7 +473,8 @@ phase12-rollback-check: docker-check ## Verify rollback from Green to Blue witho
 ops2-start-blue: docker-check ## Start Blue, Nginx, PostgreSQL, and Redis for Ops Phase 2
 	@cp infra/nginx/conf.d/upstream-active.conf.blue infra/nginx/conf.d/upstream-active.conf
 	@printf 'blue\n' > infra/nginx/.active-color
-	$(DOCKER_COMPOSE) up -d --build postgres redis api-blue nginx
+	$(DOCKER_COMPOSE) up -d --build postgres redis api-blue
+	$(DOCKER_COMPOSE) up -d --force-recreate nginx
 	@echo "Blue/Nginx stack is starting. Verify with: make ops2-check-blue"
 
 .PHONY: ops2-start-green
@@ -484,24 +489,24 @@ ops2-ensure-blue-running:
 
 .PHONY: ops2-deploy-green-only
 ops2-deploy-green-only:
-	@STOP_GREEN_ON_FAILURE=true BASE_URL=$(BASE_URL) GREEN_URL=$(GREEN_URL) ./scripts/deploy_green.sh
+	@STOP_GREEN_ON_FAILURE=true BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) GREEN_URL=$(GREEN_URL) ./scripts/deploy_green.sh
 
 .PHONY: ops2-check-blue
-ops2-check-blue: ## Check Nginx routed /health and /ready
+ops2-check-blue: ## Check public Nginx /health and internal Nginx /ready
 	@set -e; \
-	for endpoint in health ready; do \
-		echo "Waiting for $(BASE_URL)/$$endpoint"; \
+	for url in "$(BASE_URL)/health" "$(INTERNAL_BASE_URL)/ready"; do \
+		echo "Waiting for $$url"; \
 		i=0; \
-		until curl -fsS "$(BASE_URL)/$$endpoint" >/dev/null; do \
+		until curl -fsS "$$url" >/dev/null; do \
 			i=$$((i + 1)); \
 			if [ "$$i" -ge 30 ]; then \
-				echo "$(BASE_URL)/$$endpoint did not become ready"; \
+				echo "$$url did not become ready"; \
 				exit 1; \
 			fi; \
 			sleep 2; \
 		done; \
 	done
-	@echo "Nginx routed health/ready checks passed: $(BASE_URL)"
+	@echo "Nginx public health and internal readiness checks passed."
 
 .PHONY: ops2-check-green
 ops2-check-green: ## Check Green direct /health and /ready
@@ -538,7 +543,7 @@ ops2-switch-blue: docker-check ## Switch Nginx upstream to Blue after config val
 
 .PHONY: ops2-rollback
 ops2-rollback: docker-check ## Roll Nginx upstream back to Blue and verify health/readiness
-	@BASE_URL=$(BASE_URL) ./scripts/rollback_to_blue.sh
+	@BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) ./scripts/rollback_to_blue.sh
 
 .PHONY: ops2-smoke-green
 ops2-smoke-green: ## Run lightweight smoke test directly against Green
@@ -546,12 +551,12 @@ ops2-smoke-green: ## Run lightweight smoke test directly against Green
 
 .PHONY: ops2-smoke-routed
 ops2-smoke-routed: ## Run lightweight smoke test through Nginx BASE_URL
-	@BASE_URL=$(BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
+	@BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
 
 .PHONY: ops2-status
 ops2-status: docker-check ## Show Blue/Green/Nginx Docker Compose status
 	$(DOCKER_COMPOSE) --profile green-deployment ps nginx api-blue api-green postgres redis
-	@BASE_URL=$(BASE_URL) ./scripts/deployment-status.sh
+	@BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) ./scripts/deployment-status.sh
 
 .PHONY: ops2-logs
 ops2-logs: docker-check ## Follow Ops Phase 2 Nginx and API logs
@@ -560,7 +565,7 @@ ops2-logs: docker-check ## Follow Ops Phase 2 Nginx and API logs
 .PHONY: ops2-cleanup
 ops2-cleanup: docker-check ## Roll back to Blue and stop Green without deleting volumes
 	@if $(DOCKER_COMPOSE) ps --status running --services | grep -q '^nginx$$'; then \
-		BASE_URL=$(BASE_URL) ./scripts/rollback_to_blue.sh --stop-green; \
+		BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) ./scripts/rollback_to_blue.sh --stop-green; \
 	else \
 		echo "Nginx is not running; resetting active upstream files to Blue and stopping Green if present."; \
 		cp infra/nginx/conf.d/upstream-active.conf.blue infra/nginx/conf.d/upstream-active.conf; \
@@ -586,6 +591,75 @@ ops2-verify: deploy-verify ## Run PostgreSQL consistency verification after Ops 
 
 .PHONY: ops2-demo-full
 ops2-demo-full: ops2-demo ops2-verify ## Run Ops Phase 2 demo and PostgreSQL consistency verification
+
+# Ops Phase 3 Nginx Access Control
+.PHONY: ops3-up
+ops3-up: docker-check ## Start Blue/Nginx/PostgreSQL/Redis stack for Ops Phase 3
+	@cp infra/nginx/conf.d/upstream-active.conf.blue infra/nginx/conf.d/upstream-active.conf
+	@printf 'blue\n' > infra/nginx/.active-color
+	$(DOCKER_COMPOSE) up -d --build postgres redis api-blue prometheus
+	$(DOCKER_COMPOSE) up -d --force-recreate nginx
+	@echo "Public Nginx:   $(BASE_URL)"
+	@echo "Internal Nginx: $(INTERNAL_BASE_URL)"
+
+.PHONY: ops3-nginx-test
+ops3-nginx-test: docker-check ## Validate Nginx config inside the running container
+	$(DOCKER_COMPOSE) exec -T nginx nginx -t
+
+.PHONY: ops3-check-public
+ops3-check-public: ## Verify public 8080 allowlist and sensitive endpoint blocking
+	@set -e; \
+	health=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/health"); \
+	ready=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/ready"); \
+	metrics=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/metrics"); \
+	docs=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/docs"); \
+	redoc=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/redoc"); \
+	openapi=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/openapi.json"); \
+	unknown=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/unknown"); \
+	account_api=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/api/v1/accounts/ACC-001/balance"); \
+	transaction_get=$$(curl -sS -o /dev/null -w '%{http_code}' "$(BASE_URL)/api/v1/transaction-events"); \
+	echo "public /health=$$health /ready=$$ready /metrics=$$metrics /docs=$$docs /redoc=$$redoc /openapi.json=$$openapi /unknown=$$unknown account-api=$$account_api GET-transaction=$$transaction_get"; \
+	test "$$health" = "200"; \
+	case "$$ready" in 403|404) ;; *) exit 1 ;; esac; \
+	case "$$metrics" in 403|404) ;; *) exit 1 ;; esac; \
+	case "$$docs" in 403|404) ;; *) exit 1 ;; esac; \
+	case "$$redoc" in 403|404) ;; *) exit 1 ;; esac; \
+	case "$$openapi" in 403|404) ;; *) exit 1 ;; esac; \
+	test "$$unknown" = "404"; \
+	case "$$account_api" in 403|404) ;; *) exit 1 ;; esac; \
+	case "$$transaction_get" in 403|404|405) ;; *) exit 1 ;; esac
+
+.PHONY: ops3-check-internal
+ops3-check-internal: ## Verify internal 8081 allows /health, /ready, and /metrics
+	@set -e; \
+	for endpoint in health ready metrics; do \
+		status=$$(curl -sS -o /dev/null -w '%{http_code}' "$(INTERNAL_BASE_URL)/$$endpoint"); \
+		echo "internal /$$endpoint=$$status"; \
+		test "$$status" = "200"; \
+	done
+
+.PHONY: ops3-check-access
+ops3-check-access: ## Run full Nginx public/internal access control verification
+	@PUBLIC_BASE_URL=$(BASE_URL) INTERNAL_BASE_URL=$(INTERNAL_BASE_URL) ./scripts/check_nginx_access_control.sh
+
+.PHONY: ops3-smoke-public
+ops3-smoke-public: ## Run transaction smoke through public 8080 while readiness uses internal 8081
+	@BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/deployment-smoke.sh
+
+.PHONY: ops3-status
+ops3-status: docker-check ## Show Ops Phase 3 Docker Compose service status
+	$(DOCKER_COMPOSE) ps
+
+.PHONY: ops3-logs
+ops3-logs: docker-check ## Follow Ops Phase 3 Nginx logs
+	$(DOCKER_COMPOSE) logs -f nginx
+
+.PHONY: ops3-demo
+ops3-demo: docker-check ## Run Ops Phase 3 stack, Nginx config test, access check, and public smoke
+	@$(MAKE) ops3-up
+	@$(MAKE) ops3-nginx-test
+	@$(MAKE) ops3-check-access
+	@$(MAKE) ops3-smoke-public
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

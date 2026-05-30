@@ -207,7 +207,7 @@ Phase 8에서는 reconciliation failure metric hook만 제공하며, 실제 ledg
 
 | 확인 항목 | URL | 기준 |
 |-----------|-----|------|
-| API metrics | `http://localhost:8000/metrics` | `financial_*` metric 노출 |
+| API metrics | `http://localhost:8081/metrics` | internal Nginx 경유 `financial_*` metric 노출 |
 | Prometheus target | `http://localhost:9090/targets` | `api-server` target UP |
 | Grafana dashboard | `http://localhost:3000` | `Financial Event Consistency System` dashboard 확인 |
 

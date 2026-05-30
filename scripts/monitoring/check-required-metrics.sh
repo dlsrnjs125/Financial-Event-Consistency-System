@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
-API_BASE_URL="${API_BASE_URL:-http://localhost:8000}"
+API_BASE_URL="${API_BASE_URL:-http://localhost:8081}"
 REPORT_FILE="${REPORT_FILE:-reports/monitoring/ops1-required-metrics.md}"
 REQUIRED_QUERIES=(
   "up{job=\"api\"} == 1"
