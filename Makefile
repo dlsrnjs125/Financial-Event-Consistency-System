@@ -9,6 +9,7 @@ GREEN_URL ?= http://localhost:8001
 CLIENT_ID ?= bank-a
 CLIENT_SECRET ?= change-me-secret
 ACCOUNT_NO ?= ACC-001
+DUMP_FILE ?=
 
 # Python
 PYTHON ?= .venv/bin/python
@@ -51,6 +52,7 @@ help: ## Show this help message
 	@echo "  make ops1-up           # Run Ops Phase 1 monitoring stack with exporters"
 	@echo "  make ops1-check        # Verify Prometheus targets, metrics, and dashboards"
 	@echo "  make ops2-demo         # Run Ops Phase 2 Blue-Green switch and rollback demo"
+	@echo "  make ops4-demo         # Run Ops Phase 4 PostgreSQL backup/restore DR drill"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -238,6 +240,9 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/deployment-status.sh
 	bash -n scripts/deployment-smoke.sh
 	bash -n scripts/check_nginx_access_control.sh
+	bash -n scripts/postgres_backup.sh
+	bash -n scripts/postgres_restore_drill.sh
+	bash -n scripts/postgres_dr_drill.sh
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -251,6 +256,9 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/deployment-status.sh
 	test -x scripts/deployment-smoke.sh
 	test -x scripts/check_nginx_access_control.sh
+	test -x scripts/postgres_backup.sh
+	test -x scripts/postgres_restore_drill.sh
+	test -x scripts/postgres_dr_drill.sh
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -497,7 +505,7 @@ ops2-check-blue: ## Check public Nginx /health and internal Nginx /ready
 	for url in "$(BASE_URL)/health" "$(INTERNAL_BASE_URL)/ready"; do \
 		echo "Waiting for $$url"; \
 		i=0; \
-		until curl -fsS "$$url" >/dev/null; do \
+		until curl -fsS "$$url" >/dev/null 2>&1; do \
 			i=$$((i + 1)); \
 			if [ "$$i" -ge 30 ]; then \
 				echo "$$url did not become ready"; \
@@ -660,6 +668,82 @@ ops3-demo: docker-check ## Run Ops Phase 3 stack, Nginx config test, access chec
 	@$(MAKE) ops3-nginx-test
 	@$(MAKE) ops3-check-access
 	@$(MAKE) ops3-smoke-public
+
+# Ops Phase 4 PostgreSQL Backup / Restore DR Drill
+.PHONY: ops4-up
+ops4-up: docker-check ## Start PostgreSQL, Redis, Blue API, Nginx, and restore PostgreSQL for Ops Phase 4
+	@cp infra/nginx/conf.d/upstream-active.conf.blue infra/nginx/conf.d/upstream-active.conf
+	@printf 'blue\n' > infra/nginx/.active-color
+	$(DOCKER_COMPOSE) up -d --build postgres redis api-blue postgres-restore
+	$(DOCKER_COMPOSE) up -d --force-recreate nginx
+	@echo "Ops Phase 4 stack is running."
+	@echo "Source DB:  postgres/financial_events"
+	@echo "Restore DB: postgres-restore/financial_events_restore"
+
+.PHONY: ops4-backup
+ops4-backup: docker-check ## Create a PostgreSQL custom-format dump and SHA256 checksum
+	@./scripts/postgres_backup.sh
+
+.PHONY: ops4-restore
+ops4-restore: docker-check ## Restore DUMP_FILE or latest dump into postgres-restore and write DR report
+	@set -e; \
+	dump_file="$(DUMP_FILE)"; \
+	if [ -z "$$dump_file" ]; then \
+		dump_file=$$(ls -t backups/postgres/*.dump 2>/dev/null | head -n 1 || true); \
+	fi; \
+	if [ -z "$$dump_file" ]; then \
+		echo "No dump file found. Run make ops4-backup or pass DUMP_FILE=backups/postgres/xxx.dump"; \
+		exit 1; \
+	fi; \
+	./scripts/postgres_restore_drill.sh "$$dump_file"
+
+.PHONY: ops4-check
+ops4-check: docker-check ## Run restore DB consistency SQL against postgres-restore
+	@$(DOCKER_COMPOSE) exec -T postgres-restore psql -U appuser -d financial_events_restore -v ON_ERROR_STOP=1 -f - < scripts/sql/dr_consistency_check.sql
+
+.PHONY: ops4-check-app
+ops4-check-app: docker-check ## Wait for Ops Phase 4 public health and internal readiness
+	@set -e; \
+	for url in "$(BASE_URL)/health" "$(INTERNAL_BASE_URL)/ready"; do \
+		echo "Waiting for $$url"; \
+		i=0; \
+		until curl -fsS "$$url" >/dev/null 2>&1; do \
+			i=$$((i + 1)); \
+			if [ "$$i" -ge 30 ]; then \
+				echo "$$url did not become ready"; \
+				exit 1; \
+			fi; \
+			sleep 2; \
+		done; \
+	done
+	@$(MAKE) ops3-check-public
+	@echo "Ops Phase 4 app readiness checks passed."
+
+.PHONY: ops4-drill
+ops4-drill: docker-check ## Run backup, checksum verification, restore, consistency SQL, and report generation
+	@./scripts/postgres_dr_drill.sh
+
+.PHONY: ops4-status
+ops4-status: docker-check ## Show Ops Phase 4 Docker Compose service status
+	$(DOCKER_COMPOSE) ps postgres redis api-blue nginx postgres-restore
+
+.PHONY: ops4-logs
+ops4-logs: docker-check ## Follow PostgreSQL source and restore logs
+	$(DOCKER_COMPOSE) logs -f postgres postgres-restore
+
+.PHONY: ops4-cleanup
+ops4-cleanup: docker-check ## Stop restore DB only; never delete source PostgreSQL data or volumes
+	$(DOCKER_COMPOSE) stop postgres-restore
+	$(DOCKER_COMPOSE) rm -f postgres-restore
+	@echo "Stopped postgres-restore only. Source postgres volume was not touched."
+
+.PHONY: ops4-demo
+ops4-demo: docker-check ## Run Ops Phase 4 stack, public smoke, full DR drill, and print report
+	@$(MAKE) ops4-up
+	@$(MAKE) ops4-check-app
+	@$(MAKE) ops3-smoke-public
+	@$(MAKE) ops4-drill
+	@cat reports/dr/ops4-postgres-restore-drill.md
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off

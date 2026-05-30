@@ -2,7 +2,7 @@
 
 ## 현재 진행 상태
 
-- 현재 위치: **Phase 12 Blue-Green Deployment & Rollback Simulation 완료**
+- 현재 위치: **Ops Phase 4 PostgreSQL Backup / Restore DR Drill 구현**
 - GitHub 초기 Push: **완료**
 - 다음 단계: **README / Docs / Blog 최종 정리**
 
@@ -15,6 +15,7 @@ Phase 9에서는 k6 smoke/normal/peak/duplicate/redis-down 시나리오, HMAC he
 
 Phase 10에서는 Redis 장애 fallback metric/log, DB unique conflict retry, Docker Compose 장애 재현 Makefile 명령, Redis Down duplicate storm k6 시나리오, Failure Mode 문서를 추가했다.
 Phase 12에서는 Nginx upstream snippet 교체, Green smoke, API traffic rollback, deployment status 명령을 추가했다.
+Ops Phase 4에서는 운영 PostgreSQL dump를 생성한 뒤 별도 `postgres-restore` DB에 복원하고, schema/table 및 ledger/event/account/idempotency 정합성 SQL을 실행하는 DR Drill 명령을 추가했다.
 현재 Prometheus scrape 대상은 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 12 이후 운영 관측 보강 항목이다.
 
 ## 개발 Phase

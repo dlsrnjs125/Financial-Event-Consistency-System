@@ -1,106 +1,142 @@
 # 15편. PostgreSQL 백업은 만들어지는 것보다 복구되는 것이 중요하다
 
-## 1. 문제를 어떻게 정의했는가
+## 1. 백업 파일은 안심의 증거가 아니다
 
-백업 파일이 존재한다는 사실과 실제로 복구 가능하다는 사실은 다르다.
-금융 이벤트 시스템에서는 장애 이후 PostgreSQL을 복원했을 때 거래 원장과 계좌 잔액이 일치해야 한다.
+백업은 만들어지는 것이 아니라 복구되어야 의미가 있다.
+금융 이벤트 시스템에서는 dump 파일 존재보다 복원 후 ledger, event, account,
+idempotency 정합성이 유지되는지가 더 중요하다.
 
-그래서 백업 Phase의 목표는 `pg_dump` 파일을 만드는 것이 아니라, 별도 restore DB에 복원하고 정합성 SQL까지 실행하는 것이다.
+이 프로젝트에서 PostgreSQL은 최종 Source of Truth다.
+`TransactionEvent`가 한 번만 저장되고, `LedgerEntry`가 한 번만 반영되며,
+`Account.balance`가 ledger 결과와 맞고, `IdempotencyRecord`가 재시도 응답의
+기준으로 남아야 한다.
 
-## 2. 처음 세운 가설
+그래서 Ops Phase 4의 목표는 `pg_dump` 성공 메시지가 아니다.
+별도 restore DB에 복원하고, 정합성 SQL 결과가 모두 0인지 확인하는 것이다.
 
-처음에는 `pg_dump`만 있으면 충분해 보인다.
+## 2. Backup, Restore, DR Drill을 분리했다
 
-```bash
-pg_dump financial_events > backup.sql
-```
+이번 단계에서는 세 단어를 엄격히 구분했다.
 
-하지만 이 방식만으로는 다음 질문에 답할 수 없다.
-
-- 백업 파일이 손상되지 않았는가?
-- restore DB에 실제로 복원되는가?
-- `ledger_entries` 중복 반영은 없는가?
-- `accounts.balance`와 ledger 합계가 일치하는가?
-- 복구에 얼마나 걸리는가?
-
-## 3. 설계한 흐름
-
-```text
-pg_dump
-  -> gzip 압축
-  -> checksum 생성
-  -> restore 전용 DB 생성
-  -> 복원
-  -> ledger/account 정합성 SQL
-  -> 오래된 백업 정리
-```
-
-이 흐름을 스크립트로 나누면 다음과 같다.
-
-```text
-scripts/backup/
-  pg_backup.sh
-  pg_restore.sh
-  verify_backup.sh
-  cleanup_old_backups.sh
-```
-
-## 4. 정합성 검증 SQL
-
-복원 후에는 단순히 테이블 수를 보는 것이 아니라 금융 정합성 기준을 확인해야 한다.
-
-```sql
-SELECT external_event_id, COUNT(*)
-FROM ledger_entries
-GROUP BY external_event_id
-HAVING COUNT(*) > 1;
-```
-
-그리고 계좌 잔액과 원장 합계도 비교한다.
-
-```sql
-SELECT a.account_no, a.balance, COALESCE(SUM(l.amount), 0) AS ledger_sum
-FROM accounts a
-LEFT JOIN ledger_entries l ON a.id = l.account_id
-GROUP BY a.account_no, a.balance;
-```
-
-## 5. RPO/RTO 기준
-
-로컬 훈련 기준은 다음처럼 잡는다.
-
-| 항목 | 목표 |
+| 개념 | 질문 |
 |---|---|
-| RPO | 최근 백업 시점까지 |
-| RTO | 10분 이내 복원 |
-| 백업 검증 | checksum + restore |
-| 정합성 검증 | ledger/account 불일치 0건 |
+| Backup | 운영 DB에서 dump 파일을 만들 수 있는가? |
+| Restore | 그 dump 파일이 별도 DB에 실제로 복원되는가? |
+| DR Drill | 복원된 DB가 금융 정합성 기준을 통과하는가? |
 
-## 6. 완료 기준
+구현 흐름은 다음과 같다.
 
-```bash
-make backup-db
-make restore-db
-make verify-restore
-make dr-drill
+```text
+postgres/financial_events
+  -> pg_dump -Fc
+  -> SHA256 checksum
+  -> postgres-restore/financial_events_restore
+  -> pg_restore
+  -> schema/table check
+  -> scripts/sql/dr_consistency_check.sql
+  -> reports/dr/ops4-postgres-restore-drill.md
 ```
 
-백업이 생성되고, checksum이 맞고, restore DB에 복원되며, 정합성 SQL 결과가 0건이어야 한다.
+## 3. 운영 DB에 복원하지 않는다
 
-## 7. 남은 한계
+가장 중요한 원칙은 단순하다.
 
-로컬 논리 백업은 운영 환경의 PITR, WAL archive, managed backup 정책을 대체하지 못한다.
-하지만 "백업 파일이 실제로 복구 가능한가"를 검증하는 훈련은 운영 안정성의 기본선이다.
+```text
+절대 운영 DB에 restore하지 않는다.
+```
 
-## 8. 실제 구현 후 보강할 내용
+Docker Compose에 `postgres-restore` 서비스를 추가하고, restore 대상 DB 이름도
+`financial_events_restore`로 분리했다.
+host port는 `127.0.0.1:5433`에만 bind해서 로컬 검증용 DB라는 경계를 명확히 했다.
 
-이 글은 Ops Phase 3 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+```text
+postgres         : source DB, financial_events
+postgres-restore : restore DB, financial_events_restore
+```
 
-- backup duration
-- restore duration
-- backup file size
-- checksum result
-- duplicated ledger count
-- balance mismatch count
-- orphan idempotency count
-- DR Drill 결과 Markdown
+`ops4-cleanup`도 restore DB 컨테이너만 정리한다.
+운영 DB volume은 삭제하지 않는다.
+
+## 4. 실제 스크립트 구조
+
+구현은 repo의 기존 운영 스크립트 패턴에 맞춰 세 파일로 나눴다.
+
+```text
+scripts/postgres_backup.sh
+scripts/postgres_restore_drill.sh
+scripts/postgres_dr_drill.sh
+scripts/sql/dr_consistency_check.sql
+```
+
+`scripts/postgres_backup.sh`는 운영 DB 컨테이너에서 `pg_dump -Fc`를 실행하고,
+dump 파일과 `.sha256` checksum을 생성한다.
+
+`scripts/postgres_restore_drill.sh`는 checksum을 검증한 뒤
+`postgres-restore/financial_events_restore`에만 restore한다.
+기존 dump를 수동 복원하는 `make ops4-restore`에서는 checksum 파일이 없으면
+`SKIPPED`로 기록할 수 있지만, `make ops4-drill`과 `make ops4-demo`는 checksum을
+필수로 요구한다.
+
+`scripts/postgres_dr_drill.sh`는 backup부터 restore, consistency check,
+report 작성까지 한 번에 실행하는 wrapper다.
+
+## 5. 복원 후 정합성 SQL을 실행한다
+
+복원 성공은 테이블이 생겼다는 뜻일 뿐이다.
+금융 이벤트 시스템에서는 다음 위반 count가 모두 0이어야 한다.
+
+| 검증 항목 | PASS 기준 |
+|---|---:|
+| duplicated external event | 0 |
+| duplicated ledger event reference | 0 |
+| orphan ledger | 0 |
+| completed event without ledger | 0 |
+| ledger/account mismatch | 0 |
+| duplicated idempotency key | 0 |
+| account balance mismatch | 0 |
+
+특히 `completed_event_without_ledger_count`는 거래가 성공 상태인데 원장 반영이
+없는 경우를 잡는다. 반대로 `orphan_ledger_count`는 원장이 이벤트 없이 남은
+경우를 잡는다.
+
+검증 SQL은 실제 row data를 출력하지 않는다.
+report에는 count와 PASS/FAIL만 남긴다.
+dump에는 계좌/거래 데이터가 들어갈 수 있기 때문에 `backups/postgres/*.dump`와
+`*.sha256`은 git에 커밋하지 않는다.
+
+## 6. 재현 명령
+
+전체 흐름은 한 명령으로 재현한다.
+
+```bash
+make ops4-demo
+```
+
+개별 단계는 다음처럼 실행할 수 있다.
+
+```bash
+make ops4-up
+make ops4-backup
+DUMP_FILE=backups/postgres/financial_events_YYYYMMDDTHHMMSS.dump make ops4-restore
+make ops4-check
+make ops4-drill
+```
+
+결과 report는 `reports/dr/ops4-postgres-restore-drill.md`에 기록된다.
+이 report는 template이 아니라 로컬 Docker Compose 환경에서 실행한
+curated evidence report다.
+
+## 7. 이번 단계에서 일부러 하지 않은 것
+
+이번 Phase는 로컬 Docker Compose 기반 논리 백업 복구 훈련이다.
+그래서 다음은 후속 고도화 범위로 남겼다.
+
+- PITR/WAL archiving
+- S3/Object Storage 업로드
+- backup retention policy
+- dump encryption
+- 대용량 restore time/RTO 측정 고도화
+
+먼저 필요한 것은 복잡한 백업 플랫폼이 아니라,
+"백업이 실제로 복구되고 정합성까지 유지되는가"를 반복해서 확인할 수 있는
+가장 작은 훈련이다.
