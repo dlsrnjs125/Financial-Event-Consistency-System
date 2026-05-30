@@ -40,7 +40,7 @@ annotations:
 ```bash
 make k6-smoke
 make k6-verify
-curl -s http://localhost:8000/metrics
+curl -s http://localhost:8081/metrics
 ```
 
 ## 6. 원인 분기표

@@ -11,6 +11,7 @@ BLUE_SERVICE="${BLUE_SERVICE:-api-blue}"
 GREEN_SERVICE="${GREEN_SERVICE:-api-green}"
 NGINX_SERVICE="${NGINX_SERVICE:-nginx}"
 BASE_URL="${BASE_URL:-http://localhost:8080}"
+INTERNAL_BASE_URL="${INTERNAL_BASE_URL:-http://localhost:8081}"
 BLUE_URL="${BLUE_URL:-http://localhost:8000}"
 GREEN_URL="${GREEN_URL:-http://localhost:8001}"
 GREEN_UPSTREAM_URL="${GREEN_UPSTREAM_URL:-http://api-green:8000}"
@@ -217,8 +218,9 @@ run_migration_smoke() {
 
 run_deployment_smoke() {
   local url="$1"
+  local ready_url="${2:-${url}}"
   log "Running deployment smoke against ${url}"
-  BASE_URL="${url}" CLIENT_ID="${CLIENT_ID}" CLIENT_SECRET="${CLIENT_SECRET}" ACCOUNT_NO="${ACCOUNT_NO}" \
+  BASE_URL="${url}" READY_BASE_URL="${ready_url}" CLIENT_ID="${CLIENT_ID}" CLIENT_SECRET="${CLIENT_SECRET}" ACCOUNT_NO="${ACCOUNT_NO}" \
     "${ROOT_DIR}/scripts/deployment-smoke.sh"
 }
 

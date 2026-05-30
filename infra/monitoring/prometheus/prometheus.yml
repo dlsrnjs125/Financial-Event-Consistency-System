@@ -16,7 +16,7 @@ scrape_configs:
     metrics_path: "/metrics"
     scrape_interval: 5s
     static_configs:
-      - targets: ["api-blue:8000"]
+      - targets: ["nginx:8081"]
 
   - job_name: "node-exporter"
     static_configs:

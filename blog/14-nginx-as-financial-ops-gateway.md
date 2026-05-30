@@ -1,86 +1,115 @@
-# 14편. Nginx를 금융 이벤트 시스템의 운영 관문으로 설계하기
+# 14편. Nginx Access Control: 운영 endpoint를 public API와 분리하기
 
-## 1. 문제를 어떻게 정의했는가
+## 1. 이번 단계에서 추가한 것은 기능이 아니다
 
-Phase 12까지 Nginx는 Blue-Green traffic switch 역할을 했다.
-하지만 금융 이벤트 시스템에서 Nginx는 단순 reverse proxy보다 더 큰 의미를 가진다.
+이번 단계의 핵심은 `/metrics`와 `/ready` 몇 개를 숨기는 것이 아니라, public Nginx를 allowlist 방식으로 구성해 외부 거래 API와 내부 운영 endpoint의 노출 경계를 분리한 것이다.
 
-외부 금융사 요청과 내부 운영자 요청이 같은 통로로 들어오면,
-운영 편의성은 높아질 수 있지만 보안과 장애 대응 기준은 흐려진다.
-
-그래서 Nginx를 첫 번째 운영 통제 지점으로 정의했다.
+금융 이벤트 시스템에서 외부에 열어야 하는 것은 거래 이벤트 수신 API다. 운영자가 장애 분석에 쓰는 endpoint까지 같은 public 경로로 열 필요는 없다.
 
 ```text
-외부 금융사 -> public endpoint -> transaction event API
-운영자/VPN -> internal endpoint -> ready/metrics/admin
-Prometheus -> internal network -> metrics
+외부 금융사 -> public Nginx 8080 -> GET /health, POST /api/v1/transaction-events
+운영자/Prometheus -> internal Nginx 8081 -> GET /health, GET /ready, GET /metrics
 ```
 
-## 2. 외부 API와 내부 API를 나누는 이유
+## 2. Public Nginx를 allowlist로 구성한 이유
 
-`POST /api/v1/transaction-events`는 외부 금융사가 호출하는 endpoint다. HMAC, timestamp, idempotency key, rate limit이 중요하다.
+Public Nginx는 allowlist 방식으로 구성한다. 현재 허용되는 endpoint는 `GET /health`와 `POST /api/v1/transaction-events`뿐이다. 그 외 `/ready`, `/metrics`, `/docs`, `/redoc`, `/openapi.json`, `/nginx_status`, `/admin/*`, `/debug/*`, 정의되지 않은 모든 경로는 Nginx 레벨에서 차단한다.
 
-반대로 `/metrics`, `/ready`, `/admin/reconciliation`은 운영자가 시스템 상태를 확인하기 위한 endpoint다.
-이 endpoint를 외부에 그대로 열면 내부 상태, metric 이름, 장애 정보를 노출할 수 있다.
+단순히 `/metrics`만 차단하면 이후 `/docs`, `/openapi.json`, `/debug` 같은 endpoint가 추가됐을 때 다시 public으로 노출될 수 있다. 따라서 public server block은 `GET /health`와 `POST /api/v1/transaction-events`만 허용하고, 정의되지 않은 모든 경로는 기본적으로 404를 반환하도록 구성했다.
 
-따라서 endpoint는 기능이 아니라 접근 주체 기준으로 나눠야 한다.
+![Public 민감 endpoint 차단 확인](./images/ops-phase-3/02-public-sensitive-endpoints-blocked.png)
 
-| Endpoint | 접근 주체 | 정책 |
-|---|---|---|
-| Transaction Event API | 외부 금융사 | HMAC + rate limit |
-| Metrics | Prometheus | 내부 network |
-| Ready | 배포 시스템/Nginx | 제한 접근 |
-| Admin | 운영자 | IP allowlist + admin token |
+Public port 8080에서는 `/metrics`, `/ready`, `/docs`, `/openapi.json`이 모두 404를 반환하도록 Nginx 레벨에서 차단했다.
 
-## 3. Rate Limit 설계
+## 3. `/health`, `/ready`, `/metrics`를 다르게 보는 이유
 
-외부 금융사 retry는 정상 동작일 수 있지만, 짧은 시간에 과도하게 몰리면 DB와 Redis에 부담을 준다.
-Rate limit은 요청을 무조건 막기 위한 장치가 아니라, 시스템을 보호하면서 idempotency가 동작할 시간을 벌기 위한 장치다.
+`/health`는 프로세스 생존 여부를 확인하는 최소 공개 endpoint로 유지했다. 반면 `/ready`는 PostgreSQL, Redis 같은 dependency 상태를 포함하고, `/metrics`는 트래픽 패턴, 인증 실패, fallback 여부, 정합성 관련 metric을 노출할 수 있으므로 public endpoint에서 차단했다.
 
-```nginx
-limit_req_zone $binary_remote_addr zone=event_api:10m rate=20r/s;
+이 프로젝트의 readiness는 PostgreSQL을 hard dependency로 보고, Redis는 degraded dependency로 본다. 즉 `/ready`에는 다음 판단이 들어간다.
 
-location /api/v1/transaction-events {
-    limit_req zone=event_api burst=50 nodelay;
-    proxy_pass http://api_backend;
-}
+- PostgreSQL 연결 가능 여부
+- Redis 정상 또는 degraded 여부
+- API가 traffic을 받을 준비가 되었는지
+
+이 정보는 배포 시스템과 운영자에게는 필요하지만 외부 클라이언트에게는 필요하지 않다.
+
+## 4. Prometheus 수집 경로는 유지하되 public에서 분리했다
+
+Prometheus 수집 자체를 막은 것이 아니라 scrape 경로를 public `8080/metrics`에서 internal `8081/metrics`로 분리했다. 이를 통해 운영자는 필요한 metric을 계속 수집하면서도 외부 사용자는 metric endpoint에 접근할 수 없게 했다.
+
+![Internal metrics 허용 확인](./images/ops-phase-3/03-internal-metrics-allowed.png)
+
+Metric 수집 자체는 유지하되 public port가 아니라 internal Nginx 경로에서만 `financial_http_requests_total` 같은 custom metric을 확인할 수 있도록 분리했다.
+
+## 5. 구현 방식
+
+Nginx는 같은 upstream snippet을 공유하되 server block을 나눴다.
+
+```text
+listen 8080: public traffic
+listen 8081: internal operations traffic
 ```
 
-rate limit이 발생하면 운영자는 Nginx log, API idempotency metric, Redis lock rejected metric을 함께 봐야 한다.
-단순히 429만 증가했다고 장애로 볼 수는 없다.
-외부 시스템 retry storm을 정상적으로 완화한 결과일 수 있기 때문이다.
+Blue-Green 전환은 기존처럼 `infra/nginx/conf.d/upstream-active.conf`만 교체한다. Access Control 단계가 배포 전환 구조를 건드리면 rollback 리허설이 깨질 수 있기 때문이다.
 
-## 4. Nginx log에 남겨야 할 것
+Docker Compose에서는 다음처럼 internal port를 loopback에만 bind했다.
 
-장애 대응에서는 Nginx와 API 로그를 연결해야 한다.
-그래서 Nginx access log에는 `trace_id`, `request_id`, `upstream_response_time`, `status`, `request_time`을 남기는 것이 중요하다.
+```yaml
+ports:
+  - "8080:8080"
+  - "127.0.0.1:8081:8081"
+```
 
-반대로 HMAC signature, raw request body, account number 원문은 남기지 않는다. 추적 가능성과 민감정보 보호는 함께 설계해야 한다.
+Docker Compose 환경에서는 internal port를 `127.0.0.1:8081`에 바인딩해 로컬에서만 접근하도록 제한했다. 실제 운영 환경에서는 이 경로를 VPN, Security Group, internal load balancer, mTLS, Basic Auth 등 추가 보호 계층 뒤에 두어야 한다.
 
-## 5. 트레이드오프
+## 6. Access Control 검증 결과
 
-Nginx에서 접근 제어를 강화하면 API 서버의 부담은 줄어든다.
-하지만 정책이 Nginx와 API에 흩어지면 운영자가 어느 계층에서 차단됐는지 헷갈릴 수 있다.
-
-따라서 Nginx는 네트워크/경로/속도 제한을 담당하고,
-API는 HMAC, request validation, idempotency 같은 application-level 정책을 담당하도록 역할을 분리한다.
-
-## 6. 완료 기준
+검증은 `make ops3-check-access`와 `make ops3-demo`로 재현한다.
 
 ```bash
-make nginx-test
-make rate-limit-test
-make admin-access-test
+make ops3-check-access
+make ops3-demo
 ```
 
-Nginx config test, rate limit 동작, internal endpoint 접근 제한이 모두 재현되어야 한다.
+![Nginx Access Control 검증 결과](./images/ops-phase-3/01-nginx-access-control-check.png)
 
-## 7. 실제 구현 후 보강할 내용
+Public Nginx에서는 `/ready`, `/metrics`, `/docs`, `/redoc`, `/openapi.json` 등 내부 운영 endpoint가 차단되고, internal Nginx에서는 `/ready`, `/metrics`가 정상 접근되는지 검증했다.
 
-이 글은 Ops Phase 2 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+| Endpoint | Public 8080 | Internal 8081 | 판단 |
+|---|---:|---:|---|
+| `GET /health` | 200 | 200 | PASS |
+| `GET /ready` | 404 | 200 | PASS |
+| `GET /metrics` | 404 | 200 | PASS |
+| `GET /docs` | 404 | - | PASS |
+| `GET /redoc` | 404 | - | PASS |
+| `GET /openapi.json` | 404 | - | PASS |
+| `GET /nginx_status` | 404 | - | PASS |
+| `GET /admin/debug` | 404 | - | PASS |
+| `GET /debug/vars` | 404 | - | PASS |
+| `GET /unknown` | 404 | - | PASS |
+| `GET /api/v1/transaction-events` | 403 | - | PASS |
+| `POST /api/v1/transaction-events without HMAC` | 400 | - | PASS |
+| `POST /api/v1/transaction-events with valid HMAC` | 200 | - | PASS |
 
-- public/internal endpoint 테스트 결과
-- `/metrics`, `/ready`, `/admin/*` 외부 접근 차단 결과
-- rate limit 초과 시 429 반환 결과
-- Nginx JSON access log 샘플
-- HMAC signature와 raw account number가 로그에 남지 않는지 확인한 결과
+## 7. 전체 리허설 결과
+
+`ops3-demo`는 Nginx access control 검증과 public transaction smoke를 함께 실행한다. 민감 endpoint는 public에서 차단되고, 정상 거래 API는 HMAC 인증을 거쳐 기존처럼 동작한다.
+
+![Ops Phase 3 전체 demo 결과](./images/ops-phase-3/04-ops3-demo-public-smoke.png)
+
+이 단계는 “막는 작업”이라서 정상 기능까지 같이 막을 위험이 있다. 그래서 public `/ready`를 막은 뒤에도 다음 회귀를 따로 확인한다.
+
+```bash
+make scripts-check
+make ops3-demo
+make ops2-demo
+make final-check
+```
+
+Ops Phase 2의 Blue-Green script는 public `/health`와 public transaction smoke를 확인하고, readiness는 internal `8081/ready`로 확인하도록 분리했다.
+
+## 8. 남은 운영 보완점
+
+로컬 Docker Compose의 loopback binding은 접근 제어의 첫 단계일 뿐이다. 실제 운영에서는 internal endpoint를 VPN, 사내망, security group, mTLS, Basic Auth, IP allowlist 같은 추가 경계 뒤에 둬야 한다.
+
+또한 `/health`에 포함된 `deployment_color`, `instance_id`는 Blue-Green 리허설을 위한 로컬 검증 정보다. 운영 환경에서는 public 응답에서 제거하거나, 내부 진단 endpoint 또는 제한된 header로 분리할 수 있다.

@@ -3,13 +3,14 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
+READY_BASE_URL="${READY_BASE_URL:-${BASE_URL}}"
 CLIENT_ID="${CLIENT_ID:-bank-a}"
 CLIENT_SECRET="${CLIENT_SECRET:-change-me-secret}"
 ACCOUNT_NO="${ACCOUNT_NO:-ACC-001}"
 SMOKE_ACCOUNT_NO="${SMOKE_ACCOUNT_NO:-${ACCOUNT_NO}}"
 API_PATH="${API_PATH:-/api/v1/transaction-events}"
 
-python3 - "$BASE_URL" "$CLIENT_ID" "$CLIENT_SECRET" "$SMOKE_ACCOUNT_NO" "$API_PATH" <<'PY'
+python3 - "$BASE_URL" "$CLIENT_ID" "$CLIENT_SECRET" "$SMOKE_ACCOUNT_NO" "$API_PATH" "$READY_BASE_URL" <<'PY'
 from __future__ import annotations
 
 import hashlib
@@ -21,7 +22,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 
-base_url, client_id, client_secret, account_no, api_path = sys.argv[1:6]
+base_url, client_id, client_secret, account_no, api_path, ready_base_url = sys.argv[1:7]
 
 
 def request(method: str, path: str, body: bytes | None = None, headers: dict[str, str] | None = None):
@@ -69,7 +70,22 @@ def assert_status(name: str, actual: int, allowed: set[int]) -> None:
 health_status, _ = request("GET", "/health")
 assert_status("/health", health_status, {200})
 
-ready_status, ready_body = request("GET", "/ready")
+def request_to(base: str, method: str, path: str, body: bytes | None = None, headers: dict[str, str] | None = None):
+    req = urllib.request.Request(
+        f"{base}{path}",
+        data=body,
+        headers=headers or {},
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            payload = response.read().decode()
+            return response.status, payload
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode()
+
+
+ready_status, ready_body = request_to(ready_base_url, "GET", "/ready")
 assert_status("/ready", ready_status, {200})
 ready_payload = json.loads(ready_body)
 if ready_payload.get("status") != "ready":

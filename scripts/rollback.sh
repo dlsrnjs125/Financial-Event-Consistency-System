@@ -22,8 +22,8 @@ else
 fi
 
 wait_for_endpoint "${BASE_URL}/health" "Nginx routed Blue /health"
-verify_ready_body "${BASE_URL}/ready" "Nginx routed Blue"
-run_deployment_smoke "${BASE_URL}"
+verify_ready_body "${INTERNAL_BASE_URL}/ready" "Nginx routed Blue internal"
+run_deployment_smoke "${BASE_URL}" "${INTERNAL_BASE_URL}"
 run_deploy_verify_if_enabled
 
 cat <<EOF

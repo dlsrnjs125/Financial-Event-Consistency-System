@@ -65,7 +65,7 @@ blog/
 ```bash
 make metrics-check
 make ops2-demo
-make nginx-test
+make ops3-demo
 make dr-drill
 make ansible-idempotency-test
 make incident-drill-redis-down
