@@ -27,6 +27,7 @@
 | F-011 | Green readiness 실패 | 전환 전 Blue 유지 |
 | F-012 | Nginx reload 실패 | backup snippet restore |
 | F-013 | Blue-Green 전환 후 smoke 실패 | Blue rollback 후 smoke/verify |
+| F-014 | Failure Recovery Runbook Drift | 장애 주입, 복구, 검증 절차가 문서와 어긋나지 않도록 자동 drill |
 
 ---
 
@@ -246,6 +247,7 @@ Phase 12에서는 `infra/nginx/conf.d/upstream-active.conf` snippet만 교체하
 | Nginx reload 실패 | 실제 트래픽과 상태 파일 drift 위험 | deploy script reload 실패 로그 | backup snippet과 active color 복구 | `make deploy-switch-green` |
 | 전환 후 smoke 실패 | 일부 요청 실패 가능 | `make deploy-smoke`, 5xx metric | `make deploy-rollback` 후 `make deploy-verify` | `make phase12-check` |
 | rollback 후 정합성 검증 실패 | 금융 정합성 사고 가능 | `verify-consistency.sql` | 추가 트래픽 중단, reconciliation 수행 | `make deploy-verify` |
+| Failure recovery runbook drift | 운영 문서와 실제 복구 명령 불일치 | Ops5 report PASS/FAIL | `make ops5-demo`로 장애 주입부터 report까지 재검증 | `make ops5-demo` |
 
 ### 성공 기준
 
