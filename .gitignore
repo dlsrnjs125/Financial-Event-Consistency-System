@@ -66,6 +66,12 @@ reports/**/tmp/
 *.har
 *.pcap
 
+# PostgreSQL DR Drill backups
+backups/postgres/*.dump
+backups/postgres/*.sql
+backups/postgres/*.sha256
+backups/postgres/*.log
+
 # Keep curated evidence artifacts small and reviewable.
 !reports/k6/*-summary.json
 !reports/dr-drill/*-result.md
