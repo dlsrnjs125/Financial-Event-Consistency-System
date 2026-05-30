@@ -99,6 +99,18 @@ make ops2-demo
 이 과정을 넣은 이유는 Green 직접 호출이 성공해도 Nginx가 여전히 Blue를 바라보는 상태라면 배포 검증이 성립하지 않기 때문이다.
 최종적으로는 `/health` 응답에도 `deployment_color`와 `instance_id`를 포함해 실제 HTTP 응답이 어느 instance에서 왔는지 확인하도록 했다.
 
+이번 단계에서 중요한 것은 Green 컨테이너를 띄운 것이 아니라, Nginx가 실제로 Green 응답을 반환하는지 증명하고, 문제가 생겼을 때 Blue로 되돌아온 사실까지 같은 방식으로 검증한 것이다.
+
+### 4-1. 초기 Blue routed identity 확인
+
+초기 상태에서는 Blue를 운영 트래픽의 기준으로 둔다. `make ops2-start-blue`로 Blue/Nginx/PostgreSQL/Redis를 실행한 뒤 `make ops2-check-routed-blue`로 Nginx가 `api-blue:8000`을 바라보는지 확인한다.
+
+단순히 `/health`가 200인지 확인하는 방식으로는 Blue와 Green을 구분할 수 없다. 따라서 각 컨테이너에 `DEPLOYMENT_COLOR`, `INSTANCE_ID`를 주입하고, Nginx 경유 `/health` 응답에서 실제 응답 주체를 확인하도록 했다.
+
+![Blue routed identity 확인](./images/ops-phase-2/01-blue-routed-identity.png)
+
+초기 상태에서는 Nginx가 Blue upstream을 바라보고 있으며, 실제 `/health` 응답도 `deployment_color=blue`, `instance_id=api-blue`로 확인된다.
+
 ## 5. 트러블슈팅 1: reload 실패 시 상태 drift
 
 가장 위험했던 지점은 Nginx reload 실패였다.
@@ -155,6 +167,10 @@ api-green:
 3. Nginx에 로드된 config가 `api-green:8000`을 포함하는지
 4. Nginx 경유 `/health` 응답의 `deployment_color`가 `green`인지
 5. Nginx 경유 `/health` 응답의 `instance_id`가 `api-green`인지
+
+![Green routed identity 확인](./images/ops-phase-2/02-green-switch-routed-identity.png)
+
+Green 전환 후에는 설정 파일만 확인하지 않고, Nginx 경유 `/health` 응답이 실제 `api-green`에서 반환되는지 검증했다.
 
 이 변경으로 "설정상 Green"과 "실제 응답이 Green"을 분리해서 검증할 수 있게 됐다.
 
@@ -260,6 +276,12 @@ make ops2-smoke-routed
 이 검증은 `BASE_URL=http://localhost:8080`을 사용한다.
 따라서 Green이 직접 호출에서는 정상이지만 Nginx 전환 후 요청 처리에 실패하는 상황을 별도로 잡을 수 있다.
 
+Rollback도 같은 기준으로 확인한다. 이번 rollback은 DB schema rollback이 아니라 traffic rollback이다. 금융 이벤트 처리 시스템에서 DB rollback은 정합성 리스크가 크기 때문에, schema 변경은 backward-compatible migration 원칙을 따르고, 장애 발생 시에는 트래픽을 이전 Blue 인스턴스로 되돌리는 방식을 선택했다.
+
+![Rollback 이후 Blue routed identity 확인](./images/ops-phase-2/03-rollback-blue-routed-identity.png)
+
+Rollback 이후 Nginx upstream은 다시 Blue로 전환되며, 실제 routed response identity도 `api-blue`로 복구된다.
+
 더 무거운 정합성 검증이 필요하면 다음 명령으로 PostgreSQL 검증 SQL까지 실행한다.
 
 ```bash
@@ -268,6 +290,12 @@ make ops2-demo-full
 
 이 명령은 `ops2-demo` 이후 `deploy-verify`를 실행한다.
 배포 전환 중 생성된 smoke 거래 이벤트가 PostgreSQL unique constraint와 ledger 검증 기준을 깨지 않았는지 확인하기 위한 선택적 full gate다.
+
+![ops2-demo-full 정합성 gate 결과](./images/ops-phase-2/04-ops2-demo-full-consistency-gate.png)
+
+`ops2-demo-full`은 Blue 시작, Green 검증, Green 전환, routed smoke, Blue rollback, PostgreSQL 정합성 검증까지 한 번에 수행한다.
+
+최종적으로 `ops2-demo-full`을 통해 Blue 시작, Green 검증, 트래픽 전환, routed smoke, Blue rollback, PostgreSQL 정합성 검증을 한 번에 재현했다. 정합성 gate에서는 중복 ledger event와 중복 external event가 모두 0건임을 확인했다.
 
 ## 9. 포기한 것
 
