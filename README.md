@@ -263,7 +263,7 @@ make ops2-demo-full
 
 ### Ops Phase 3. Nginx Access Control
 
-Public Nginx는 allowlist 방식으로 `GET /health`와 `POST /api/v1/transaction-events`만 허용한다. `/metrics`, `/ready`, `/docs`, `/redoc`, `/openapi.json`은 차단하고, internal Nginx 경로에서만 운영 진단 endpoint를 허용한다.
+Public Nginx는 allowlist 방식으로 `GET /health`, `POST /api/v1/transaction-events`만 허용하고, `/ready`, `/metrics`, `/docs`, `/redoc`, `/openapi.json`, `/nginx_status`, `/admin/*`, `/debug/*`, 정의되지 않은 모든 경로를 차단한다. Internal Nginx에서는 운영 검증과 Prometheus 수집을 위해 `/health`, `/ready`, `/metrics`를 허용한다.
 
 ```bash
 make ops3-demo
@@ -272,6 +272,7 @@ make ops3-demo
 대표 증거:
 
 - `reports/security/ops3-nginx-access-control.md`
+- `blog/14-nginx-as-financial-ops-gateway.md`
 
 상세 정책은 [Nginx Access Control](./docs/21-nginx-access-control.md)과 [blog 14편](./blog/14-nginx-as-financial-ops-gateway.md)에 정리한다.
 

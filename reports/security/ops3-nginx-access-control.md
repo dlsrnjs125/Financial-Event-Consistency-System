@@ -8,6 +8,7 @@
 ## Public Endpoint Policy
 
 Public Nginx is the simulated external entry point for financial clients.
+It is configured as an allowlist, not a denylist.
 
 Allowed:
 
@@ -22,8 +23,10 @@ Blocked:
 - `GET /redoc`
 - `GET /openapi.json`
 - `GET /nginx_status`
-- Unknown paths
-- Internal admin/debug paths
+- `GET /admin/*`
+- `GET /debug/*`
+- non-allowlisted `/api/` paths
+- unknown paths
 
 ## Internal Endpoint Policy
 
@@ -60,22 +63,25 @@ make ops2-demo
 make deploy-smoke
 ```
 
-## Expected Result Table
+## Result Table
 
 | Endpoint | Public 8080 | Internal 8081 | Judgment |
 |---|---:|---:|---|
-| `/health` | 200 | 200 | OK |
-| `/ready` | 403/404 | 200 | OK |
-| `/metrics` | 403/404 | 200 | OK |
-| `/docs` | 403/404 | not used | OK |
-| `/redoc` | 403/404 | not used | OK |
-| `/openapi.json` | 403/404 | not used | OK |
-| non-allowlisted `/api/` path | 403/404 | not used | OK |
-| unknown path | 404 | not used | OK |
-| `/nginx_status` | 403/404 | 200 | OK |
-| `/api/v1/transaction-events` | HMAC required | optional/not used | OK |
+| `GET /health` | 200 | 200 | PASS |
+| `GET /ready` | 404 | 200 | PASS |
+| `GET /metrics` | 404 | 200 | PASS |
+| `GET /docs` | 404 | - | PASS |
+| `GET /redoc` | 404 | - | PASS |
+| `GET /openapi.json` | 404 | - | PASS |
+| `GET /nginx_status` | 404 | - | PASS |
+| `GET /admin/debug` | 404 | - | PASS |
+| `GET /debug/vars` | 404 | - | PASS |
+| `GET /unknown` | 404 | - | PASS |
+| `GET /api/v1/transaction-events` | 403 | - | PASS |
+| `POST /api/v1/transaction-events without HMAC` | 400 | - | PASS |
+| `POST /api/v1/transaction-events with valid HMAC` | 200 | - | PASS |
 
-## Recorded Result
+## Verification Source
 
 | Check | Verification | Expected | Result |
 |---|---|---|---|
