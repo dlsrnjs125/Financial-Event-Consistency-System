@@ -28,6 +28,10 @@ redis_api_fallback="SKIPPED"
 redis_restarted="SKIPPED"
 redis_ready_after_recovery="SKIPPED"
 redis_consistency_check="SKIPPED"
+redis_ready_state_while_down="SKIPPED"
+redis_event_count="SKIPPED"
+redis_ledger_count="SKIPPED"
+redis_idempotency_record_count="SKIPPED"
 redis_duplicate_ledger_count="SKIPPED"
 redis_idempotency_violation_count="SKIPPED"
 
@@ -47,6 +51,10 @@ db_restarted="SKIPPED"
 db_ready_after_recovery="SKIPPED"
 db_consistency_after_recovery="SKIPPED"
 
+redis_stopped_by_drill=false
+api_stopped_by_drill=false
+db_stopped_by_drill=false
+
 log() {
     printf '[ops5] %s\n' "$*"
 }
@@ -54,6 +62,26 @@ log() {
 compose() {
     (cd "${ROOT_DIR}" && ${DOCKER_COMPOSE} "$@")
 }
+
+cleanup() {
+    set +e
+    if [ "${db_stopped_by_drill}" = "true" ] ||
+       [ "${redis_stopped_by_drill}" = "true" ] ||
+       [ "${api_stopped_by_drill}" = "true" ]; then
+        log "Cleanup: ensuring services stopped by this drill are running."
+    fi
+    if [ "${db_stopped_by_drill}" = "true" ]; then
+        compose start "${POSTGRES_SERVICE}" >/dev/null 2>&1 || true
+    fi
+    if [ "${redis_stopped_by_drill}" = "true" ]; then
+        compose start "${REDIS_SERVICE}" >/dev/null 2>&1 || true
+    fi
+    if [ "${api_stopped_by_drill}" = "true" ]; then
+        compose start "${API_SERVICE}" >/dev/null 2>&1 || true
+    fi
+}
+
+trap cleanup EXIT
 
 require_command() {
     local command_name="$1"
@@ -134,6 +162,21 @@ wait_for_ready_postgres_ok() {
     done
 
     echo "Readiness did not recover postgres=ok." >&2
+    return 1
+}
+
+wait_for_postgres() {
+    local deadline=$((SECONDS + VERIFY_TIMEOUT_SECONDS))
+
+    while (( SECONDS < deadline )); do
+        if compose exec -T "${POSTGRES_SERVICE}" pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null 2>&1; then
+            log "postgres is ready"
+            return 0
+        fi
+        sleep 2
+    done
+
+    echo "postgres did not become ready" >&2
     return 1
 }
 
@@ -308,7 +351,7 @@ ensure_preconditions() {
 
     wait_for_status "${BASE_URL}/health" "200" "public health"
     wait_for_ready_postgres_ok
-    compose exec -T "${POSTGRES_SERVICE}" pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null
+    wait_for_postgres
     compose exec -T "${REDIS_SERVICE}" redis-cli ping >/dev/null
     log "Precheck passed."
 }
@@ -320,11 +363,14 @@ run_redis_drill() {
     local event_count
     local ledger_count
     local idem_count
+    local redis_state
+    local smoke_output
 
     log "Running Redis failure recovery drill."
     started="$(date +%s)"
 
     compose stop "${REDIS_SERVICE}" >/dev/null
+    redis_stopped_by_drill=true
     if ! compose exec -T "${REDIS_SERVICE}" redis-cli ping >/dev/null 2>&1; then
         redis_down_detected="PASS"
     else
@@ -332,6 +378,7 @@ run_redis_drill() {
     fi
 
     redis_state="$(ready_json_field "checks.redis")"
+    redis_ready_state_while_down="${redis_state:-unknown}"
     if [ "${redis_state}" = "degraded" ]; then
         redis_down_detected="PASS"
     fi
@@ -344,6 +391,9 @@ run_redis_drill() {
     event_count="$(psql_scalar "SELECT COUNT(*) FROM transaction_events WHERE external_event_id = '${external_event_id}';")"
     ledger_count="$(psql_scalar "SELECT COUNT(*) FROM ledger_entries le JOIN transaction_events te ON te.id = le.transaction_event_id WHERE te.external_event_id = '${external_event_id}';")"
     idem_count="$(psql_scalar "SELECT COUNT(*) FROM idempotency_records WHERE idempotency_key = '${idempotency_key}';")"
+    redis_event_count="${event_count}"
+    redis_ledger_count="${ledger_count}"
+    redis_idempotency_record_count="${idem_count}"
     redis_duplicate_ledger_count="$(( ledger_count > 1 ? ledger_count - 1 : 0 ))"
     redis_idempotency_violation_count="$(( idem_count > 1 ? idem_count - 1 : 0 ))"
 
@@ -354,6 +404,7 @@ run_redis_drill() {
     fi
 
     compose start "${REDIS_SERVICE}" >/dev/null
+    redis_stopped_by_drill=false
     redis_restarted="PASS"
     wait_for_status "${BASE_URL}/health" "200" "health after redis restart"
     wait_for_ready_postgres_ok
@@ -386,11 +437,13 @@ run_redis_drill() {
 
 run_api_drill() {
     local started
+    local status
 
     log "Running API failure recovery drill."
     started="$(date +%s)"
 
     compose stop "${API_SERVICE}" >/dev/null
+    api_stopped_by_drill=true
     status="$(http_status "${BASE_URL}/health")"
     if [ "${status}" != "200" ]; then
         api_down_detected="PASS"
@@ -401,6 +454,7 @@ run_api_drill() {
     fi
 
     compose start "${API_SERVICE}" >/dev/null
+    api_stopped_by_drill=false
     api_restarted="PASS"
     if wait_for_status "${BASE_URL}/health" "200" "health after api restart"; then
         api_health_after_recovery="PASS"
@@ -441,6 +495,7 @@ run_db_drill() {
     started="$(date +%s)"
 
     compose stop "${POSTGRES_SERVICE}" >/dev/null
+    db_stopped_by_drill=true
     sleep 2
     status="$(http_status "${READY_BASE_URL}/ready")"
     if [ "${status}" = "503" ] || [ "${status}" = "000" ]; then
@@ -450,10 +505,10 @@ run_db_drill() {
     fi
 
     compose start "${POSTGRES_SERVICE}" >/dev/null
+    db_stopped_by_drill=false
     db_restarted="PASS"
-    compose exec -T "${POSTGRES_SERVICE}" pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null
 
-    if wait_for_ready_postgres_ok; then
+    if wait_for_postgres && wait_for_ready_postgres_ok; then
         db_ready_after_recovery="PASS"
     else
         db_ready_after_recovery="FAIL"
@@ -516,7 +571,11 @@ Redis, API, PostgreSQL 장애를 Docker Compose 로컬 운영 환경에서 재�
 | 항목 | 결과 |
 |---|---|
 | Redis down detected | ${redis_down_detected} |
+| Redis ready state while down | ${redis_ready_state_while_down} |
 | API fallback behavior | ${redis_api_fallback} |
+| Event count for duplicate smoke | ${redis_event_count} |
+| Ledger count for duplicate smoke | ${redis_ledger_count} |
+| Idempotency record count for duplicate smoke | ${redis_idempotency_record_count} |
 | Redis restarted | ${redis_restarted} |
 | Ready after recovery | ${redis_ready_after_recovery} |
 | Consistency check | ${redis_consistency_check} |

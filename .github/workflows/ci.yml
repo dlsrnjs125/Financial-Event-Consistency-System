@@ -276,6 +276,12 @@ jobs:
           grep -q "Redis Failure Recovery Evidence" reports/ops/ops5-failure-recovery-drill.md
           grep -q "API Failure Recovery Evidence" reports/ops/ops5-failure-recovery-drill.md
           grep -q "PostgreSQL Failure Recovery Evidence" reports/ops/ops5-failure-recovery-drill.md
+          grep -q "| Redis failure recovery | PASS |" reports/ops/ops5-failure-recovery-drill.md
+          grep -q "| API failure recovery | PASS |" reports/ops/ops5-failure-recovery-drill.md
+          grep -q "| PostgreSQL failure detection/recovery | PASS |" reports/ops/ops5-failure-recovery-drill.md
+          grep -q "| Duplicate ledger count | 0 |" reports/ops/ops5-failure-recovery-drill.md
+          grep -q "| Idempotency violation count | 0 |" reports/ops/ops5-failure-recovery-drill.md
+          grep -q "| Total drill duration seconds |" reports/ops/ops5-failure-recovery-drill.md
 
   gate-check:
     runs-on: ubuntu-latest
@@ -289,6 +295,7 @@ jobs:
       - secret-scan
       - docker-build
       - ops4-dr-drill
+      - ops5-failure-recovery-drill
     if: always()
     steps:
       - name: Summarize required deployment gates
@@ -314,6 +321,7 @@ jobs:
           check_gate "secret-scan" "${{ needs.secret-scan.result }}"
           check_gate "docker-build" "${{ needs.docker-build.result }}"
           check_gate "ops4-dr-drill" "${{ needs.ops4-dr-drill.result }}"
+          check_gate "ops5-failure-recovery-drill" "${{ needs.ops5-failure-recovery-drill.result }}"
 
           if [ "$failed" -ne 0 ]; then
             echo "One or more deployment gates failed"
