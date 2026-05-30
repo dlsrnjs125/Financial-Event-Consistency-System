@@ -136,6 +136,11 @@ make deploy-blue-green
 운영에 가까운 환경에서는 `SMOKE_ACCOUNT_NO`로 smoke 전용 계좌를 지정하고, smoke 데이터가 정산/분석 지표와 섞이지 않도록 분리한다.
 `RUN_MIGRATION_SMOKE=true`일 때 실행되는 `migration-smoke`는 migration을 새로 수행하는 명령이 아니라, 현재 적용된 schema와 unique constraint가 기대와 일치하는지 확인하는 검증 명령이다.
 
+Ops Phase 5의 Failure Recovery Runbook Drill은 배포 후 장애 대응 검증으로 사용한다.
+`make ops5-demo`는 Redis/API/PostgreSQL stop/start를 포함하므로 CI의 필수 전체
+장애 주입 gate로 두지 않고, 로컬 운영 drill evidence로 관리한다.
+CI에서는 스크립트 문법과 report 포맷을 검증한다.
+
 ---
 
 ## 6. Rollback 조건

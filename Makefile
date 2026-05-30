@@ -53,6 +53,7 @@ help: ## Show this help message
 	@echo "  make ops1-check        # Verify Prometheus targets, metrics, and dashboards"
 	@echo "  make ops2-demo         # Run Ops Phase 2 Blue-Green switch and rollback demo"
 	@echo "  make ops4-demo         # Run Ops Phase 4 PostgreSQL backup/restore DR drill"
+	@echo "  make ops5-demo         # Run Ops Phase 5 failure recovery runbook drill"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -243,6 +244,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/postgres_backup.sh
 	bash -n scripts/postgres_restore_drill.sh
 	bash -n scripts/postgres_dr_drill.sh
+	bash -n scripts/ops5_failure_recovery_drill.sh
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -259,6 +261,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/postgres_backup.sh
 	test -x scripts/postgres_restore_drill.sh
 	test -x scripts/postgres_dr_drill.sh
+	test -x scripts/ops5_failure_recovery_drill.sh
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -744,6 +747,44 @@ ops4-demo: docker-check ## Run Ops Phase 4 stack, public smoke, full DR drill, a
 	@$(MAKE) ops3-smoke-public
 	@$(MAKE) ops4-drill
 	@cat reports/dr/ops4-postgres-restore-drill.md
+
+# Ops Phase 5 Failure Recovery Runbook Drill
+.PHONY: ops5-up
+ops5-up: docker-check ## Start PostgreSQL, Redis, Blue API, and Nginx for Ops Phase 5
+	@cp infra/nginx/conf.d/upstream-active.conf.blue infra/nginx/conf.d/upstream-active.conf
+	@printf 'blue\n' > infra/nginx/.active-color
+	$(DOCKER_COMPOSE) up -d --build postgres redis api-blue
+	$(DOCKER_COMPOSE) up -d --force-recreate nginx
+	@echo "Ops Phase 5 stack is running."
+	@echo "Public Nginx:   $(BASE_URL)"
+	@echo "Internal ready: $(INTERNAL_BASE_URL)"
+
+.PHONY: ops5-check
+ops5-check: docker-check ## Run Ops Phase 5 preflight health/readiness/dependency checks
+	@SCENARIO=check BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) ./scripts/ops5_failure_recovery_drill.sh
+
+.PHONY: ops5-redis-drill
+ops5-redis-drill: docker-check ## Run Redis failure recovery drill only
+	@SCENARIO=redis BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/ops5_failure_recovery_drill.sh
+
+.PHONY: ops5-api-drill
+ops5-api-drill: docker-check ## Run API failure recovery drill only
+	@SCENARIO=api BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/ops5_failure_recovery_drill.sh
+
+.PHONY: ops5-db-drill
+ops5-db-drill: docker-check ## Run PostgreSQL failure detection/recovery drill only
+	@SCENARIO=db BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/ops5_failure_recovery_drill.sh
+
+.PHONY: ops5-drill
+ops5-drill: docker-check ## Run full Ops Phase 5 failure recovery runbook drill
+	@SCENARIO=all BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/ops5_failure_recovery_drill.sh
+
+.PHONY: ops5-demo
+ops5-demo: docker-check ## Start stack, precheck, run full Ops Phase 5 drill, and print report
+	@$(MAKE) ops5-up
+	@$(MAKE) ops5-check
+	@$(MAKE) ops5-drill
+	@cat reports/ops/ops5-failure-recovery-drill.md
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off
