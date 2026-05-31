@@ -19,6 +19,15 @@ Ops Phase 4와 5에서는 백업 복구와 장애 복구 drill을 만들었다.
 2. alert마다 severity, impact, action, runbook을 연결한다.
 3. CI와 로컬 검증 범위를 분리해 rule 문법과 rule load evidence를 남긴다.
 
+![Ops6 demo pass](../docs/images/ops6-01-demo-pass.png)
+
+`make ops6-demo` 실행 결과. Alert rule 파일 존재 여부, YAML 파싱, promtool 검증, Prometheus rule load 여부를 확인하고 Required Alert Inventory를 evidence로 남겼다.
+
+로컬 `make ops6-demo`는 실제 Prometheus API `/api/v1/rules`를 호출해 rule load까지
+확인한다. 반면 CI에서는 flakiness를 줄이기 위해 Prometheus API check를 SKIPPED로
+두고, 로컬 evidence report에서 PASS를 남기는 방식으로 역할을 나눴다. 이 차이는
+숨기지 않고 운영 trade-off로 문서화했다.
+
 ## 3. 어떤 장애를 Alert로 볼 것인가
 
 이번 Phase에서 정의한 required alert는 다음이다.
@@ -79,6 +88,10 @@ annotations:
 Redis alert는 `redis_up`뿐 아니라 `up{job="redis-exporter"}`도 함께 본다.
 Redis exporter 자체가 내려가면 `redis_up` 시계열이 사라질 수 있기 때문이다.
 
+![Ops6 alert validation report](../docs/images/ops6-02-alert-validation-report.png)
+
+Ops Phase 6 alert validation report. Alert rule 파일 존재 여부, YAML 문법, promtool 검증, Prometheus rule load check, Required Alert Inventory를 PASS/FAIL evidence로 기록했다.
+
 정합성 alert 중 reconciliation failure는 counter의 누적값 전체를 보지 않고
 `increase(financial_reconciliation_failures_total[5m]) > 0`으로 최근 발생 여부를
 본다. 한 번 발생한 과거 failure가 계속 firing되는 것을 피하기 위한 선택이다.
@@ -115,6 +128,16 @@ CI에서 monitoring stack 전체를 띄우고 rule load까지 확인하면 runne
 커밋된 local evidence report는 `make ops6-demo`로 생성해 rule load check PASS를
 남긴다. CI는 rule load까지 검증했다고 말하지 않고, rule 문법과 required inventory,
 report 형식을 검증한다고 표현한다.
+
+![Ops6 GitHub Actions gate](../docs/images/ops6-03-github-actions-gate.png)
+
+GitHub Actions에서 Ops6 Alerting Runbook Check가 Deployment Gate에 포함된 결과. CI에서는 alert rule 문법, required inventory, evidence report 형식을 검증하고, 실제 Prometheus rule load는 로컬 drill evidence로 남겼다.
+
+Ops4, Ops5, Ops6 운영 검증 job을 Deployment Gate Summary에 함께 포함했다.
+CI에서 monitoring stack 전체를 띄우고 Prometheus API load까지 강제하면 검증이
+느려지고 flaky해질 수 있다. 그래서 CI는 안정적인 정적/문법/형식 검증을 맡고,
+로컬 drill은 실제 Prometheus rule load PASS evidence를 남긴다. 이것은 구현 한계가
+아니라 운영 검증의 안정성을 위한 분리다.
 
 ## 8. 처음 기획과 달라진 점
 

@@ -8,7 +8,7 @@ Prometheus Alert Rule과 Incident Response Runbook을 구성하고, API/Redis/Po
 
 | 항목 | 값 |
 |---|---|
-| 검증 시각 UTC | `2026-05-30T18:49:53Z` |
+| 검증 시각 UTC | `2026-05-31T05:08:25Z` |
 | Alert rule file | `infra/prometheus/rules/financial_event_alerts.yml` |
 | Prometheus URL | `http://localhost:9090` |
 | Prometheus API check | `true` |
