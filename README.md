@@ -35,7 +35,7 @@ Ops Extension Track은 운영 관점의 장애 탐지, 복구, DR Drill, 보안 
    - Ops Phase는 1~8까지만 진행한다.
    - Ops Phase 8 Incident Runbook finalization까지 완료했으며, 이후 문서는 supporting documents로 관리한다.
 
-| Track | Phase | Status | Main Evidence |
+| Track | Scope | Status | Evidence |
 | --- | --- | --- | --- |
 | Development | Phase 1~12 | Done | Backend consistency, Redis fallback, k6, CI/CD, Blue-Green |
 | Ops Extension Track | Phase 1~8 | Done | Monitoring, DR drill, security, incident runbook |
@@ -45,7 +45,7 @@ Ops Extension Track은 운영 관점의 장애 탐지, 복구, DR Drill, 보안 
 
 Ops Extension Track은 Phase 1~8까지만 수행했고, Phase 8 Incident Runbook에서 종료한다.
 
-`docs/27-*` ~ `docs/34-*` 문서는 추가 Ops Phase가 아니라, Ops Phase 7~8을 보완하기 위한 supporting documents로 관리한다.
+`docs/27-*` ~ `docs/34-*` 문서는 추가 Ops Phase가 아니라, 운영 판단과 포트폴리오 증거를 보완하기 위한 supporting documents로 관리한다.
 
 따라서 본 프로젝트의 필수 운영 확장 범위는 Ops Phase 8 Incident Runbook까지이며,
 Capacity Planning, Change Management, 추가 자동화 문서는 향후 고도화 후보로 분리한다.

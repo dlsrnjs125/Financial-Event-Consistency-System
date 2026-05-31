@@ -26,7 +26,21 @@ Ops Phase 8은 Redis 장애, DB connection 고갈, Nginx 5xx, p99 latency, faile
 - 장애 자동 복구는 초기 범위에서 제외한다.
 - 운영 DB destructive drill은 제외한다.
 
-## 4. Supporting Documents 연결
+## 4. Ops Phase 8 Completion Criteria
+
+Ops Phase 8은 Incident Runbook을 완성하고, 장애 대응 기준을 문서화하는 단계다.
+
+완료 기준:
+
+- 필수 장애 시나리오별 Runbook이 존재한다.
+- 각 Runbook은 장애 상황, 예상 원인, 사용자 영향, 탐지 방법, 대응 방법, 복구 검증, 재발 방지, README/블로그 기록 문장을 포함한다.
+- 각 Runbook은 관련 SLO/SLI와 연결된다.
+- 각 Runbook은 수집해야 할 관측 증거와 연결된다.
+- 실제 존재하는 명령과 수동 확인 항목이 구분되어 있다.
+- 실제 측정하지 않은 결과는 placeholder 또는 TODO로 표시되어 있다.
+- Ops Extension Track은 Phase 8에서 종료된다.
+
+## 5. Supporting Documents 연결
 
 | Supporting document | Runbook에서 사용하는 역할 |
 | --- | --- |
@@ -36,7 +50,7 @@ Ops Phase 8은 Redis 장애, DB connection 고갈, Nginx 5xx, p99 latency, faile
 | [27-threat-model.md](27-threat-model.md) | 보안성 장애 시나리오의 위협 근거 |
 | [32-security-checklist.md](32-security-checklist.md) | 운영 보안 점검 기준 |
 
-## 5. 파일/디렉터리 기준
+## 6. 파일/디렉터리 기준
 
 ```text
 docs/
@@ -60,7 +74,7 @@ reports/
       result.md
 ```
 
-## 6. 검증 기준
+## 7. 검증 기준
 
 | Scenario | Verification mode | Evidence |
 | --- | --- | --- |
@@ -72,6 +86,40 @@ reports/
 | Consistency violation | Local consistency check | duplicate ledger count, idempotency violation count, reconciliation failure metric |
 | Secret leak or security incident | Manual checklist | Threat Model, Secret Management Policy, Security Checklist |
 
+### 실제 존재하는 검증 명령
+
+아래 명령은 현재 Makefile에 존재하는 명령만 기록한다.
+자동화되지 않은 항목은 code block에 넣지 않고 Manual verification 또는 Planned automation으로 분리한다.
+
+```bash
+make ops2-demo
+make ops4-demo
+make ops5-demo
+make ops6-demo
+make ops7-demo
+make deploy-status
+make deploy-smoke
+make deploy-rollback
+make deploy-verify
+make k6-normal
+make k6-peak
+make k6-duplicate
+make k6-verify
+make security-log-check
+```
+
+Manual verification:
+
+- Grafana dashboard에서 p95/p99 latency, 5xx, Redis fallback, DB connection panel을 확인한다.
+- structured log에서 `trace_id`, `request_id`, `event_id`, `error_code` 기준으로 장애 요청을 추적한다.
+- PostgreSQL connection exhaustion은 DB exporter panel, PostgreSQL log, `/ready` failure를 기준으로 확인한다.
+- Secret Leak / Security Incident는 Threat Model, Secret Management Policy, Security Checklist와 `make security-log-check` 결과를 함께 확인한다.
+
+Planned automation:
+
+- `make ops8-incident-drill`은 현재 존재하지 않는다. 필요하면 후속 고도화에서 추가한다.
+- DB connection exhaustion, Nginx 5xx spike, Secret leak drill은 현재 Runbook/manual checklist 기준으로 관리한다.
+
 성공 기준:
 
 - 각 장애별 local evidence 또는 manual checklist 존재
@@ -81,7 +129,7 @@ reports/
 - 복구 후 정합성 검증 통과
 - incident report 또는 measurement result template으로 결과 기록 가능
 
-## 7. 완료 기준과 README에 남길 결과
+## 8. 완료 기준과 README에 남길 결과
 
 ### Runbook 목록
 
@@ -99,7 +147,7 @@ reports/
 | Backup Restore Failed | [runbooks/backup-restore-failed.md](runbooks/backup-restore-failed.md) |
 | Metrics Unavailable | [runbooks/metrics-unavailable.md](runbooks/metrics-unavailable.md) |
 
-### Scenario 1. Redis Down / Redis Degraded
+## Scenario 1. Redis Down / Redis Degraded
 
 #### 장애 상황
 - Redis lock/cache 계층이 down 또는 degraded 상태가 되어 `/ready`에서 Redis dependency가 degraded로 표시된다.
@@ -141,7 +189,7 @@ reports/
 #### README/블로그 기록 문장
 - Redis 장애는 성능 저하로 이어질 수 있지만, PostgreSQL 기준 duplicate ledger 0건과 idempotency violation 0건을 복구 검증 기준으로 삼았다.
 
-### Scenario 2. PostgreSQL Connection Exhausted
+## Scenario 2. PostgreSQL Connection Exhausted
 
 #### 장애 상황
 - PostgreSQL connection pool 또는 DB connection이 고갈되어 transaction 처리와 readiness가 실패한다.
@@ -182,7 +230,7 @@ reports/
 #### README/블로그 기록 문장
 - PostgreSQL connection 고갈은 Source of Truth 접근 실패로 보고, readiness 복구와 정합성 SQL PASS를 함께 복구 기준으로 둔다.
 
-### Scenario 3. Nginx 5xx Spike
+## Scenario 3. Nginx 5xx Spike
 
 #### 장애 상황
 - Nginx public/internal gateway에서 5xx가 증가해 사용자 요청 실패가 늘어난다.
@@ -224,7 +272,7 @@ reports/
 #### README/블로그 기록 문장
 - Nginx 5xx spike는 단순 gateway 오류가 아니라 배포 routing, API readiness, POST retry 정합성까지 함께 확인하는 incident로 정리했다.
 
-### Scenario 4. High Latency / p95, p99 Latency Spike
+## Scenario 4. High Latency / p95, p99 Latency Spike
 
 #### 장애 상황
 - 평균 응답은 정상처럼 보여도 p95/p99 latency가 상승해 timeout과 retry 가능성이 커진다.
@@ -265,7 +313,7 @@ reports/
 #### README/블로그 기록 문장
 - High latency incident는 평균 응답시간이 아니라 p95/p99와 retry/duplicate 영향까지 함께 보는 runbook으로 정리했다.
 
-### Scenario 5. Failed Deployment / Rollback
+## Scenario 5. Failed Deployment / Rollback
 
 #### 장애 상황
 - Green 배포 검증 실패 또는 전환 후 오류로 active upstream rollback이 필요하다.
@@ -305,7 +353,7 @@ reports/
 #### README/블로그 기록 문장
 - Failed deployment는 DB rollback이 아니라 traffic rollback으로 완화하고, smoke와 consistency check를 통과해야 복구로 판단한다.
 
-### Scenario 6. Consistency Violation
+## Scenario 6. Consistency Violation
 
 #### 장애 상황
 - duplicate ledger, account balance mismatch, invalid transition, idempotency violation 같은 금융 정합성 위반이 발생한다.
@@ -346,7 +394,7 @@ reports/
 #### README/블로그 기록 문장
 - 정합성 위반은 error budget을 두지 않고 1건이라도 SEV1로 분류하며, count-only SQL과 postmortem으로 복구를 검증한다.
 
-### Scenario 7. Secret Leak / Security Incident
+## Scenario 7. Secret Leak / Security Incident
 
 #### 장애 상황
 - HMAC secret, client secret, token, raw account_no, idempotency key 원문이 로그/report/screenshot에 노출되었거나 노출이 의심된다.
@@ -389,7 +437,7 @@ reports/
 #### README/블로그 기록 문장
 - 보안 사고 Runbook은 Threat Model, Secret Management, Security Checklist를 연결해 secret 노출 탐지, rotation, evidence sanitization 절차를 고정했다.
 
-### 공통 템플릿
+## 공통 템플릿
 
 각 runbook은 아래 구조를 따른다.
 
@@ -403,7 +451,7 @@ reports/
 8. README/블로그 기록 문장
 9. 사후 기록 템플릿
 
-### Alert Rule 연결
+## Alert Rule 연결
 
 각 Alert Rule에는 반드시 runbook 링크를 추가한다.
 
@@ -412,7 +460,7 @@ annotations:
   runbook: "docs/runbooks/redis-down.md"
 ```
 
-### Severity Level
+## Severity Level
 
 | Severity | 기준 | 예시 |
 |---|---|---|
@@ -424,7 +472,7 @@ annotations:
 정합성 위반은 성능 저하와 다르게 error budget을 두지 않는다.
 1건 발생 시 SEV1 incident로 분류한다.
 
-### Incident Lifecycle
+## Incident Lifecycle
 
 Runbook은 다음 lifecycle을 기준으로 작성한다.
 
