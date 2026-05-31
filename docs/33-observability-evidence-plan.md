@@ -400,13 +400,16 @@ README에는 대표 결과 표와 핵심 캡처만 넣는다.
 - DR Drill에서 restore 또는 checksum 검증이 실패한다.
 - incident report가 생성되지 않는다.
 
-## 18. 완료 기준
+## 18. Evidence Completion Checklist
 
-- 필수 Grafana 캡처 5개 이상 저장
-- Prometheus target UP 캡처 저장
-- k6 summary JSON 저장
-- DR Drill 결과 Markdown/JSON 저장
-- Redis down, DB pressure, Nginx burst 전후 비교 표 작성
-- 정합성 검증 결과 0건 기록
-- README에는 요약 표와 대표 캡처만 반영
-- blog에는 상세 수치와 트러블슈팅을 반영
+이 항목은 Phase 8 Runbook 문서화 완료 기준이 아니라, 블로그/README 최종 게시 전 채워야 할 evidence checklist다.
+Phase 8 완료 기준은 Incident Runbook과 supporting documents가 장애 판단·대응·복구 검증 기준을 제공하는지 여부로 본다.
+
+- [ ] 필수 Grafana 캡처 5개 이상 저장
+- [ ] Prometheus target UP 캡처 저장
+- [ ] k6 summary JSON 저장
+- [ ] DR Drill 결과 Markdown/JSON 저장
+- [ ] Redis down, DB pressure, Nginx burst 전후 비교 표 작성
+- [ ] 정합성 검증 결과 0건 기록
+- [ ] README에는 요약 표와 대표 캡처만 반영
+- [ ] blog에는 상세 수치와 트러블슈팅을 반영

@@ -64,6 +64,11 @@ Ops Phase 8의 목표는 다음이다.
 
 ## 5. 파일/디렉터리 기준
 
+Note:
+일부 문서 번호는 Development/Ops 확장 과정에서 생성된 historical numbering을 유지한다.
+Ops Phase 번호와 docs 파일 번호는 1:1로 대응하지 않는다.
+실제 Ops Phase 기준은 본 문서의 구현 범위 표를 따른다.
+
 ```text
 docs/
   20-infra-metrics-design.md
