@@ -29,6 +29,7 @@
 | F-013 | Blue-Green 전환 후 smoke 실패 | Blue rollback 후 smoke/verify |
 | F-014 | Failure Recovery Runbook Drift | 장애 주입, 복구, 검증 절차가 문서와 어긋나지 않도록 자동 drill |
 | F-015 | Alert Rule / Runbook Drift | Prometheus alert rule과 운영 대응 기준이 실제 metric/runbook과 어긋나지 않도록 검증 |
+| F-016 | Incident Timeline / Postmortem Drift | 장애 발생, 탐지, 영향 확인, 복구, 정합성 검증, Action Item이 누락되지 않도록 postmortem drill |
 
 ---
 
