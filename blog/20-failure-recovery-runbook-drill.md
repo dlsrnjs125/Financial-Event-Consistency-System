@@ -121,9 +121,6 @@ consistency evidence로 확인해야 한다.
 
 이번 Phase를 통해 장애 대응 문서가 실행 가능한 runbook으로 바뀌었다.
 
-## 게시 전 보강 항목
-
-- [x] `make ops5-demo` terminal evidence 추가
-- [x] Redis recovery count-only evidence 추가
-- [x] GitHub Actions Ops5 gate evidence 추가
-- [ ] TODO: evidence needed - 최종 Velog 게시 전 이미지 경로와 캡션 렌더링 확인
+`make ops5-demo` 실행 화면, Redis recovery count-only evidence, GitHub Actions
+Ops5 gate 결과를 함께 남긴 이유도 여기에 있다. 장애 복구 Runbook은 "절차가 있다"가
+아니라 "실제로 실행했고, 복구 후 정합성까지 확인했다"는 증거와 함께 읽혀야 한다.

@@ -46,6 +46,8 @@
 Ops Extension Track은 Phase 8 Incident Runbook에서 종료한다.
 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 증거를 보완하기 위한 supporting documents로 관리한다.
 
+Ops Phase 8에서는 장애 대응 Runbook을 최종 정리하고, Grafana p95/p99 지표와 rollback smoke/consistency gate 결과를 evidence로 남겼다.
+
 ## 5. Final Verification Summary
 
 | 검증 항목 | 방법 | 결과 요약 | 근거 문서 |
@@ -54,9 +56,9 @@ Ops Extension Track은 Phase 8 Incident Runbook에서 종료한다.
 | Redis 장애 대응 | Redis down/degraded drill + fallback | PostgreSQL 기준 정합성 유지 | [Failure Recovery Drill](docs/23-failure-recovery-runbook-drill.md), [Blog 05](blog/05-redis-lock-cache-fallback.md), [Blog 20](blog/20-failure-recovery-runbook-drill.md) |
 | 상태 전이 검증 | State machine test | invalid transition 차단 | [State Transition Table](docs/13-state-transition-table.md), [Blog 06](blog/06-state-transition-test-strategy.md) |
 | 성능 측정 | k6 load/stress/duplicate storm | p95/p99, 5xx, retry 지표 측정 구조 수립 | [Performance Design](docs/16-performance-measurement-design.md), [Blog 07](blog/07-k6-duplicate-storm-performance-test.md) |
-| 배포 안정성 | Blue-Green + rollback | smoke/verify 후 traffic rollback | [Deployment Strategy](docs/09-deployment-strategy.md), [Phase 12](docs/phase-12-blue-green-rollback.md), [Blog 11](blog/11-blue-green-rollback-simulation.md) |
+| 배포 복구 | Blue-Green rollback + smoke + consistency gate | rollback 후 health/ready/smoke와 중복 ledger/event 0건 확인 | [Deployment Strategy](docs/09-deployment-strategy.md), [Phase 12](docs/phase-12-blue-green-rollback.md), [Blog 11](blog/11-blue-green-rollback-simulation.md) |
 | DR Drill | PostgreSQL dump restore + consistency SQL | restore 후 정합성 검증 | [PostgreSQL DR Drill](docs/22-postgres-backup-restore-drill.md), [DR Report](reports/dr/ops4-postgres-restore-drill.md), [Blog 15](blog/15-postgresql-backup-restore-drill.md) |
-| 장애 대응 | Runbook + SLO/SLI + postmortem | 장애별 탐지/복구 기준 문서화 | [Incident Runbook](docs/26-incident-runbook-index.md), [SLO/SLI](docs/29-slo-sli-error-budget.md), [Blog 19](blog/19-incident-runbook-oncall-simulation.md), [Blog 22](blog/22-incident-timeline-postmortem-drill.md) |
+| 장애 대응 | Incident Runbook + Grafana evidence + rollback verification | 장애별 탐지/대응/복구 기준 문서화 | [Incident Runbook](docs/26-incident-runbook-index.md), [SLO/SLI](docs/29-slo-sli-error-budget.md), [Blog 19](blog/19-incident-runbook-oncall-simulation.md), [Blog 22](blog/22-incident-timeline-postmortem-drill.md) |
 
 ## 6. Architecture
 

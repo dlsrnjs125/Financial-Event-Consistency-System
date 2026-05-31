@@ -79,6 +79,13 @@
 | Evidence Path |  |
 | Follow-up Action |  |
 
+## Actual Evidence Paths
+
+| Scenario | Evidence Path | Verified Point |
+| --- | --- | --- |
+| Grafana request/latency overview | `docs/images/ops8-02-grafana-request-latency-overview.png` | request rate, p95/p99 latency observable |
+| Rollback smoke and consistency gate | `docs/images/ops8-03-rollback-smoke-consistency-pass.png` | health/ready 200, smoke pass, duplicated ledger/event count = 0 |
+
 ## 6. Ops Phase 1 - Monitoring Foundation Result
 
 Ops Phase 1은 성능 수치 측정이 아니라 인프라 metric 수집 기반을 구축하는 단계다.
