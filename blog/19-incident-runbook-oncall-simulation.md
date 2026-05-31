@@ -142,3 +142,8 @@ SLO/SLI 판단 기준은 `docs/29-slo-sli-error-budget.md`,
 rollback smoke와 consistency gate 결과를 함께 남겼다. Runbook은 문서만으로
 끝나는 것이 아니라, 운영자가 실제 장애 대응 순간에 어떤 지표와 검증 결과를
 기준으로 판단할지 보여주는 evidence와 연결되어야 한다.
+
+이번 Phase에서 모든 장애를 자동으로 주입하는 것보다 중요하게 본 것은,
+자동화된 drill과 수동 확인이 필요한 장애를 구분하는 것이었다. Redis degraded,
+rollback, postmortem은 실제 명령으로 evidence를 남겼고, PostgreSQL connection
+exhaustion이나 Secret leak은 운영자가 따라갈 manual checklist로 분리했다.

@@ -6,7 +6,7 @@
 - GitHub 초기 Push: **완료**
 - 다음 단계: **프로젝트 종료 기준 검토 및 PR 정리**
 
-Phase 8에서는 Prometheus custom metrics, trace_id/request_id context middleware, 구조화 로그, Grafana dashboard 초안, alert rule 초안, 로컬 Prometheus/Grafana provisioning을 구현했다.
+Development Phase 8에서는 Prometheus custom metrics, trace_id/request_id context middleware, 구조화 로그, Grafana dashboard 초안, alert rule 초안, 로컬 Prometheus/Grafana provisioning을 구현했다.
 현재 추적은 `X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적이다.
 OpenTelemetry SDK 및 W3C `traceparent`/`tracestate` 분산 추적은 핵심 개발 범위에서 제외하고 향후 운영 고도화 후보로 남긴다.
 
