@@ -1,5 +1,8 @@
 # Observability Evidence Plan
 
+> 이 문서는 Ops Phase 8 Incident Runbook을 보완하기 위한 supporting document입니다.
+> 별도의 추가 Ops Phase가 아닙니다.
+
 ## 1. 목적
 
 Prometheus, Grafana, k6, Runbook은 붙이는 것만으로 운영성이 증명되지 않는다.

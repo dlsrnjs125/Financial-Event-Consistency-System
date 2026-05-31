@@ -1,18 +1,23 @@
-# Ops Phase 7 - Incident Runbook & On-call Simulation
+# Ops Phase 8 - Incident Runbook Finalization
+
+> 이 문서는 Ops Phase 8의 핵심 산출물이다.
+> Ops Phase 8은 본 프로젝트의 마지막 필수 Ops 단계이며, 장애 탐지·대응·복구 검증·재발 방지 절차를 정리한다.
 
 ## 1. 해결하려는 운영 문제
 
 모니터링은 장애를 감지하는 장치이고, Runbook은 장애가 났을 때 운영자가 어떤 순서로 판단할지 고정하는 문서다.
 
-Ops Phase 7은 Redis 장애, DB connection 고갈, Nginx 5xx, p99 latency, disk full, failed deployment 상황을 재현 가능한 runbook으로 정리한다.
+Ops Phase 8은 Redis 장애, DB connection 고갈, Nginx 5xx, p99 latency, failed deployment, consistency violation, security incident 상황을 운영자가 추적 가능한 runbook으로 정리한다.
+새 장애 주입 기능을 늘리는 단계가 아니라, Ops Phase 4~7에서 만든 DR Drill, Failure Recovery Drill, Alert Rule, Postmortem evidence를 한 곳에서 찾을 수 있게 연결하는 문서화 단계다.
 
 ## 2. 구현 범위
 
 - 장애별 runbook 작성
 - alert rule과 runbook 링크 연결
-- 장애 훈련 명령 설계
+- 장애 훈련 명령, local evidence, manual checklist 연결
 - 복구 후 정합성 검증 기준 정리
 - incident report 결과 파일 설계
+- SLO/SLI, observability evidence, measurement result template 연결
 
 ## 3. 제외 범위
 
@@ -21,7 +26,17 @@ Ops Phase 7은 Redis 장애, DB connection 고갈, Nginx 5xx, p99 latency, disk 
 - 장애 자동 복구는 초기 범위에서 제외한다.
 - 운영 DB destructive drill은 제외한다.
 
-## 4. 파일/디렉터리 변경 계획
+## 4. Supporting Documents 연결
+
+| Supporting document | Runbook에서 사용하는 역할 |
+| --- | --- |
+| [29-slo-sli-error-budget.md](29-slo-sli-error-budget.md) | 장애 심각도, SLO 위반, error budget 판단 기준 |
+| [33-observability-evidence-plan.md](33-observability-evidence-plan.md) | Prometheus/Grafana/log screenshot evidence 수집 기준 |
+| [34-measurement-result-template.md](34-measurement-result-template.md) | 장애 대응 결과와 측정값 기록 양식 |
+| [27-threat-model.md](27-threat-model.md) | 보안성 장애 시나리오의 위협 근거 |
+| [32-security-checklist.md](32-security-checklist.md) | 운영 보안 점검 기준 |
+
+## 5. 파일/디렉터리 기준
 
 ```text
 docs/
@@ -45,34 +60,35 @@ reports/
       result.md
 ```
 
-## 5. 검증 명령어
+## 6. 검증 기준
 
-```bash
-make drill-redis-down
-make drill-postgres-connection-exhausted
-make drill-nginx-5xx
-make drill-high-latency
-make drill-disk-full
-make drill-failed-deployment
-make drill-consistency-violation
-make drill-secret-leak
-```
+| Scenario | Verification mode | Evidence |
+| --- | --- | --- |
+| Redis Down / Redis Degraded | Local command | `make ops5-demo`, `make ops7-demo` |
+| PostgreSQL connection exhausted | Manual checklist / planned verification | readiness failure, DB connection metric, recovery checklist |
+| Nginx 5xx spike | Manual checklist / planned verification | Nginx access log, HTTP 5xx metric, routed smoke |
+| High latency / p99 latency spike | Local report / manual checklist | k6 result, latency dashboard, p95/p99 metric |
+| Failed deployment / rollback | Local command | `make ops2-demo`, `make deploy-rollback` |
+| Consistency violation | Local consistency check | duplicate ledger count, idempotency violation count, reconciliation failure metric |
+| Secret leak or security incident | Manual checklist | Threat Model, Secret Management Policy, Security Checklist |
 
 성공 기준:
 
-- 각 장애별 재현 명령 존재
-- 장애 재현 후 alert firing 확인
+- 각 장애별 local evidence 또는 manual checklist 존재
+- 장애 재현 또는 planned verification 기준 명시
+- alert firing 또는 detection metric 확인 기준 명시
 - runbook 절차대로 복구 가능
 - 복구 후 정합성 검증 통과
-- `reports/incidents/{scenario}/result.md` 생성
+- incident report 또는 measurement result template으로 결과 기록 가능
 
-## 6. 완료 기준과 README에 남길 결과
+## 7. 완료 기준과 README에 남길 결과
 
 ### Runbook 목록
 
 | 장애 | 문서 |
 |---|---|
 | Redis Down | [runbooks/redis-down.md](runbooks/redis-down.md) |
+| Redis Degraded | [23-failure-recovery-runbook-drill.md](23-failure-recovery-runbook-drill.md), [25-incident-timeline-postmortem-drill.md](25-incident-timeline-postmortem-drill.md) |
 | PostgreSQL Connection Exhausted | [runbooks/postgres-connection-exhausted.md](runbooks/postgres-connection-exhausted.md) |
 | Nginx 5xx Spike | [runbooks/nginx-5xx-spike.md](runbooks/nginx-5xx-spike.md) |
 | High Latency p99 | [runbooks/high-latency-p99.md](runbooks/high-latency-p99.md) |
@@ -87,16 +103,15 @@ make drill-secret-leak
 
 각 runbook은 아래 구조를 따른다.
 
-1. 장애 정의
-2. 사용자 영향
-3. 즉시 확인할 Dashboard
-4. Alert Rule
-5. 1차 확인 명령
-6. 원인 분기표
-7. 대응 절차
-8. 복구 확인 기준
-9. 재발 방지
-10. 사후 기록 템플릿
+1. 장애 상황
+2. 예상 원인
+3. 사용자 영향
+4. 탐지 방법
+5. 대응 방법
+6. 복구 검증
+7. 재발 방지
+8. README/블로그 기록 문장
+9. 사후 기록 템플릿
 
 ### Alert Rule 연결
 

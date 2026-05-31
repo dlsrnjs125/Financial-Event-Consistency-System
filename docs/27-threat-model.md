@@ -1,5 +1,8 @@
 # Threat Model
 
+> 이 문서는 Ops Phase 7 Internal Network Security를 보완하기 위한 supporting document입니다.
+> 별도의 추가 Ops Phase가 아닙니다.
+
 ## 1. 목적
 
 보안 설계는 어떤 기술을 사용했는지보다 어떤 위협을 막으려는지부터 정의해야 한다.

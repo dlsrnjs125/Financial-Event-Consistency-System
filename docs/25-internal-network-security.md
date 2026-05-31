@@ -1,11 +1,14 @@
-# Ops Phase 6 - Internal Network & Secure Admin Access
+# Ops Phase 7 Supporting - Internal Network & Secure Admin Access
+
+> 이 문서는 Ops Phase 7 Internal Network Security를 보완하기 위한 supporting document입니다.
+> 별도의 추가 Ops Phase가 아닙니다.
 
 ## 1. 해결하려는 운영 문제
 
 모든 endpoint를 같은 방식으로 열어두면 운영은 편해 보일 수 있다.
 하지만 `/metrics`, `/ready`, `/admin/reconciliation` 같은 endpoint는 내부 상태와 장애 정보를 노출할 수 있다.
 
-Ops Phase 6은 NAC/VPN/DLP 솔루션 자체를 구현하기보다, 금융 사내망 운영 관점에서 어떤 endpoint를 어떤 주체에게 열어야 하는지 정의한다.
+이 문서는 NAC/VPN/DLP 솔루션 자체를 구현하기보다, 금융 사내망 운영 관점에서 어떤 endpoint를 어떤 주체에게 열어야 하는지 정의한다.
 
 ## 2. 구현 범위
 

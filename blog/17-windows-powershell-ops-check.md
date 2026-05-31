@@ -5,7 +5,7 @@
 서버는 Linux/Docker 기반이어도 운영자 단말은 Windows일 수 있다.
 운영자가 매번 SSH로 서버에 들어가지 않고도 API health, readiness, metrics, incident snapshot을 확인할 수 있어야 한다.
 
-그래서 PowerShell 기반 점검 스크립트를 Ops Phase 5로 설계했다.
+그래서 PowerShell 기반 점검 스크립트를 필수 Ops Phase가 아닌 운영 보조 도구 후보로 분리했다.
 
 ## 2. 스크립트 구조
 
@@ -69,7 +69,9 @@ PowerShell 스크립트는 운영자 점검 편의를 위한 보조 도구다.
 
 ## 7. 실제 구현 후 보강할 내용
 
-이 글은 Ops Phase 5 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+이 글은 필수 Ops Phase가 아니라 Windows 운영자 단말 지원을 위한 optional enhancement 초안이다.
+Ops Extension Track은 Phase 8 Incident Runbook에서 종료하고, PowerShell 점검 스크립트는 향후 고도화 후보로 둔다.
+실제 구현을 진행한다면 다음 내용을 추가한다.
 
 - PowerShell 정상 실행 결과
 - Redis down 상태에서 degraded exit code 확인

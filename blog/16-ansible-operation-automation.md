@@ -84,7 +84,9 @@ make ansible-collect-logs
 
 ## 7. 실제 구현 후 보강할 내용
 
-이 글은 Ops Phase 4 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+이 글은 필수 Ops Phase가 아니라 향후 운영 자동화 고도화 후보를 설명하는 초안이다.
+Ops Extension Track은 Phase 8 Incident Runbook에서 종료하고, Ansible 자동화는 optional enhancement로 분리한다.
+실제 구현을 진행한다면 다음 내용을 추가한다.
 
 - `ansible-lint` 결과
 - check mode 실행 결과

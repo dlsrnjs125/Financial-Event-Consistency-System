@@ -1,5 +1,8 @@
 # Measurement Result Template
 
+> 이 문서는 Ops Phase 8 Incident Runbook을 보완하기 위한 supporting document입니다.
+> 별도의 추가 Ops Phase가 아닙니다.
+
 ## 1. 목적
 
 이 문서는 Ops Phase 구현 후 측정 결과를 같은 형식으로 기록하기 위한 템플릿이다.

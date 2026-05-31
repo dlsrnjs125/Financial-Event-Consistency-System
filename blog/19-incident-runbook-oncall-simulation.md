@@ -89,7 +89,9 @@ Runbook은 실제 장애를 대신 해결하지 않는다.
 
 ## 9. 실제 구현 후 보강할 내용
 
-이 글은 Ops Phase 7 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+이 글은 Ops Phase 8 Incident Runbook finalization을 설명하기 위한 게시 초안이다.
+실제 Redis stop/start incident drill은 Ops Phase 5~7 evidence에서 다루고, 이 글은 장애 유형별 판단 순서와 복구 기준을 정리하는 역할을 맡는다.
+Runbook 세부 evidence를 확장한다면 다음 내용을 추가한다.
 
 - 각 장애 drill 명령 실행 결과
 - alert firing 캡처 또는 Prometheus API 결과

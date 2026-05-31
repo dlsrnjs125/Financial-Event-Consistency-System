@@ -1,4 +1,7 @@
-# Ops Phase 5 - Windows/PowerShell Operator Scripts
+# Optional Enhancement - Windows/PowerShell Operator Scripts
+
+> 이 문서는 현재 필수 Ops Phase에 포함되지 않는 optional enhancement 문서입니다.
+> 프로젝트 종료 기준에는 포함하지 않고, 향후 운영 고도화 시 참고합니다.
 
 ## 1. 해결하려는 운영 문제
 
@@ -6,7 +9,7 @@
 
 운영자가 매번 SSH로 서버에 들어가지 않고도 API health, readiness, metrics, incident snapshot을 확인할 수 있어야 한다.
 
-Ops Phase 5는 Windows 운영자 워크스테이션에서 실행 가능한 PowerShell 점검 스크립트를 설계한다.
+PowerShell operator script는 Windows 운영자 워크스테이션에서 실행 가능한 점검 스크립트를 설계하는 향후 고도화 후보다.
 
 ## 2. 구현 범위
 
