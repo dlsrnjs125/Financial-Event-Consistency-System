@@ -36,9 +36,14 @@ Timeline은 최소 다음 phase를 포함한다.
 | RECOVERED | readiness 회복 | ready=PASS |
 | VERIFIED | consistency 검증 완료 | duplicate_ledger_count=0 |
 
-장애 발생 시각과 탐지 시각은 분리해 기록한다. `detection latency seconds`는 incident
-start부터 Redis degraded 탐지까지의 시간이고, `recovery duration seconds`는 start부터
-readiness/검증 완료까지의 시간을 의미한다.
+장애 발생 시각과 탐지 시각은 분리해 기록한다.
+
+| 지표 | 의미 |
+|---|---|
+| Detection latency seconds | started -> detected |
+| Mitigation latency seconds | detected -> mitigated |
+| Recovery duration seconds | mitigated -> recovered |
+| Total incident duration seconds | started -> recovered |
 
 ## Impact Evidence 기준
 
@@ -53,6 +58,7 @@ Impact evidence는 row data가 아니라 count-only 값으로 남긴다.
 | Consistency check | 전체 consistency count가 0 |
 
 Report에는 secret, token, account_no 원문, 거래 row data를 기록하지 않는다.
+추적성을 위해 synthetic external event id와 idempotency key는 prefix만 기록한다.
 
 ## Root Cause Analysis 기준
 
@@ -89,6 +95,8 @@ Action item은 단순 희망사항이 아니라 후속 Phase에서 검증 가능
 CI에서는 Redis stop/start를 직접 실행하지 않는다. 대신 다음을 검증한다.
 
 - `scripts/ops7_incident_timeline_drill.sh` 문법과 실행 권한
+- `MODE=help` 실행 가능 여부
+- `MODE=validate-report`를 통한 script 기반 report 검증
 - postmortem report 파일 존재
 - 필수 section 존재
 - `Overall result | PASS`
@@ -96,6 +104,7 @@ CI에서는 Redis stop/start를 직접 실행하지 않는다. 대신 다음을 
 - `Idempotency violation count | 0`
 - `Incident Timeline`
 - `Action Items`
+- duration evidence 문구
 
 이 선택은 container stop/start로 인한 runner flakiness를 줄이기 위한 trade-off다.
 
@@ -128,5 +137,5 @@ readiness recovery, consistency check까지 실행한 뒤 report를 생성한다
 - Duplicate smoke가 실패하면 HMAC 설정, API health, PostgreSQL readiness를 먼저 확인한다.
 - Duplicate ledger count가 0이 아니면 PostgreSQL unique constraint와 idempotency
   transaction boundary를 우선 점검한다.
-- CI는 local evidence report를 검증한다. CI에서 실제 incident drill을 실행하지 않는 것은
-  구현 누락이 아니라 안정적인 gate를 위한 분리다.
+- CI는 `MODE=validate-report`로 local evidence report를 검증한다. CI에서 실제 incident
+  drill을 실행하지 않는 것은 구현 누락이 아니라 안정적인 gate를 위한 분리다.

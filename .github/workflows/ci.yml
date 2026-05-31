@@ -317,20 +317,11 @@ jobs:
         run: |
           bash -n scripts/ops7_incident_timeline_drill.sh
           test -x scripts/ops7_incident_timeline_drill.sh
+          MODE=help ./scripts/ops7_incident_timeline_drill.sh
 
-      - name: Verify Ops7 evidence report format
+      - name: Verify Ops7 evidence report format through script
         run: |
-          test -f reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "# Ops Phase 7 - Incident Timeline & Postmortem Drill" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "Incident Summary" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "Incident Timeline" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "Impact Evidence" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "Root Cause Analysis" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "Recovery Verification" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "Action Items" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "| Overall result | PASS |" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "| Duplicate ledger count | 0 |" reports/ops/ops7-incident-timeline-postmortem.md
-          grep -q "| Idempotency violation count | 0 |" reports/ops/ops7-incident-timeline-postmortem.md
+          MODE=validate-report ./scripts/ops7_incident_timeline_drill.sh
 
   gate-check:
     runs-on: ubuntu-latest

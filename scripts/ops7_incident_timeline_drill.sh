@@ -31,13 +31,17 @@ detected_epoch="0"
 mitigated_epoch="0"
 recovered_epoch="0"
 detection_latency_seconds="0"
+mitigation_latency_seconds="0"
 recovery_duration_seconds="0"
+total_incident_duration_seconds="0"
 
 redis_stopped_by_drill=false
 redis_degraded_detected="FAIL"
 api_fallback_behavior="FAIL"
 first_duplicate_smoke_status="0"
 second_duplicate_smoke_status="0"
+synthetic_external_event_id_prefix="SKIPPED"
+synthetic_idempotency_key_prefix="SKIPPED"
 event_count_for_duplicate_smoke="0"
 ledger_count_for_duplicate_smoke="0"
 idempotency_record_count_for_duplicate_smoke="0"
@@ -385,6 +389,52 @@ ensure_preconditions() {
     log "Precheck passed."
 }
 
+usage() {
+    cat <<'EOF'
+Usage: MODE=<mode> ./scripts/ops7_incident_timeline_drill.sh
+
+Modes:
+  check            Run precheck only. Does not stop Redis or write report.
+  drill            Run Redis degraded incident drill and write report. Default.
+  validate-report  Validate committed Ops7 postmortem report format/evidence only.
+  help             Print this help.
+EOF
+}
+
+validate_report() {
+    local required_patterns=(
+        "# Ops Phase 7 - Incident Timeline & Postmortem Drill"
+        "Incident Summary"
+        "Incident Timeline"
+        "Impact Evidence"
+        "Root Cause Analysis"
+        "Recovery Verification"
+        "Action Items"
+        "| Overall result | PASS |"
+        "| Duplicate ledger count | 0 |"
+        "| Idempotency violation count | 0 |"
+        "Detection latency seconds"
+        "Mitigation latency seconds"
+        "Recovery duration seconds"
+        "Total incident duration seconds"
+    )
+    local pattern
+
+    if [ ! -f "${REPORT_FILE}" ]; then
+        echo "Ops7 report file not found: ${REPORT_FILE}" >&2
+        return 1
+    fi
+
+    for pattern in "${required_patterns[@]}"; do
+        if ! grep -q "${pattern}" "${REPORT_FILE}"; then
+            echo "Ops7 report missing required pattern: ${pattern}" >&2
+            return 1
+        fi
+    done
+
+    log "Ops7 report validation passed: ${REPORT_FILE}"
+}
+
 run_incident_drill() {
     local smoke_output
     local external_event_id
@@ -419,10 +469,12 @@ run_incident_drill() {
     idempotency_key="$(printf '%s\n' "${smoke_output}" | awk -F= '$1=="idempotency_key"{print $2}')"
     first_duplicate_smoke_status="$(printf '%s\n' "${smoke_output}" | awk -F= '$1=="first_status"{print $2}')"
     second_duplicate_smoke_status="$(printf '%s\n' "${smoke_output}" | awk -F= '$1=="second_status"{print $2}')"
+    synthetic_external_event_id_prefix="${external_event_id%-*}"
+    synthetic_idempotency_key_prefix="${idempotency_key%-*}"
 
-    event_count="$(psql_scalar "SELECT COUNT(*) FROM transaction_events WHERE external_event_id = '${external_event_id}';")"
-    ledger_count="$(psql_scalar "SELECT COUNT(*) FROM ledger_entries le JOIN transaction_events te ON te.id = le.transaction_event_id WHERE te.external_event_id = '${external_event_id}';")"
-    idem_count="$(psql_scalar "SELECT COUNT(*) FROM idempotency_records WHERE idempotency_key = '${idempotency_key}';")"
+    event_count="$(psql_scalar "SELECT COUNT(*) FROM transaction_events WHERE external_event_id = \$ops7\$${external_event_id}\$ops7\$;")"
+    ledger_count="$(psql_scalar "SELECT COUNT(*) FROM ledger_entries le JOIN transaction_events te ON te.id = le.transaction_event_id WHERE te.external_event_id = \$ops7\$${external_event_id}\$ops7\$;")"
+    idem_count="$(psql_scalar "SELECT COUNT(*) FROM idempotency_records WHERE idempotency_key = \$ops7\$${idempotency_key}\$ops7\$;")"
     event_count_for_duplicate_smoke="${event_count}"
     ledger_count_for_duplicate_smoke="${ledger_count}"
     idempotency_record_count_for_duplicate_smoke="${idem_count}"
@@ -434,10 +486,11 @@ run_incident_drill() {
     else
         api_fallback_behavior="FAIL"
     fi
-    append_timeline "$(utc_now)" "IMPACT_CHECK" "Duplicate smoke executed" "first=${first_duplicate_smoke_status}, second=${second_duplicate_smoke_status}"
+    append_timeline "$(utc_now)" "IMPACT_CHECK" "Duplicate smoke executed" "first=${first_duplicate_smoke_status}, second=${second_duplicate_smoke_status}, event_prefix=${synthetic_external_event_id_prefix}"
 
     mitigated_at="$(utc_now)"
     mitigated_epoch="$(epoch_now)"
+    mitigation_latency_seconds="$(( mitigated_epoch - detected_epoch ))"
     append_timeline "${mitigated_at}" "MITIGATED" "Redis restart requested" "container=start"
     compose start "${REDIS_SERVICE}" >/dev/null
     redis_stopped_by_drill=false
@@ -452,7 +505,8 @@ run_incident_drill() {
     fi
     recovered_at="$(utc_now)"
     recovered_epoch="$(epoch_now)"
-    recovery_duration_seconds="$(( recovered_epoch - started_epoch ))"
+    recovery_duration_seconds="$(( recovered_epoch - mitigated_epoch ))"
+    total_incident_duration_seconds="$(( recovered_epoch - started_epoch ))"
     append_timeline "${recovered_at}" "RECOVERED" "Readiness recovered" "ready=${ready_after_recovery}"
 
     if run_duplicate_smoke "OPS7-RECOVERY" >/dev/null; then
@@ -502,7 +556,9 @@ Redis degraded incident를 재현하고, 장애 발생부터 탐지, 영향 확�
 | Mitigated at | ${mitigated_at} |
 | Recovered at | ${recovered_at} |
 | Detection latency seconds | ${detection_latency_seconds} |
+| Mitigation latency seconds | ${mitigation_latency_seconds} |
 | Recovery duration seconds | ${recovery_duration_seconds} |
+| Total incident duration seconds | ${total_incident_duration_seconds} |
 | Overall result | ${overall_result} |
 
 ## Incident Timeline
@@ -518,6 +574,8 @@ ${timeline_rows}
 | API fallback behavior | ${api_fallback_behavior} |
 | First duplicate smoke status | ${first_duplicate_smoke_status} |
 | Second duplicate smoke status | ${second_duplicate_smoke_status} |
+| Synthetic external event id prefix | ${synthetic_external_event_id_prefix} |
+| Synthetic idempotency key prefix | ${synthetic_idempotency_key_prefix} |
 | Event count for duplicate smoke | ${event_count_for_duplicate_smoke} |
 | Ledger count for duplicate smoke | ${ledger_count_for_duplicate_smoke} |
 | Idempotency record count for duplicate smoke | ${idempotency_record_count_for_duplicate_smoke} |
@@ -559,7 +617,7 @@ ${timeline_rows}
 - Redis degraded는 warning 성격의 incident다. PostgreSQL Source of Truth가 유지되는지와 duplicate ledger 0건을 핵심 기준으로 삼는다.
 - Report에는 실제 거래 row data, account_no 원문, secret, token을 기록하지 않고 PASS/FAIL, duration, count-only evidence만 기록한다.
 - 실제 운영에서는 Slack/PagerDuty/Jira incident ticket과 연결할 수 있지만, 이번 Phase에서는 Markdown postmortem evidence로 제한한다.
-- CI에서는 Redis stop/start incident drill을 직접 실행하지 않고 script/report 형식을 검증한다. 실제 incident evidence는 로컬 \`make ops7-demo\` 결과로 남긴다.
+- CI에서는 Redis stop/start incident drill을 직접 실행하지 않고 \`MODE=validate-report\`로 script/report 형식을 검증한다. 실제 incident evidence는 로컬 \`make ops7-demo\` 결과로 남긴다.
 - 현재 repo에는 \`infra/loki\`, \`infra/promtail\` 구성이 없으므로 trace/log query evidence는 후속 Phase에서 보강한다.
 
 ## Troubleshooting
@@ -567,7 +625,7 @@ ${timeline_rows}
 - Drill 실패 시 cleanup trap이 Redis를 다시 start한다. 그래도 readiness가 회복되지 않으면 \`make ops7-up\` 후 \`make ops7-check\`를 다시 실행한다.
 - Duplicate smoke status가 2xx가 아니면 API health, HMAC header 설정, PostgreSQL readiness를 먼저 확인한다.
 - Duplicate ledger count 또는 idempotency violation count가 0이 아니면 PostgreSQL unique constraint와 idempotency transaction 경계를 우선 점검한다.
-- CI report 검증은 curated local evidence report를 대상으로 한다. CI에서 Redis stop/start를 강제하지 않는 것은 runner flakiness를 줄이기 위한 trade-off다.
+- CI report 검증은 \`MODE=validate-report\`와 curated local evidence report를 대상으로 한다. CI에서 Redis stop/start를 강제하지 않는 것은 runner flakiness를 줄이기 위한 trade-off다.
 
 ## README에 기록할 문장
 
@@ -578,9 +636,25 @@ EOF
 }
 
 main() {
+    if [ "${MODE}" = "help" ]; then
+        usage
+        exit 0
+    fi
+
     if [ "${MODE}" = "check" ]; then
         ensure_preconditions
         exit 0
+    fi
+
+    if [ "${MODE}" = "validate-report" ]; then
+        validate_report
+        exit 0
+    fi
+
+    if [ "${MODE}" != "drill" ]; then
+        echo "Unknown MODE: ${MODE}" >&2
+        usage >&2
+        exit 1
     fi
 
     run_incident_drill
