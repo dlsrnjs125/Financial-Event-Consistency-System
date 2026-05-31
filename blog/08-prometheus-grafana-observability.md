@@ -74,7 +74,7 @@ financial_readiness_dependency_status{dependency}
 ```python
 from prometheus_client import Counter, Histogram, Gauge
 
-# Counter: 누적 개수
+ # Metric type: Counter, 누적 개수
 financial_events_received = Counter(
     'financial_events_received_total',
     'Total transaction events received'
@@ -90,14 +90,14 @@ invalid_state_transition = Counter(
     'Total invalid state transitions attempted'
 )
 
-# Histogram: 시간 분포
+ # Metric type: Histogram, 시간 분포
 request_duration = Histogram(
     'http_request_duration_seconds',
     'HTTP request duration',
     buckets=[0.01, 0.05, 0.1, 0.5, 1.0]
 )
 
-# Gauge: 현재값
+ # Metric type: Gauge, 현재값
 db_connections_active = Gauge(
     'db_connections_active',
     'Active database connections'

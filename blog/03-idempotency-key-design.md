@@ -84,7 +84,7 @@ Idempotency-Key: idem-20260527-001
 같은 Idempotency Key라도 Body가 다르면 위험합니다.
 
 ```python
-# 악의적 또는 실수로 발생하는 상황
+ # 상황: 악의적 또는 실수로 발생하는 다른 Body 요청
 요청 1: Idempotency-Key: idem-001
 {
   "amount": 10000
@@ -114,14 +114,14 @@ def compute_request_hash(request_body: dict) -> str:
     # 2. SHA256 해시 계산
     return hashlib.sha256(normalized.encode()).hexdigest()
 
-# 예시
+ # 예시 request hash
 req1 = {"amount": 10000, "account_id": "ACC-001"}
 hash1 = compute_request_hash(req1)
-# hash1 = "a1b2c3d4e5f6..."
+ # 결과: hash1 = "a1b2c3d4e5f6..."
 
 req2 = {"amount": 50000, "account_id": "ACC-001"}
 hash2 = compute_request_hash(req2)
-# hash2 = "x9y8z7w6v5u4..." (다름!)
+ # 결과: hash2 = "x9y8z7w6v5u4..." (다름!)
 ```
 
 ---

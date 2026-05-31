@@ -1,4 +1,4 @@
-# 장애를 빨리 아는 것도 설계다: Alerting & Incident Response Runbook
+# 21편. 장애를 빨리 아는 것도 설계다: Alerting & Incident Response Runbook
 
 ## 1. 왜 장애 복구 다음 단계로 Alerting을 봤나
 
@@ -175,3 +175,10 @@ Redis down은 warning, PostgreSQL down은 critical이라는 구분은 이 프로
 핵심 설계와 연결된다. Redis는 최적화 계층이고 PostgreSQL은 Source of Truth다.
 그리고 consistency violation은 일반적인 availability 장애보다 더 중요한 금융
 도메인 장애로 다뤄야 한다.
+
+## 게시 전 보강 항목
+
+- [x] `make ops6-demo` local alert validation evidence 추가
+- [x] alert validation report screenshot 추가
+- [x] GitHub Actions Ops6 gate evidence 추가
+- [ ] TODO: evidence needed - 최종 Velog 게시 전 Prometheus rule load PASS 이미지와 report 경로 재확인
