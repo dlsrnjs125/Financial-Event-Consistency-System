@@ -53,3 +53,22 @@
 - Redis fallback은 정합성이 유지되는 한 Warning으로 시작한다.
 - 정합성 위반, secret leak, PostgreSQL write 불가는 error budget을 두지 않는다.
 - SEV1은 즉시 incident report와 재발 방지 action item을 요구한다.
+
+## 6. Runbook Mapping
+
+아래 표는 SLO/SLI signal을 Ops Phase 8 Incident Runbook의 장애 시나리오로 연결한다.
+실제 metric이 아직 exporter 또는 application metric으로 확정되지 않은 항목은 `example metric`으로 표시한다.
+
+| Signal | Threshold Example | Related Runbook | Reason |
+| --- | --- | --- | --- |
+| `financial_http_requests_total` 또는 `financial_http_errors_total` | 5분간 5xx rate 증가 | Nginx 5xx Spike / Failed Deployment | 사용자 요청 실패 증가 |
+| `financial_http_request_duration_seconds` | p95 > 500ms 또는 p99 > 2s | High Latency / p95, p99 Latency Spike | timeout/retry 증가 가능성 |
+| `financial_redis_fallback_total` | fallback 급증 또는 지속 증가 | Redis Down / Redis Degraded | Redis 장애 또는 지연 |
+| `financial_readiness_dependency_status{dependency="postgres"}` | 0 또는 readiness FAIL | PostgreSQL Connection Exhausted | Source of Truth 접근 실패 |
+| `db_connection_usage` (`example metric`) | connection usage >= 90% | PostgreSQL Connection Exhausted | DB connection pool 고갈 |
+| `financial_reconciliation_failures_total` | 최근 window에서 1건 이상 | Consistency Violation | 금융 정합성 위반 |
+| `financial_invalid_state_transition_total` | 1건 이상 | Consistency Violation | 상태 전이 규칙 위반 |
+| security log event / secret scan result | secret, token, raw account_no 노출 의심 | Secret Leak / Security Incident | 보안 사고 가능성 |
+
+정합성 관련 signal은 availability error budget과 분리한다.
+`financial_reconciliation_failures_total` 또는 invalid state transition이 1건이라도 발생하면 SEV1로 분류하고, [26-incident-runbook-index.md](26-incident-runbook-index.md)의 Consistency Violation 시나리오를 따른다.

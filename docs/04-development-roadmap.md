@@ -2,9 +2,9 @@
 
 ## 현재 진행 상태
 
-- 현재 위치: **Ops Phase 6 Alerting & Incident Response Runbook 구현 완료**
+- 현재 위치: **Ops Phase 8 Incident Runbook finalization 완료**
 - GitHub 초기 Push: **완료**
-- 다음 단계: **README / Docs / Blog 최종 정리**
+- 다음 단계: **프로젝트 종료 기준 검토 및 PR 정리**
 
 Phase 8에서는 Prometheus custom metrics, trace_id/request_id context middleware, 구조화 로그, Grafana dashboard 초안, alert rule 초안, 로컬 Prometheus/Grafana provisioning을 구현했다.
 현재 추적은 `X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적이다.
@@ -18,6 +18,8 @@ Phase 12에서는 Nginx upstream snippet 교체, Green smoke, API traffic rollba
 Ops Phase 4에서는 운영 PostgreSQL dump를 생성한 뒤 별도 `postgres-restore` DB에 복원하고, schema/table 및 ledger/event/account/idempotency 정합성 SQL을 실행하는 DR Drill 명령을 추가했다.
 Ops Phase 5에서는 Redis, API, PostgreSQL 장애를 Docker Compose 환경에서 stop/start 방식으로 재현하고, 복구 절차와 health/ready/smoke/consistency 검증을 자동화하는 Failure Recovery Runbook Drill을 추가했다.
 Ops Phase 6에서는 Prometheus Alert Rule과 Incident Response Runbook을 구성하고, API/Redis/PostgreSQL/정합성 장애의 탐지 기준과 운영자 대응 절차를 evidence로 남겼다.
+Ops Phase 7에서는 Redis degraded incident를 timeline과 postmortem evidence로 남겼다.
+Ops Phase 8에서는 Incident Runbook Index를 완성하고 SLO/SLI, observability evidence, measurement template을 supporting documents로 연결했다.
 현재 Prometheus scrape 대상은 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 12 이후 운영 관측 보강 항목이다.
 
 ## 개발 Phase
@@ -1115,7 +1117,7 @@ Ops Extension Track의 마지막 필수 단계로 장애 탐지, 대응, 복구 
 - `docs/29-slo-sli-error-budget.md`
 - `docs/33-observability-evidence-plan.md`
 - `docs/34-measurement-result-template.md`
-- `blog/README.md`
+- `blog/19-incident-runbook-oncall-simulation.md`
 
 완료 기준:
 - Ops Phase가 1~8까지만 유지됨

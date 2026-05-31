@@ -12,14 +12,15 @@ Runbook은 장애가 난 뒤 작성하는 문서가 아니라, 장애가 나기 
 각 장애 문서는 다음 형식을 따른다.
 
 ```text
-1. 증상
-2. 사용자 영향
-3. 즉시 확인할 지표
-4. 확인 명령
-5. 1차 대응
-6. 복구 확인 기준
+1. 장애 상황
+2. 예상 원인
+3. 사용자 영향
+4. 탐지 방법
+5. 대응 방법
+6. 복구 검증
 7. 재발 방지
-8. 사후 기록 템플릿
+8. README/블로그 기록 문장
+9. 사후 기록 템플릿
 ```
 
 이 구조를 고정하면 장애마다 문서 형식이 달라지는 문제를 줄일 수 있다.
@@ -87,14 +88,26 @@ Runbook은 실제 장애를 대신 해결하지 않는다.
 하지만 장애 순간에 어떤 지표를 보고, 어떤 명령을 실행하고,
 어떤 기준으로 복구를 선언할지 미리 정리해두면 대응 속도와 일관성이 크게 좋아진다.
 
-## 9. 실제 구현 후 보강할 내용
+이번 Phase에서는 실제 Slack/PagerDuty 연동이나 모든 장애의 자동 재현을 목표로 두지 않았다.
+Redis degraded와 postmortem evidence는 Ops Phase 5~7에서 실제 drill로 남겼고,
+PostgreSQL connection exhaustion, Nginx 5xx, Secret leak 같은 항목은 manual checklist와 planned verification을 분리했다.
 
-이 글은 Ops Phase 8 Incident Runbook finalization을 설명하기 위한 게시 초안이다.
-실제 Redis stop/start incident drill은 Ops Phase 5~7 evidence에서 다루고, 이 글은 장애 유형별 판단 순서와 복구 기준을 정리하는 역할을 맡는다.
-Runbook 세부 evidence를 확장한다면 다음 내용을 추가한다.
+## 9. Ops Phase 8에서 정리한 것
 
-- 각 장애 drill 명령 실행 결과
-- alert firing 캡처 또는 Prometheus API 결과
-- runbook 절차대로 복구한 기록
-- 복구 후 `make k6-verify` 또는 정합성 SQL 결과
-- `reports/incidents/{scenario}/result.md` 예시
+Ops Phase 8의 핵심 산출물은 `docs/26-incident-runbook-index.md`다.
+이 문서에서 Redis Down/Degraded, PostgreSQL Connection Exhausted, Nginx 5xx Spike,
+High Latency, Failed Deployment/Rollback, Consistency Violation, Secret Leak/Security Incident를 같은 형식으로 정리했다.
+
+SLO/SLI 판단 기준은 `docs/29-slo-sli-error-budget.md`,
+증거 수집 기준은 `docs/33-observability-evidence-plan.md`,
+측정 결과 양식은 `docs/34-measurement-result-template.md`에 연결했다.
+
+중요한 점은 실제 실행 가능한 명령과 수동 확인 항목을 섞지 않는 것이다.
+이미 존재하는 `make ops5-demo`, `make ops7-demo`, `make ops2-demo`, `make deploy-rollback`은 local evidence로 남기고,
+아직 자동화하지 않은 DB connection exhaustion이나 secret leak 대응은 manual checklist로 표시했다.
+
+## 10. 블로그 최종본에서 채울 증거
+
+> TODO: Ops Phase 8 최종 게시 전 Grafana p95/p99 latency panel 캡처 추가
+> TODO: Nginx 5xx 또는 deployment rollback terminal evidence 추가
+> TODO: Secret leak/security checklist PASS evidence 추가
