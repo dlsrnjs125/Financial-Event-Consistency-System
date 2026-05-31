@@ -1,5 +1,8 @@
 # Security Checklist
 
+> 이 문서는 Ops Phase 7 Internal Network Security를 보완하기 위한 supporting document입니다.
+> 별도의 추가 Ops Phase가 아닙니다.
+
 ## 1. 목적
 
 운영 확장 단계에서 보안은 별도 기능이 아니라 배포 전 검증 Gate로 다뤄야 한다.

@@ -1,4 +1,7 @@
-# Ops Phase 4 - Ansible Operation Automation
+# Optional Enhancement - Ansible Operation Automation
+
+> 이 문서는 현재 필수 Ops Phase에 포함되지 않는 optional enhancement 문서입니다.
+> 프로젝트 종료 기준에는 포함하지 않고, 향후 운영 고도화 시 참고합니다.
 
 ## 1. 해결하려는 운영 문제
 
@@ -6,7 +9,7 @@
 
 배포, 백업, 로그 수집, rollback은 반복되는 작업이고, 반복되는 작업은 표준화되어야 한다.
 
-Ops Phase 4는 Docker Compose 운영 작업을 Ansible playbook으로 자동화한다.
+Ansible automation은 Docker Compose 운영 작업을 playbook으로 표준화하는 향후 고도화 후보다.
 같은 playbook을 반복 실행해도 불필요한 변경이 없는 idempotent 구조를 목표로 한다.
 
 ## 2. 구현 범위

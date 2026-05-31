@@ -71,7 +71,9 @@ Nginx 설정과 문서가 다음 기준을 만족해야 한다.
 
 ## 7. 실제 구현 후 보강할 내용
 
-이 글은 Ops Phase 6 구현 전 설계 초안이다. 구현 후에는 다음 내용을 추가한다.
+이 글은 Ops Phase 7 Internal Network Security를 보완하는 운영 보안 초안이다.
+Threat Model, Secret Management, Security Checklist와 함께 supporting document 성격으로 관리한다.
+실제 구현을 확장한다면 다음 내용을 추가한다.
 
 - access matrix 테스트 결과
 - public zone에서 `/metrics` 접근 차단 결과
