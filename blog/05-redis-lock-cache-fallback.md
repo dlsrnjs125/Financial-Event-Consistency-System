@@ -37,7 +37,7 @@ DB 부하 감소, 성능 향상
 key = f"lock:idempotency:{idempotency_key}"
 ttl = 10  # 초
 
-# Lock 획득 시도
+ # Redis Lock 획득 시도
 result = redis.set(key, "locked", nx=True, ex=ttl)
 
 if result:
@@ -53,10 +53,10 @@ else:
 key = f"cache:idempotency:{idempotency_key}"
 ttl = 3600  # 1시간
 
-# 캐시 저장
+ # Redis cache 저장
 redis.setex(key, ttl, json.dumps(response))
 
-# 캐시 조회
+ # Redis cache 조회
 cached = redis.get(key)
 if cached:
     return json.loads(cached)

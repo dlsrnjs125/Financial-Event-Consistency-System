@@ -1,4 +1,4 @@
-# 장애를 복구한 뒤 무엇을 남겨야 할까: Incident Timeline & Postmortem Drill
+# 22편. 장애를 복구한 뒤 무엇을 남겨야 할까: Incident Timeline & Postmortem Drill
 
 ## 1. 왜 복구보다 기록이 중요한가
 
@@ -163,3 +163,7 @@ Timeline, impact evidence, root cause, recovery verification, action item이 같
 Redis degraded는 전체 장애가 아니지만, 금융 이벤트 시스템에서는 중복 요청 압력이
 PostgreSQL까지 도달할 수 있다. 그래서 warning incident라도 duplicate ledger 0건과
 idempotency violation 0건을 반드시 evidence로 확인해야 한다.
+
+`make ops7-demo` incident drill, postmortem report screenshot, GitHub Actions Ops7
+gate evidence를 함께 남긴 것은 postmortem이 회고 문서에 그치지 않고 탐지,
+영향 확인, 복구, 정합성 검증이 모두 연결된 운영 기록임을 보여주기 위해서다.

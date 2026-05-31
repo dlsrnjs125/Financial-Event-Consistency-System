@@ -295,6 +295,11 @@ make ops2-demo-full
 
 `ops2-demo-full`은 Blue 시작, Green 검증, Green 전환, routed smoke, Blue rollback, PostgreSQL 정합성 검증까지 한 번에 수행한다.
 
+![Rollback smoke and consistency verification](../docs/images/ops8-03-rollback-smoke-consistency-pass.png)
+
+Rollback 이후 `/health`, `/ready`, transaction create, idempotency replay가 모두 정상 응답했고, PostgreSQL 기준 중복 ledger/event 검증도 0건으로 통과했다.  
+이 프로젝트에서는 rollback을 단순 traffic switch로 보지 않고, smoke test와 consistency gate를 함께 통과해야 복구 완료로 판단했다.
+
 최종적으로 `ops2-demo-full`을 통해 Blue 시작, Green 검증, 트래픽 전환, routed smoke, Blue rollback, PostgreSQL 정합성 검증을 한 번에 재현했다. 정합성 gate에서는 중복 ledger event와 중복 external event가 모두 0건임을 확인했다.
 
 ## 9. 포기한 것

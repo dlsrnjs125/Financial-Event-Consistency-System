@@ -1,4 +1,4 @@
-# 장애를 가정하지 않고 재현하기: Failure Recovery Runbook Drill
+# 20편. 장애를 가정하지 않고 재현하기: Failure Recovery Runbook Drill
 
 ## 1. 왜 장애 복구 Runbook을 자동화하려고 했나
 
@@ -120,3 +120,7 @@ PostgreSQL은 destructive 복구를 피하고 readiness fail/pass와 count-only
 consistency evidence로 확인해야 한다.
 
 이번 Phase를 통해 장애 대응 문서가 실행 가능한 runbook으로 바뀌었다.
+
+`make ops5-demo` 실행 화면, Redis recovery count-only evidence, GitHub Actions
+Ops5 gate 결과를 함께 남긴 이유도 여기에 있다. 장애 복구 Runbook은 "절차가 있다"가
+아니라 "실제로 실행했고, 복구 후 정합성까지 확인했다"는 증거와 함께 읽혀야 한다.
