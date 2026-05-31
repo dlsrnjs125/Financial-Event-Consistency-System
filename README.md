@@ -26,6 +26,7 @@ Phase 12에서는 Green 환경 검증 후 Nginx upstream을 전환하고, 이상
 Ops Phase 4에서는 PostgreSQL dump를 별도 `postgres-restore` DB에 복원하고, ledger/event/account/idempotency 정합성 SQL을 실행하는 DR Drill을 구현했다.
 Ops Phase 5에서는 Redis/API/PostgreSQL 장애를 Docker Compose 환경에서 stop/start 방식으로 재현하고, 복구 후 health/ready/smoke/consistency check와 recovery duration을 evidence로 남긴다.
 Ops Phase 6에서는 Prometheus Alert Rule과 Incident Response Runbook을 구성해 장애 탐지 기준과 1차 대응 절차를 evidence로 남긴다.
+Ops Phase 7에서는 Redis degraded incident를 재현하고, 탐지·영향 확인·복구·정합성 검증·Action Item을 postmortem evidence로 남긴다.
 
 ---
 
@@ -131,6 +132,7 @@ make ops2-demo         # Ops Phase 2 Blue-Green 전환/rollback 재현
 make ops4-demo         # Ops Phase 4 PostgreSQL backup/restore DR drill 재현
 make ops5-demo         # Ops Phase 5 Failure Recovery Runbook Drill 재현
 make ops6-demo         # Ops Phase 6 Alerting & Incident Response Runbook 검증
+make ops7-demo         # Ops Phase 7 Incident Timeline & Postmortem Drill 재현
 ```
 
 ### 주요 엔드포인트
@@ -306,6 +308,14 @@ Prometheus Alert Rule과 Incident Response Runbook을 구성하고, API/Redis/Po
 - Runbook: `docs/24-alerting-incident-response-runbook.md`
 - Blog: `blog/21-alerting-incident-response-runbook.md`
 
+### Ops Phase 7. Incident Timeline & Postmortem Drill
+
+Redis degraded incident를 재현하고, 장애 발생부터 탐지·영향 확인·복구·정합성 검증·재발 방지 Action Item까지 Incident Timeline과 Postmortem report로 남겼다.
+
+- Evidence report: `reports/ops/ops7-incident-timeline-postmortem.md`
+- Runbook: `docs/25-incident-timeline-postmortem-drill.md`
+- Blog: `blog/22-incident-timeline-postmortem-drill.md`
+
 ---
 
 ## 📚 기술 블로그 시리즈
@@ -334,6 +344,7 @@ Prometheus Alert Rule과 Incident Response Runbook을 구성하고, API/Redis/Po
 19. [장애 Runbook을 작성하면서 배운 운영자의 사고방식](./blog/19-incident-runbook-oncall-simulation.md) - 장애 탐지 지표, 확인 명령, 1차 대응, 복구 기준을 runbook으로 고정한다.
 20. [장애를 가정하지 않고 재현하기: Failure Recovery Runbook Drill](./blog/20-failure-recovery-runbook-drill.md) - Redis/API/PostgreSQL 장애 주입, 복구, 정합성 검증, duration evidence를 자동화한다.
 21. [장애를 빨리 아는 것도 설계다: Alerting & Incident Response Runbook](./blog/21-alerting-incident-response-runbook.md) - Prometheus alert rule과 운영자 대응 runbook을 연결한다.
+22. [장애를 복구한 뒤 무엇을 남겨야 할까: Incident Timeline & Postmortem Drill](./blog/22-incident-timeline-postmortem-drill.md) - Redis degraded incident의 timeline, impact evidence, postmortem action item을 남긴다.
 
 ---
 

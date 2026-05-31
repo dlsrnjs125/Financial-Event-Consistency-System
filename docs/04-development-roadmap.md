@@ -1083,27 +1083,47 @@ Prometheus Alert Rule과 Incident Response Runbook을 구성하고, API/Redis/Po
 - CI Gate에 Ops6 alerting check 포함
 - README에는 요약과 링크만 추가
 
-### Ops Phase 7. Ansible Operation Automation
+### Ops Phase 7. Incident Timeline & Postmortem Drill
+
+목표:
+Redis degraded incident를 재현하고, 장애 발생부터 탐지, 영향 확인, 복구, 정합성 검증, Action Item까지 timeline과 postmortem evidence로 남긴다.
+
+주요 산출물:
+- `scripts/ops7_incident_timeline_drill.sh`
+- `reports/ops/ops7-incident-timeline-postmortem.md`
+- `docs/25-incident-timeline-postmortem-drill.md`
+- `blog/22-incident-timeline-postmortem-drill.md`
+- Makefile `ops7-*` 명령
+
+완료 기준:
+- incident timeline report 생성
+- duplicate ledger count 0
+- idempotency violation count 0
+- recovery verification PASS
+- action item 문서화
+- CI Gate에 Ops7 check 포함
+
+### Ops Phase 8. Ansible Operation Automation
 
 - 서버 설정, 배포, 백업, 로그 수집, rollback 자동화
 - idempotent playbook 작성
 - 반복 운영 작업의 표준화
 - 완료 기준: `make ansible-check`, `make ansible-deploy`, `make ansible-backup`, `make ansible-rollback`
 
-### Ops Phase 8. Windows/PowerShell Operator Scripts
+### Ops Phase 9. Windows/PowerShell Operator Scripts
 
 - Windows 운영자 단말에서 health/readiness/metrics 점검 가능하도록 PowerShell 스크립트 제공
 - incident snapshot 저장 자동화
 - 완료 기준: `Invoke-HealthCheck.ps1`, `Invoke-ReadinessCheck.ps1`, `Invoke-MetricsCheck.ps1`, `Invoke-IncidentSnapshot.ps1`
 
-### Ops Phase 9. Internal Network & Secure Admin Access
+### Ops Phase 10. Internal Network & Secure Admin Access
 
 - 외부 금융사 호출 경로와 내부 운영자 접근 경로 분리
 - IP allowlist, admin token, metrics private access 설계
 - 로그/개인정보/DLP 관점의 마스킹 정책 보강
 - 완료 기준: public/internal endpoint 접근 정책이 Nginx 설정과 문서에 일치
 
-### Ops Phase 10. Incident Runbook & On-call Simulation
+### Ops Phase 11. Incident Runbook & On-call Simulation
 
 - Redis Down, DB Connection Exhaustion, Nginx 5xx, p99 latency, Disk Full, Failed Deployment Runbook 작성
 - Consistency Violation, Secret Leak, Backup Restore Failed, Metrics Unavailable Runbook 작성

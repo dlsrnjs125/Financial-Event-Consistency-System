@@ -56,6 +56,7 @@ help: ## Show this help message
 	@echo "  make ops4-demo         # Run Ops Phase 4 PostgreSQL backup/restore DR drill"
 	@echo "  make ops5-demo         # Run Ops Phase 5 failure recovery runbook drill"
 	@echo "  make ops6-demo         # Run Ops Phase 6 alerting/runbook verification"
+	@echo "  make ops7-demo         # Run Ops Phase 7 incident timeline/postmortem drill"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -248,6 +249,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/postgres_dr_drill.sh
 	bash -n scripts/ops5_failure_recovery_drill.sh
 	bash -n scripts/ops6_alert_rule_validation.sh
+	bash -n scripts/ops7_incident_timeline_drill.sh
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -266,6 +268,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/postgres_dr_drill.sh
 	test -x scripts/ops5_failure_recovery_drill.sh
 	test -x scripts/ops6_alert_rule_validation.sh
+	test -x scripts/ops7_incident_timeline_drill.sh
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -832,6 +835,36 @@ ops6-demo: docker-check ## Start stack, validate alert rules, check rule loading
 	@$(MAKE) ops6-check
 	@$(MAKE) ops6-drill
 	@cat reports/ops/ops6-alerting-incident-runbook.md
+
+# Ops Phase 7 Incident Timeline & Postmortem Drill
+.PHONY: ops7-up
+ops7-up: docker-check ## Start app stack for Ops Phase 7 incident drill
+	@cp infra/nginx/conf.d/upstream-active.conf.blue infra/nginx/conf.d/upstream-active.conf
+	@printf 'blue\n' > infra/nginx/.active-color
+	$(DOCKER_COMPOSE) up -d --build postgres redis api-blue
+	$(DOCKER_COMPOSE) up -d --force-recreate nginx
+	@echo "Ops Phase 7 stack is running."
+	@echo "Public Nginx:   $(BASE_URL)"
+	@echo "Internal ready: $(INTERNAL_BASE_URL)"
+
+.PHONY: ops7-check
+ops7-check: docker-check ## Run Ops Phase 7 preflight health/readiness/dependency checks
+	@MODE=check BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) ./scripts/ops7_incident_timeline_drill.sh
+
+.PHONY: ops7-drill
+ops7-drill: docker-check ## Run Ops Phase 7 incident timeline and postmortem drill
+	@BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/ops7_incident_timeline_drill.sh
+
+.PHONY: ops7-report
+ops7-report: ## Print Ops Phase 7 incident timeline report
+	@cat reports/ops/ops7-incident-timeline-postmortem.md
+
+.PHONY: ops7-demo
+ops7-demo: docker-check ## Start stack, run incident drill, and print postmortem report
+	@$(MAKE) ops7-up
+	@$(MAKE) ops7-check
+	@$(MAKE) ops7-drill
+	@$(MAKE) ops7-report
 
 .PHONY: perf-cache-off
 perf-cache-off: ## Run duplicate storm with Redis lock on and idempotency cache off
