@@ -66,8 +66,11 @@ SENSITIVE_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 SENSITIVE_TEXT_RE = re.compile(
-    r"(Authorization:\s*\S+|X-Signature:\s*\S+|Idempotency-Key:\s*\S+|"
-    r"DATABASE_URL\s*=|postgresql://[^\\s)]+|synthetic-authorization-token|"
+    r"(Authorization\s*[:=]\s*\S+|X-Signature\s*[:=]\s*\S+|"
+    r"x_signature\s*=\s*\S+|Idempotency-Key\s*[:=]\s*\S+|"
+    r"idempotency_key\s*=\s*\S+|account_no\s*=\s*\S+|"
+    r"account_number\s*=\s*\S+|DATABASE_URL\s*=|Bearer\s+\S+|"
+    r"Basic\s+\S+|postgresql://[^\\s)]+|synthetic-authorization-token|"
     r"synthetic-signature-value|synthetic-account-number-1234|"
     r"synthetic-idempotency-key)",
     re.IGNORECASE,
@@ -116,9 +119,10 @@ def create_artifact(
     ph1_report_dir: Path | None,
 ) -> Path:
     created_at = _now_kst()
-    incident_id = _incident_id(created_at, scenario)
-    incident_dir = output_root / incident_id
-    incident_dir.mkdir(parents=True, exist_ok=False)
+    incident_dir = _create_unique_incident_dir(
+        output_root, _incident_id(created_at, scenario)
+    )
+    incident_id = incident_dir.name
     (incident_dir / "raw").mkdir()
     (incident_dir / "raw" / "README.md").write_text(
         "# Raw Evidence\n\nRaw logs are not collected by PH2 by default.\n",
@@ -317,7 +321,7 @@ def latest_incident_dir(output_root: Path) -> Path:
     candidates = [path for path in output_root.glob("inc-*") if path.is_dir()]
     if not candidates:
         raise FileNotFoundError(f"no incident directories found in {output_root}")
-    return max(candidates, key=lambda path: path.stat().st_mtime)
+    return max(candidates, key=lambda path: path.name)
 
 
 def _validate_json_keys(payload: Any, label: Path, errors: list[str]) -> None:
@@ -341,7 +345,16 @@ def _load_sanitized_write_suspend_state(state_path: Path) -> dict[str, Any]:
             "run_id": "not_collected",
             "sensitive_data_included": False,
         }
-    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "active": True,
+            "reason": "state_file_invalid",
+            "source": "artifact_parse_failed",
+            "result": "invalid_state_json",
+            "sensitive_data_included": False,
+        }
     sanitized = sanitize_payload(payload)
     if isinstance(sanitized, dict):
         sanitized["sensitive_data_included"] = False
@@ -412,6 +425,20 @@ def _severity_for(scenario: str) -> str:
 def _incident_id(created_at: dt.datetime, scenario: str) -> str:
     slug = scenario.lower().replace("_", "-")
     return f"inc-{created_at.strftime('%Y%m%d-%H%M%S')}-{slug}"
+
+
+def _create_unique_incident_dir(output_root: Path, incident_id: str) -> Path:
+    output_root.mkdir(parents=True, exist_ok=True)
+    for suffix in [""] + [f"-{index:03d}" for index in range(1, 1000)]:
+        incident_dir = output_root / f"{incident_id}{suffix}"
+        try:
+            incident_dir.mkdir()
+        except FileExistsError:
+            continue
+        return incident_dir
+    raise FileExistsError(
+        f"could not allocate unique incident directory for {incident_id}"
+    )
 
 
 def _now_kst() -> dt.datetime:

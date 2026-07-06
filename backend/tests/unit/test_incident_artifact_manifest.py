@@ -74,6 +74,29 @@ def test_validate_fails_when_sensitive_key_is_present(tmp_path: Path) -> None:
     assert any("sensitive value pattern found" in error for error in errors)
 
 
+def test_create_handles_corrupt_write_suspend_state(tmp_path: Path) -> None:
+    state_file = tmp_path / "write-suspend-state.json"
+    state_file.write_text("{broken", encoding="utf-8")
+
+    incident_dir = ph2_incident_artifact.create_artifact(
+        scenario="POSTGRES_DOWN",
+        run_id="ph1-db-down-test",
+        source="unit_test",
+        output_root=tmp_path / "incidents",
+        write_suspend_state=state_file,
+        ph1_report_dir=None,
+    )
+
+    state = json.loads(
+        (incident_dir / "write-suspend-state.json").read_text(encoding="utf-8")
+    )
+
+    assert state["result"] == "invalid_state_json"
+    assert state["reason"] == "state_file_invalid"
+    assert state["sensitive_data_included"] is False
+    assert ph2_incident_artifact.validate_artifact(incident_dir) == []
+
+
 def test_latest_incident_dir_selects_most_recent(tmp_path: Path) -> None:
     output_root = tmp_path / "incidents"
     first = output_root / "inc-20260706-153000-postgres-down"
@@ -82,3 +105,15 @@ def test_latest_incident_dir_selects_most_recent(tmp_path: Path) -> None:
     second.mkdir()
 
     assert ph2_incident_artifact.latest_incident_dir(output_root) == second
+
+
+def test_create_adds_suffix_when_incident_id_collides(tmp_path: Path) -> None:
+    output_root = tmp_path / "incidents"
+    existing = output_root / "inc-20260706-153000-postgres-down"
+    existing.mkdir(parents=True)
+
+    incident_dir = ph2_incident_artifact._create_unique_incident_dir(
+        output_root, "inc-20260706-153000-postgres-down"
+    )
+
+    assert incident_dir.name == "inc-20260706-153000-postgres-down-001"

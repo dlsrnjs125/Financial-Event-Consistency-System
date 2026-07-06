@@ -67,6 +67,7 @@ reports/incidents/{incident_id}/
 
 `raw/` is intentionally empty by default.
 Real `inc-*` directories are ignored by git; commit only reviewed samples and templates.
+If the same scenario is created more than once in the same second, PH2 appends a numeric suffix such as `-001` to avoid overwriting an existing artifact.
 
 ## 5. Manifest Schema
 
@@ -235,6 +236,7 @@ make ph2-db-down-incident-artifact
 
 - If `validate --latest` fails with no incident directories, run `make ph2-incident-artifact` first.
 - If validation reports a sensitive key, inspect generated JSON files and remove the raw field at the source.
+- If `write-suspend-state.json` is corrupt, PH2 keeps artifact creation alive and writes `result=invalid_state_json` in the sanitized state summary.
 - If Docker Compose status is `not_collected`, Docker was unavailable or the stack was not running. This does not invalidate the standalone artifact.
 - Real `reports/incidents/inc-*` directories are local runtime evidence and should not be committed.
 
