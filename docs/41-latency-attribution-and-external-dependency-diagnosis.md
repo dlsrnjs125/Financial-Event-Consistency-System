@@ -365,6 +365,7 @@ Outbound 외부 API 호출에서 남길 값:
 - k6 latency drill scenario
 
 구현하지 않은 항목은 완료된 것처럼 쓰지 않는다.
+구체적인 k6 latency drill 시나리오와 evidence 저장 구조는 [42-latency-drill-test-plan.md](42-latency-drill-test-plan.md)에서 관리한다.
 
 ## 12. 면접 답변용 요약
 

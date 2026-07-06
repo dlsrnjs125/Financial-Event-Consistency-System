@@ -105,6 +105,7 @@ confidence는 운영자 판단을 대체하지 않는다.
 ### Latency Attribution Rule Matrix
 
 자세한 구간 분해와 metric/log 설계는 [41-latency-attribution-and-external-dependency-diagnosis.md](41-latency-attribution-and-external-dependency-diagnosis.md)를 기준으로 한다.
+k6 기반 latency drill과 evidence 수집 계획은 [42-latency-drill-test-plan.md](42-latency-drill-test-plan.md)를 기준으로 한다.
 
 | Rule | 조건 | 분류 | Severity | 자동 조치 | 수동 확인 |
 | --- | --- | --- | --- | --- | --- |
@@ -206,6 +207,7 @@ make incident-report
 make recovery-cases
 make ai-safe-incident-context
 make latency-attribution-report
+make latency-drill-report
 ```
 
 성공 기준 후보:
@@ -215,3 +217,4 @@ make latency-attribution-report
 - 자동 조치와 수동 조치 분리
 - raw 계좌번호, raw idempotency key, signature 없는 sanitized report 생성
 - internal/external latency responsibility 구간 후보 분류
+- k6 latency drill result와 server metric/log 상관분석
