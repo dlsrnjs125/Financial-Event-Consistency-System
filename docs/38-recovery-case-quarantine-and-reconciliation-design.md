@@ -38,6 +38,7 @@ invalid state / balance mismatch / orphan idempotency 탐지
 | WAITING_APPROVAL | 금전 상태 변경 가능성이 있어 승인 대기 | 운영자 승인 |
 | APPROVED | 승인 완료 | 실행 job 대기 |
 | EXECUTED | 복구 action 실행 | reconciliation 재검증 |
+| EXECUTION_FAILED | 승인된 action 실행 실패 | 실패 원인 분석, 재시도/재승인 판단 |
 | REJECTED | 제안 action 반려 | 재분석 또는 수동 처리 |
 | CLOSED | reconciliation 통과 후 종료 | postmortem 연결 |
 
@@ -52,6 +53,19 @@ invalid state / balance mismatch / orphan idempotency 탐지
 Quarantine은 전체 write suspend보다 좁은 containment 방식이다.
 정합성 위험이 전체 시스템으로 번질 가능성이 있으면 `WRITE_SUSPENDED`를 우선한다.
 
+### 전체 write suspend 승격 기준
+
+| 관측 결과 | 기본 대응 | 승격 기준 |
+| --- | --- | --- |
+| duplicate ledger count > 0 and root cause unknown | `WRITE_SUSPENDED` | 즉시 전역 차단 |
+| account balance mismatch가 1개 account에 한정 | account quarantine | 같은 원인이 여러 account에서 발견되면 전역 차단 |
+| balance mismatch가 여러 account/client에서 발생 | `WRITE_SUSPENDED` | 즉시 전역 차단 |
+| secret leak이 특정 client에 한정 | client quarantine | secret 범위가 불명확하면 all partner traffic block 후보 |
+| invalid state transition이 특정 배포 이후 급증 | rollback 또는 `WRITE_SUSPENDED` | rollback 전까지 전역 write 차단 |
+| stale PROCESSING이 단일 event에 한정 | event quarantine | 다수 event에서 동시에 발생하면 DB pressure/failover incident로 승격 |
+
+전역 suspend 승격 여부가 불명확하면 금융 정합성 보호를 우선해 `WRITE_SUSPENDED`로 승격하고, recovery case 분석 후 좁은 quarantine으로 낮춘다.
+
 ## 4. Stale PROCESSING 처리 기준
 
 추가 상태 후보:
@@ -65,7 +79,26 @@ Quarantine은 전체 write suspend보다 좁은 containment 방식이다.
 | QUARANTINED | 정합성 위험 이벤트/계좌 격리 | 해당 범위 제한 | 복구 방식 승인 |
 | RECONCILED | 검증 후 정상화 완료 | 재처리 금지 | 사후 기록 |
 
-## 5. Reconciliation 기준
+## 5. Recovery Action Idempotency & Approval Guard
+
+Recovery action 자체도 중복 실행되면 금융 사고가 될 수 있다.
+따라서 recovery action은 일반 거래 처리와 동일하게 idempotent해야 한다.
+
+Guard 정책:
+
+- recovery action은 `recovery_case_id` 기준으로 idempotent해야 한다.
+- compensation ledger는 `recovery_case_id` 또는 `compensation_event_id`에 unique constraint를 둔다.
+- `APPROVED` 상태의 case만 실행할 수 있다.
+- `EXECUTED` 또는 `CLOSED` 상태의 case는 재실행할 수 없다.
+- 실행 실패 시 `EXECUTION_FAILED`로 전환하고, 같은 action을 재시도할지 재승인이 필요한지 별도 판단한다.
+- `REJECTED` 상태는 evidence 추가 후 `AUTO_ANALYZED` 또는 `WAITING_APPROVAL`로 재분석할 수 있다.
+- 승인자와 실행자는 production 환경에서 분리하는 것을 권장한다.
+- 보정 ledger를 생성할 때도 별도 `compensation_event_id` 또는 recovery 전용 idempotency key를 사용한다.
+
+Open recovery case가 있는 account에 신규 거래 요청이 들어오면 기본적으로 account quarantine 정책을 따른다.
+단, case가 read-only 검증만 남았고 금전 상태 위험이 없다는 운영자 승인 evidence가 있으면 제한적으로 허용할 수 있다.
+
+## 6. Reconciliation 기준
 
 복구 전후 다음 결과가 모두 0이어야 한다.
 
@@ -79,7 +112,7 @@ Quarantine은 전체 write suspend보다 좁은 containment 방식이다.
 
 SQLite 기반 빠른 테스트는 회귀 확인에 사용할 수 있지만, row lock, concurrent unique conflict, failover in-doubt 상태는 PostgreSQL 기반 drill에서 별도 검증해야 한다.
 
-## 6. 자동 재처리 가능 조건
+## 7. 자동 재처리 가능 조건
 
 다음 조건을 모두 만족하면 자동 재처리 후보가 될 수 있다.
 
@@ -92,7 +125,7 @@ SQLite 기반 빠른 테스트는 회귀 확인에 사용할 수 있지만, row 
 
 자동 재처리는 idempotency와 unique constraint를 다시 통과해야 한다.
 
-## 7. 자동 완료 처리 가능 조건
+## 8. 자동 완료 처리 가능 조건
 
 다음 조건을 모두 만족하면 자동 완료 처리 후보가 될 수 있다.
 
@@ -105,7 +138,7 @@ SQLite 기반 빠른 테스트는 회귀 확인에 사용할 수 있지만, row 
 
 자동 완료는 commit 후 응답 실패를 복구하는 용도다.
 
-## 8. 수동 승인이 필요한 조건
+## 9. 수동 승인이 필요한 조건
 
 다음 조건은 recovery case와 운영자 승인을 요구한다.
 
@@ -118,7 +151,7 @@ SQLite 기반 빠른 테스트는 회귀 확인에 사용할 수 있지만, row 
 - compensation ledger가 필요한 금전 보정
 - 고객/제휴사 영향도 판단이 필요한 경우
 
-## 9. Compensation ledger vs direct update trade-off
+## 10. Compensation ledger vs direct update trade-off
 
 - 선택한 정책: 금전 보정은 direct `UPDATE accounts.balance`보다 compensation ledger를 우선한다.
 - 대안: 운영자가 직접 balance를 UPDATE한다.
@@ -127,7 +160,7 @@ SQLite 기반 빠른 테스트는 회귀 확인에 사용할 수 있지만, row 
 - 보완 전략: recovery case approval과 reconciliation을 통해 compensation event를 추적한다.
 - 면접 답변용 한 문장: 금융 데이터는 잘못된 값을 덮어쓰기보다 반대 방향 ledger로 보정해야 감사 가능성과 재현성을 유지할 수 있습니다.
 
-## 10. Recovery case 테이블 초안
+## 11. Recovery case 테이블 초안
 
 ```text
 recovery_cases
@@ -143,13 +176,15 @@ recovery_cases
   -- scheduled_reconciliation, incident_analyzer, manual, ci_gate
 - detected_at
 - current_status
-  -- OPEN, AUTO_ANALYZED, WAITING_APPROVAL, APPROVED, EXECUTED, REJECTED, CLOSED
+  -- OPEN, AUTO_ANALYZED, WAITING_APPROVAL, APPROVED, EXECUTED, EXECUTION_FAILED, REJECTED, CLOSED
 - proposed_action
   -- MARK_COMPLETED, MARK_FAILED_RETRYABLE, COMPENSATE_LEDGER, REPLAY_EVENT, NOOP
 - approval_required
 - approved_by
 - approved_at
+- executed_by
 - executed_at
+- execution_error
 - evidence_path
 - before_snapshot_hash
 - after_snapshot_hash
@@ -157,7 +192,7 @@ recovery_cases
 
 이번 문서는 설계 초안이며, 실제 migration은 후속 구현 Phase에서 별도로 다룬다.
 
-## 11. Incident events 테이블 초안
+## 12. Incident events 테이블 초안
 
 ```text
 incident_events
@@ -180,7 +215,7 @@ incident_events
 - report_path
 ```
 
-## 12. Trade-off
+## 13. Trade-off
 
 ### 12.1 자동 재처리 vs 수동 복구
 
@@ -218,7 +253,7 @@ incident_events
 - 보완 전략: event/ledger/account/idempotency 상태를 비교해 action을 결정한다.
 - 면접 답변용 한 문장: PROCESSING timeout만 보고 실패 처리하지 않고, DB 흔적을 대조한 뒤 자동 복구와 수동 승인을 분리했습니다.
 
-## 13. 후속 구현 Phase 분리
+## 14. 후속 구현 Phase 분리
 
 이번 브랜치에서는 구현하지 않는다.
 후속 구현 후보:

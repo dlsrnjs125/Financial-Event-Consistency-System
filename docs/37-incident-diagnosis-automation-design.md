@@ -24,7 +24,29 @@ Production Hardening에서는 Prometheus metric, structured log, k6 summary, con
 | consistency SQL 결과 | duplicate, mismatch, orphan count 확인 | count-only 기본 |
 | deployment status | active color, commit SHA, rollback 여부 확인 | public 가능 |
 
-## 3. 자동 분류 가능한 장애 유형
+## 3. Signal Availability Matrix
+
+현재 프로젝트는 FastAPI application metric 중심으로 관측성이 구현되어 있다.
+PostgreSQL exporter, Redis exporter, Nginx log parser, HA replication metric은 후속 보완 후보이므로, Incident Analyzer는 현재 가능한 신호와 후속 구현 신호를 분리해서 사용한다.
+
+| Signal | 현재 사용 가능 여부 | 현재 source | 후속 보완 |
+| --- | --- | --- | --- |
+| API 5xx rate | 가능 | FastAPI Prometheus metric | 유지 |
+| `/ready` postgres fail | 가능 | readiness endpoint | 유지 |
+| Redis fallback count | 가능 | app metric | 유지 |
+| invalid state transition count | 가능 | app metric/log | 유지 |
+| consistency SQL count | 가능 | 수동 SQL 또는 기존 verify command | analyzer query 자동화 |
+| DB active connection usage | 제한적 | app log 또는 SQL 수동 조회 | PostgreSQL exporter 필요 |
+| lock wait/deadlock count | 제한적 | SQL 수동 조회 | PostgreSQL exporter 또는 analyzer query 필요 |
+| WAL/disk usage | 제한적 | Docker/host check | node/postgres exporter 필요 |
+| Nginx upstream 5xx | 제한적 | Nginx log | log parser 필요 |
+| metrics target down | 제한적 | Prometheus target page | alert/report 자동화 필요 |
+| replication lag | 현재 불가 | HA 미구현 | HA 도입 시 가능 |
+
+Rule Matrix의 자동 판단은 현재 사용 가능한 신호만으로도 동작해야 한다.
+후속 exporter가 필요한 신호는 confidence를 높이거나 세부 원인을 분류하는 보조 증거로 다룬다.
+
+## 4. 자동 분류 가능한 장애 유형
 
 - PostgreSQL down
 - DB connection pool exhausted
@@ -36,7 +58,7 @@ Production Hardening에서는 Prometheus metric, structured log, k6 summary, con
 - metrics unavailable
 - secret leak suspicion
 
-## 4. Severity 판단 기준
+## 5. Severity 판단 기준
 
 | Severity | 기준 | 예시 |
 | --- | --- | --- |
@@ -48,7 +70,7 @@ Production Hardening에서는 Prometheus metric, structured log, k6 summary, con
 정합성 위반은 error budget을 두지 않는다.
 1건이라도 발생하면 SEV1로 분류한다.
 
-## 5. Confidence score 기준
+## 6. Confidence score 기준
 
 | Confidence | 의미 | 예시 |
 | --- | --- | --- |
@@ -60,7 +82,7 @@ Production Hardening에서는 Prometheus metric, structured log, k6 summary, con
 confidence는 운영자 판단을 대체하지 않는다.
 보고서에는 primary signal과 missing evidence를 함께 기록한다.
 
-## 6. 자동 판단 Rule Matrix
+## 7. 자동 판단 Rule Matrix
 
 | 관측 결과 | 자동 판단 | Severity | 자동 조치 | 사람 판단 |
 | --- | --- | --- | --- | --- |
@@ -75,7 +97,7 @@ confidence는 운영자 판단을 대체하지 않는다.
 | metrics target down + app 정상 | Observability incident | SEV3 | metrics incident 생성 | 모니터링 복구 |
 | secret scan hit 또는 raw key log 의심 | Secret leak suspicion | SEV1 | affected context 격리, report 생성 | secret rotation, 외부 공지 판단 |
 
-## 7. 자동 조치와 수동 조치의 경계
+## 8. 자동 조치와 수동 조치의 경계
 
 자동화해도 되는 조치:
 
@@ -99,7 +121,7 @@ confidence는 운영자 판단을 대체하지 않는다.
 - secret rotation 최종 승인
 - write resume 승인
 
-## 8. AI 활용 가능 지점과 금지 지점
+## 9. AI 활용 가능 지점과 금지 지점
 
 AI에게 맡길 수 있는 일:
 
@@ -120,7 +142,7 @@ AI에게 맡기면 안 되는 일:
 - write resume 승인
 - secret rotation 최종 승인
 
-## 9. Incident report 자동 생성 형식
+## 10. Incident report 자동 생성 형식
 
 ```json
 {
@@ -151,7 +173,7 @@ AI에게 맡기면 안 되는 일:
 }
 ```
 
-## 10. 향후 Makefile target 후보
+## 11. 향후 Makefile target 후보
 
 이번 브랜치에서는 실제 target을 구현하지 않는다.
 후속 구현 후보로만 관리한다.

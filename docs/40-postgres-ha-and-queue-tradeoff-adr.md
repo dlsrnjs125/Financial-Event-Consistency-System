@@ -21,6 +21,18 @@ Redis는 lock/cache/fallback을 위한 보조 계층이며, Redis 장애는 degr
 
 각 선택지는 API 응답 의미, commit durability, 운영 복잡도, reconciliation 책임을 바꾼다.
 
+## RPO/RTO target
+
+현재 로컬 프로젝트는 PostgreSQL HA를 구현하지 않았으므로 DB 장애 중 RPO 0을 기술적으로 보장한다고 주장하지 않는다.
+대신 PostgreSQL commit 이전 성공 응답 금지, 동일 idempotency key 재시도, 복구 후 consistency gate를 보장 대상으로 둔다.
+
+| 항목 | 현재 목표 | Queue-first 도입 시 |
+| --- | --- | --- |
+| RPO | commit 전 성공 응답 금지, 복구 후 중복 반영 0 검증 | queue durability 기준으로 수신 RPO와 ledger posting RPO 분리 |
+| RTO | 로컬 drill에서 DB stop/start 후 1~3분 내 readiness 회복과 consistency check 완료 목표 | API accept RTO와 consumer posting RTO 분리 |
+| Write resume | consistency gate와 recovery case 검토 후 사람 승인 | DLQ/replay/reconciliation 검토 후 사람 승인 |
+| In-doubt event | recovery case로 격리 | queue offset, consumer idempotency, DB evidence를 함께 대조 |
+
 ## Decision
 
 1차 Production Hardening에서는 다음을 선택한다.

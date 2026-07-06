@@ -4,6 +4,24 @@
 
 자동 복구로 판단할 수 없는 stale PROCESSING, balance mismatch, duplicate ledger, failover in-doubt 이벤트가 recovery case로 등록된 상태다.
 
+Severity: recovery case type에 따라 SEV1 또는 SEV2
+
+자동 조치:
+
+- affected account/client/event quarantine 후보 생성
+- proposed_action 생성
+- evidence path 연결
+
+수동 승인 필요 여부: 필요
+
+승인자: 운영 책임자, 보안 사고인 경우 보안 담당자 포함
+
+Evidence 경로:
+
+```text
+reports/incidents/{incident_id}/pending-recovery-cases.json
+```
+
 ## 2. 예상 원인
 
 - commit 후 응답 실패
@@ -41,12 +59,27 @@
 - recovery case CLOSED 처리
 - postmortem action item 기록
 
-## 7. 재발 방지
+## 7. Rollback/abort 조건
+
+- 승인자와 실행자가 분리되지 않음
+- before snapshot hash 누락
+- compensation ledger idempotency key 또는 recovery_case_id unique guard 없음
+- 실행 중 오류가 발생했지만 `EXECUTION_FAILED`로 기록되지 않음
+- report에 raw sensitive data 포함
+
+## 8. Postmortem 연결
+
+- recovery_case_id
+- 승인자/실행자/승인 시각/실행 시각
+- before/after snapshot hash
+- compensation ledger id 또는 noop 사유
+
+## 9. 재발 방지
 
 - 자동 분석 rule 보강
 - state machine 또는 transaction boundary 테스트 추가
 - runbook threshold 갱신
 
-## 8. README/블로그 기록 문장
+## 10. README/블로그 기록 문장
 
 자동 판단이 불가능한 금전 상태는 recovery case로 격리하고, 보정 또는 재처리는 사람이 승인한 뒤 reconciliation으로 검증한다.
