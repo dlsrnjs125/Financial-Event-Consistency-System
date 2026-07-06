@@ -238,7 +238,7 @@ PH1에서 구현/검증할 항목:
 
 - PostgreSQL stop 중 POST 요청이 `503` + `Retry-After`를 반환한다.
 - DB down 중 처리 성공 idempotency record가 생성되지 않는다.
-- PostgreSQL start와 operator resume 후 동일 `Idempotency-Key`와 동일 body 재시도 시 ledger 1건만 생성된다.
+- PostgreSQL start와 operator resume 후 동일 `Idempotency-Key`와 동일 body 재시도 및 replay 시 ledger 1건만 생성된다.
 - 복구 후 consistency SQL 결과가 모두 0이다.
 - incident report에 원문 계좌번호, raw idempotency key, signature가 포함되지 않는다.
 

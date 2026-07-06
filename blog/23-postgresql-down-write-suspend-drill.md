@@ -37,7 +37,8 @@ DB가 회복됐다는 사실만으로 write를 자동 재개하지 않고, consi
 7. blocked event가 성공 기록으로 남지 않았는지 확인
 8. operator resume
 9. 동일 external_event_id, 동일 Idempotency-Key, 동일 body 재시도 성공
-10. duplicate event/ledger count 0
+10. 성공한 동일 요청 replay 후에도 event/ledger count 1
+11. duplicate event/ledger count 0
 
 evidence는 `reports/production-hardening/ph1-write-suspend/{run_id}/report.md`에 남긴다.
 

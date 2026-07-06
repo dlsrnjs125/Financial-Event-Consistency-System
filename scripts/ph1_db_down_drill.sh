@@ -143,6 +143,11 @@ require_command docker
 require_command curl
 require_command python3
 
+if ! [[ "${RUN_ID}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "RUN_ID may only contain letters, numbers, dots, underscores, and hyphens." >&2
+    exit 1
+fi
+
 mkdir -p "${REPORT_DIR}"
 
 log "Starting PH1 DB-down drill: ${RUN_ID}"
@@ -187,6 +192,13 @@ blocked_retry_status="$(cat "${blocked_retry_status_file}")"
 test "${blocked_retry_status}" = "200"
 
 blocked_event_count_after_retry="$(psql_scalar "SELECT COUNT(*) FROM transaction_events WHERE external_event_id = '${blocked_event}';")"
+blocked_replay_status_file="${REPORT_DIR}/blocked-replay.status"
+write_request "${blocked_event}" "ph1-blocked-${RUN_ID}" "${REPORT_DIR}/blocked-replay.json" "${blocked_replay_status_file}" "${REPORT_DIR}/blocked-replay.headers" "${blocked_occurred_at}"
+blocked_replay_status="$(cat "${blocked_replay_status_file}")"
+test "${blocked_replay_status}" = "200"
+
+blocked_event_count_after_replay="$(psql_scalar "SELECT COUNT(*) FROM transaction_events WHERE external_event_id = '${blocked_event}';")"
+blocked_ledger_count_after_replay="$(psql_scalar "SELECT COUNT(*) FROM ledger_entries le JOIN transaction_events te ON te.id = le.transaction_event_id WHERE te.external_event_id = '${blocked_event}';")"
 duplicate_ledger_count="$(psql_scalar "SELECT COUNT(*) FROM (SELECT transaction_event_id FROM ledger_entries GROUP BY transaction_event_id HAVING COUNT(*) > 1) duplicated;")"
 duplicate_event_count="$(psql_scalar "SELECT COUNT(*) FROM (SELECT external_event_id FROM transaction_events GROUP BY external_event_id HAVING COUNT(*) > 1) duplicated;")"
 
@@ -198,8 +210,11 @@ cat > "${REPORT_DIR}/report.md" <<EOF
 - blocked_write_status: ${blocked_status}
 - retry_after_header_present: yes
 - same_idempotency_retry_status: ${blocked_retry_status}
+- same_idempotency_replay_status: ${blocked_replay_status}
 - blocked_event_record_count_before_retry: ${blocked_event_count}
 - blocked_event_record_count_after_retry: ${blocked_event_count_after_retry}
+- blocked_event_record_count_after_replay: ${blocked_event_count_after_replay}
+- blocked_ledger_count_after_replay: ${blocked_ledger_count_after_replay}
 - duplicate_event_count: ${duplicate_event_count}
 - duplicate_ledger_count: ${duplicate_ledger_count}
 - state_file: ${STATE_FILE}
@@ -208,10 +223,12 @@ cat > "${REPORT_DIR}/report.md" <<EOF
 
 PostgreSQL down caused readiness failure and financial write suspension.
 The blocked request returned 503 with Retry-After and was not recorded as a successful transaction.
-After operator resume, the same external_event_id, Idempotency-Key, and body were retried successfully once.
+After operator resume, the same external_event_id, Idempotency-Key, and body were retried successfully once and replayed once without duplicate records.
 EOF
 
 test "${blocked_event_count_after_retry}" = "1"
+test "${blocked_event_count_after_replay}" = "1"
+test "${blocked_ledger_count_after_replay}" = "1"
 test "${duplicate_ledger_count}" = "0"
 test "${duplicate_event_count}" = "0"
 

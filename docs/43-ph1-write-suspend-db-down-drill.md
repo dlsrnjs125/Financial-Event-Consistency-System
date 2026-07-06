@@ -147,8 +147,9 @@ make ops9-db-down-drill
 11. operator resume을 실행한다.
 12. 동일 `external_event_id`, 동일 `Idempotency-Key`, 동일 body로 blocked request를 재시도한다.
 13. retry 후 blocked event가 1건만 기록되었는지 확인한다.
-14. duplicate event/ledger count가 0인지 확인한다.
-15. evidence report를 생성한다.
+14. 성공한 동일 요청을 한 번 더 replay해 event/ledger count가 계속 1건인지 확인한다.
+15. duplicate event/ledger count가 0인지 확인한다.
+16. evidence report를 생성한다.
 
 evidence 경로:
 
@@ -203,6 +204,7 @@ make ph1-db-down-drill
 
 - PH1은 단일 API 인스턴스와 local artifact 기준이다.
 - multi-node production에서는 Nginx/LB write route blocking 또는 shared control plane이 필요하다.
+- `RUN_ID`는 drill SQL과 artifact path에 쓰이므로 `[A-Za-z0-9._-]` 문자만 허용한다.
 - PH1은 안전성을 우선해 write 요청마다 DB availability probe를 실행한다. 운영형에서는 probe TTL, readiness cache, DB pressure 시 probe 빈도 제한을 검토한다.
 - PH1의 `OperationalError` handler는 DB hard dependency 장애를 보수적으로 감지한다. 후속에서는 write route에서 발생한 DB unavailable과 read route의 일시적 오류를 더 세밀하게 분리한다.
 - DB 복구 후 `incident_events`/`recovery_cases` backfill은 후속 PH2/PH3 범위다.
