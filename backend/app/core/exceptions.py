@@ -4,6 +4,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 
 from app.domain.exceptions import (
     AccountNotFound,
@@ -18,6 +19,7 @@ from app.domain.exceptions import (
     TransactionAlreadyCancelled,
     TransactionAlreadySettled,
 )
+from app.observability.metrics import record_write_suspended
 from app.schemas.common import ErrorDetail, ErrorResponse
 from app.security.exceptions import (
     DisabledClient,
@@ -26,6 +28,10 @@ from app.security.exceptions import (
     InvalidTimestamp,
     MissingSecurityHeader,
     UnknownClient,
+)
+from app.services.write_suspension_service import (
+    WriteSuspended,
+    get_write_suspension_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -158,6 +164,38 @@ async def security_exception_handler(request: Request, exc: Exception) -> JSONRe
     )
 
 
+async def write_suspended_exception_handler(
+    request: Request, exc: WriteSuspended
+) -> JSONResponse:
+    headers = {
+        "Retry-After": str(exc.state.retry_after_seconds),
+        **_observability_headers(request),
+    }
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "error_code": "WRITE_SUSPENDED",
+            "message": "Financial write traffic is temporarily suspended.",
+            "retryable": True,
+            "request_id": _request_id(request),
+            "trace_id": _trace_id(request),
+        },
+        headers=headers,
+    )
+
+
+async def database_exception_handler(
+    request: Request, exc: OperationalError
+) -> JSONResponse:
+    state = get_write_suspension_service().enable(
+        reason="postgres_unavailable",
+        activated_by="api",
+        source="sqlalchemy_exception",
+    )
+    record_write_suspended("postgres_unavailable", "unknown")
+    return await write_suspended_exception_handler(request, WriteSuspended(state))
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     for exception_type in (
         AccountNotFound,
@@ -182,5 +220,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         UnknownClient,
     ):
         app.add_exception_handler(exception_type, security_exception_handler)
+    app.add_exception_handler(WriteSuspended, write_suspended_exception_handler)
+    app.add_exception_handler(OperationalError, database_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

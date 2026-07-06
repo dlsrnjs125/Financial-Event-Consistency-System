@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -14,6 +15,10 @@ from app.db.session import get_db
 from app.main import app
 from app.models import import_all_models
 from app.models.account import Account
+from app.services.write_suspension_service import (
+    get_write_suspension_service,
+    reset_write_suspension_service_for_testing,
+)
 
 import_all_models()
 
@@ -37,10 +42,19 @@ def db_session():
 
 
 @pytest.fixture()
-def client(db_session, monkeypatch):
+def client(db_session, monkeypatch, tmp_path):
     # These tests cover Phase 5/6 transaction consistency behavior. Phase 7 HMAC
     # enforcement is covered separately in test_transaction_event_security.py.
     monkeypatch.setattr(settings, "hmac_enabled", False)
+    monkeypatch.setattr(settings, "redis_enabled", False)
+    monkeypatch.setattr(settings, "redis_lock_enabled", False)
+    monkeypatch.setattr(settings, "idempotency_cache_enabled", False)
+    monkeypatch.setattr(
+        settings,
+        "write_suspend_state_file",
+        str(tmp_path / "write-suspend-state.json"),
+    )
+    reset_write_suspension_service_for_testing()
 
     def override_get_db():
         yield db_session
@@ -50,6 +64,7 @@ def client(db_session, monkeypatch):
         yield TestClient(app)
     finally:
         app.dependency_overrides.clear()
+        reset_write_suspension_service_for_testing()
 
 
 def seed_account(db_session, balance=10000):
@@ -136,3 +151,65 @@ def test_get_account_balance_masks_account_no(client, db_session):
     assert response.status_code == 200
     assert response.json()["account_no"] == "******7890"
     assert response.json()["balance"] == 12000
+
+
+def test_write_suspend_blocks_transaction_post_with_retry_after(client, db_session):
+    seed_account(db_session)
+    get_write_suspension_service().enable(
+        reason="postgres_unavailable",
+        activated_by="test",
+        source="test",
+        retry_after_seconds=45,
+        run_id="test-run",
+    )
+
+    response = client.post(
+        "/api/v1/transaction-events",
+        json=payload(),
+        headers={"Idempotency-Key": "idem-001"},
+    )
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "45"
+    assert response.json()["error_code"] == "WRITE_SUSPENDED"
+    assert response.json()["retryable"] is True
+
+
+def test_health_is_not_blocked_when_write_suspend_active(client, db_session):
+    get_write_suspension_service().enable(
+        reason="postgres_unavailable",
+        activated_by="test",
+        source="test",
+        run_id="test-run",
+    )
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+
+
+def test_postgres_probe_failure_activates_write_suspend(client):
+    class BrokenSession:
+        def execute(self, statement):
+            raise SQLAlchemyError("postgres unavailable")
+
+        def close(self):
+            return None
+
+    def override_get_db():
+        yield BrokenSession()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    response = client.post(
+        "/api/v1/transaction-events",
+        json=payload(),
+        headers={"Idempotency-Key": "idem-001"},
+    )
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "30"
+    assert response.json()["error_code"] == "WRITE_SUSPENDED"
+    state = get_write_suspension_service().status()
+    assert state.active is True
+    assert state.reason == "postgres_unavailable"

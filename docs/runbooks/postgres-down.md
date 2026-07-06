@@ -25,6 +25,8 @@ Evidence 경로:
 
 ```text
 reports/incidents/{incident_id}/
+reports/runtime/write-suspend-state.json
+reports/production-hardening/ph1-write-suspend/{run_id}/
 ```
 
 ## 2. 예상 원인
@@ -55,6 +57,17 @@ reports/incidents/{incident_id}/
 3. PostgreSQL service 상태와 disk/WAL 상태를 확인한다.
 4. failover 또는 복구 작업이 필요한지 판단한다.
 5. 복구 후 recovery mode에서 consistency SQL을 실행한다.
+
+PH1 운영 명령:
+
+```bash
+make ph1-write-suspend-status
+make ph1-write-suspend-resume
+make ph1-db-down-drill
+```
+
+`POST /api/v1/transaction-events`는 write suspend active 상태에서 `503 Service Unavailable`과 `Retry-After`를 반환한다.
+`/health`, `/ready`, `/metrics`는 write suspend 자체로 차단하지 않는다.
 
 ## 6. 복구 검증
 

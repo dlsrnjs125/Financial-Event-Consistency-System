@@ -59,6 +59,8 @@ HMAC_FAILURE_REASONS = {
 }
 ENDPOINTS = {"transaction_events", "unknown"}
 STATE_RESULTS = {"allowed", "rejected", "unknown"}
+WRITE_SUSPEND_REASONS = {"postgres_unavailable", "manual", "none", "unknown"}
+ROUTE_GROUPS = {"transaction_events", "unknown"}
 
 financial_http_requests_total = Counter(
     "financial_http_requests_total",
@@ -214,6 +216,16 @@ financial_reconciliation_failures_total = Counter(
 financial_reconciliation_last_checked_timestamp = Gauge(
     "financial_reconciliation_last_checked_timestamp",
     "Last reconciliation check timestamp.",
+)
+financial_write_suspended_total = Counter(
+    "financial_write_suspended_total",
+    "Financial write requests rejected while write suspension is active.",
+    ["reason", "route_group"],
+)
+financial_write_suspend_state = Gauge(
+    "financial_write_suspend_state",
+    "Runtime write-suspend state. 1 means active, 0 means inactive.",
+    ["reason"],
 )
 
 
@@ -462,3 +474,19 @@ def record_state_transition(from_status: str, to_status: str, result: str) -> No
 @safe_metric
 def record_reconciliation_failure() -> None:
     financial_reconciliation_failures_total.inc()
+
+
+@safe_metric
+def record_write_suspended(reason: str, route_group: str) -> None:
+    financial_write_suspended_total.labels(
+        reason=normalize_label(reason, WRITE_SUSPEND_REASONS),
+        route_group=normalize_label(route_group, ROUTE_GROUPS),
+    ).inc()
+
+
+@safe_metric
+def record_write_suspend_state(reason: str, active: bool) -> None:
+    normalized_reason = normalize_label(reason, WRITE_SUSPEND_REASONS)
+    financial_write_suspend_state.labels(reason=normalized_reason).set(
+        1 if active else 0
+    )

@@ -21,6 +21,8 @@ Evidence 경로:
 
 ```text
 reports/incidents/{incident_id}/write-suspend-state.json
+reports/runtime/write-suspend-state.json
+reports/production-hardening/ph1-write-suspend/{run_id}/report.md
 ```
 
 ## 2. 예상 원인
@@ -51,6 +53,23 @@ reports/incidents/{incident_id}/write-suspend-state.json
 4. 자동 복구 가능한 stale PROCESSING을 처리한다.
 5. 수동 승인이 필요한 case는 승인 전까지 quarantine을 유지한다.
 
+PH1 명령:
+
+```bash
+make ph1-write-suspend-status
+WRITE_SUSPEND_STATE_FILE=reports/runtime/write-suspend-state.json \
+  python3 scripts/write_suspend_state.py enable --reason postgres_unavailable
+make ph1-write-suspend-resume
+```
+
+DB-down drill:
+
+```bash
+make ph1-db-down-drill
+```
+
+drill은 PostgreSQL stop, readiness failure, write `503` + `Retry-After`, operator resume, 복구 후 consistency count를 확인하고 `reports/production-hardening/ph1-write-suspend/{run_id}/report.md`에 evidence를 남긴다.
+
 ## 6. Resume 승인 기준
 
 - PostgreSQL write readiness 정상
@@ -58,6 +77,9 @@ reports/incidents/{incident_id}/write-suspend-state.json
 - account balance mismatch 0
 - unresolved SEV1 recovery case 없음 또는 격리 완료
 - 운영자 승인자와 승인 시각 기록 존재
+
+PH1에서는 resume이 자동 실행되지 않는다.
+PostgreSQL readiness와 duplicate event/ledger count를 확인한 뒤 운영자가 명시적으로 resume한다.
 
 ## 7. Rollback/abort 조건
 

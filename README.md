@@ -42,15 +42,16 @@
 | Development Track | Phase 1~12 | Done | consistency, idempotency, Redis fallback, k6, CI/CD, Blue-Green |
 | Ops Extension Track | Phase 1~8 | Done | monitoring, DR drill, security, incident runbook |
 | Supporting Docs | docs/27~34 | Supporting | threat model, SLO/SLI, evidence template, capacity appendix |
-| Production Hardening Track | PH Phase 0~10 | Planning | PostgreSQL failure policy, write suspend, incident diagnosis, recovery case, AI-safe governance, latency attribution drill |
+| Production Hardening Track | PH Phase 0~10 | In Progress | PH1 write suspend implementation, PostgreSQL failure policy, incident diagnosis, recovery case, AI-safe governance, latency attribution drill |
 
 Ops Extension Track은 Phase 8 Incident Runbook에서 종료한다.
 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 증거를 보완하기 위한 supporting documents로 관리한다.
 
 Ops Phase 8에서는 장애 대응 Runbook을 최종 정리하고, Grafana p95/p99 지표와 rollback smoke/consistency gate 결과를 evidence로 남겼다.
 
-Production Hardening Track은 기존 구현 위에 PostgreSQL 자체 장애, failover 중 미확정 거래, stale PROCESSING, 자동 incident diagnosis, recovery case 승인 흐름, AI-safe 데이터 보호 기준, latency attribution drill을 설계하는 후속 보완 트랙이다.
-상세 설계는 README가 아니라 `docs/35-*` ~ `docs/42-*` 문서에서 관리한다.
+Production Hardening Track은 기존 구현 위에 PostgreSQL 자체 장애, failover 중 미확정 거래, stale PROCESSING, 자동 incident diagnosis, recovery case 승인 흐름, AI-safe 데이터 보호 기준, latency attribution drill을 보완하는 후속 트랙이다.
+PH1에서는 PostgreSQL write path가 불가능할 때 신규 금융 write를 `503` + `Retry-After`로 fail-closed 처리하는 runtime write suspend와 DB-down drill을 구현했다.
+상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/43-*` 문서에서 관리한다.
 
 ## 5. Final Verification Summary
 
@@ -109,6 +110,9 @@ make ops4-demo
 make ops5-demo
 make ops6-demo
 make ops7-demo
+make ph1-db-down-drill
+make ph1-write-suspend-status
+make ph1-write-suspend-resume
 ```
 
 ## 9. 주요 문서
@@ -133,6 +137,7 @@ make ops7-demo
 | [docs/40-postgres-ha-and-queue-tradeoff-adr.md](docs/40-postgres-ha-and-queue-tradeoff-adr.md) | PostgreSQL HA와 durable queue trade-off ADR |
 | [docs/41-latency-attribution-and-external-dependency-diagnosis.md](docs/41-latency-attribution-and-external-dependency-diagnosis.md) | 내부/외부 구간별 latency 원인 분리 설계 |
 | [docs/42-latency-drill-test-plan.md](docs/42-latency-drill-test-plan.md) | k6 기반 latency attribution drill 테스트 계획 |
+| [docs/43-ph1-write-suspend-db-down-drill.md](docs/43-ph1-write-suspend-db-down-drill.md) | PH1 write suspend 구현과 PostgreSQL down drill |
 
 ## 10. Blog Series
 
@@ -159,10 +164,11 @@ make ops7-demo
 - Kubernetes 기반 운영 전환은 제외했다.
 - Loki/OpenTelemetry 기반 trace query evidence는 향후 고도화로 남겼다.
 - Capacity Planning, Change Management, Ansible, PowerShell 문서는 supporting/optional docs로 관리한다.
-- Production Hardening 문서는 현재 설계 단계이며, write suspend 구현, incident analyzer, recovery case DB 모델, PostgreSQL HA/Queue 도입, latency attribution instrumentation과 k6 latency drill은 후속 구현 후보로 남겼다.
+- Production Hardening PH1 write suspend는 단일 API 인스턴스 기준으로 구현했다.
+- Incident analyzer, recovery case DB 모델, PostgreSQL HA/Queue 도입, latency attribution instrumentation과 k6 latency drill은 후속 구현 후보로 남겼다.
 
 ## 12. 최종 요약
 
 Development Track에서는 금융 이벤트 정합성 처리 시스템을 구현했고, Ops Extension Track에서는 모니터링, DR Drill, 보안 통제, 장애 대응 Runbook까지 정리했다.
 Ops Phase 8 Incident Runbook을 마지막으로 운영 확장 트랙을 종료했으며, 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 evidence를 보완하는 supporting documents로 관리한다.
-Production Hardening Track은 운영 확장 종료 이후의 후속 설계 트랙으로, PostgreSQL 장애 중 성공 응답 금지, 자동 진단과 수동 승인 경계, 민감 데이터의 AI-safe 처리 원칙을 문서화한다.
+Production Hardening Track은 운영 확장 종료 이후의 후속 보완 트랙으로, PostgreSQL 장애 중 성공 응답 금지, 자동 진단과 수동 승인 경계, 민감 데이터의 AI-safe 처리 원칙을 문서화하고 일부 안전장치를 구현한다.
