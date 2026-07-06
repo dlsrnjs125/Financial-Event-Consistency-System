@@ -4,7 +4,6 @@ from importlib import util
 from pathlib import Path
 from typing import Any
 
-
 SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts/ph2_incident_artifact.py"
 SPEC = util.spec_from_file_location("ph2_incident_artifact", SCRIPT_PATH)
 ph2_incident_artifact = util.module_from_spec(SPEC)
