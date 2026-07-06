@@ -11,8 +11,8 @@ from app.db.session import get_db
 from app.observability.logging import log_event
 from app.observability.metrics import record_write_suspended
 from app.services.write_suspension_service import (
-    WriteSuspendState,
     WriteSuspended,
+    WriteSuspendState,
     get_write_suspension_service,
 )
 

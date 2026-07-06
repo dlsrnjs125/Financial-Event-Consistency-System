@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -115,7 +115,15 @@ class WriteSuspensionService:
         try:
             payload = json.loads(self.state_file.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return self._runtime_state
+            return WriteSuspendState(
+                active=True,
+                reason="unknown",
+                activated_at=_utc_now(),
+                activated_by="system",
+                retry_after_seconds=self.retry_after_seconds,
+                source="artifact_corrupt",
+                run_id="artifact-corrupt",
+            )
         return WriteSuspendState(
             active=bool(payload.get("active", False)),
             reason=str(payload.get("reason") or "unknown"),
@@ -133,10 +141,14 @@ class WriteSuspensionService:
 
     def _write_artifact(self, state: WriteSuspendState) -> None:
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        self.state_file.write_text(
+        temp_file = self.state_file.with_name(
+            f".{self.state_file.name}.{uuid4().hex}.tmp"
+        )
+        temp_file.write_text(
             json.dumps(asdict(state), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        temp_file.replace(self.state_file)
 
     def _record_state_metric(self, state: WriteSuspendState) -> None:
         if state.reason in ACTIVE_REASON_LABELS:

@@ -19,6 +19,7 @@ from app.domain.exceptions import (
     TransactionAlreadyCancelled,
     TransactionAlreadySettled,
 )
+from app.observability.metrics import record_write_suspended
 from app.schemas.common import ErrorDetail, ErrorResponse
 from app.security.exceptions import (
     DisabledClient,
@@ -191,6 +192,7 @@ async def database_exception_handler(
         activated_by="api",
         source="sqlalchemy_exception",
     )
+    record_write_suspended("postgres_unavailable", "unknown")
     return await write_suspended_exception_handler(request, WriteSuspended(state))
 
 

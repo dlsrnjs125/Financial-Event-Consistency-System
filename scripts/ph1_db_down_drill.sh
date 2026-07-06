@@ -79,8 +79,9 @@ write_request() {
     local output_file="$3"
     local status_file="$4"
     local header_file="$5"
+    local occurred_at="$6"
 
-    python3 - "${CLIENT_SECRET}" "${CLIENT_ID}" "${ACCOUNT_NO}" "${external_event_id}" "${idempotency_key}" "${BASE_URL}" "${output_file}" "${status_file}" "${header_file}" <<'PY'
+    python3 - "${CLIENT_SECRET}" "${CLIENT_ID}" "${ACCOUNT_NO}" "${external_event_id}" "${idempotency_key}" "${BASE_URL}" "${output_file}" "${status_file}" "${header_file}" "${occurred_at}" <<'PY'
 import datetime as dt
 import hashlib
 import hmac
@@ -89,7 +90,7 @@ import sys
 import urllib.error
 import urllib.request
 
-secret, client_id, account_no, external_event_id, idempotency_key, base_url, output_file, status_file, header_file = sys.argv[1:10]
+secret, client_id, account_no, external_event_id, idempotency_key, base_url, output_file, status_file, header_file, occurred_at = sys.argv[1:11]
 path = "/api/v1/transaction-events"
 timestamp = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
 payload = {
@@ -98,7 +99,7 @@ payload = {
     "event_type": "DEPOSIT",
     "amount": 100,
     "currency": "KRW",
-    "occurred_at": timestamp,
+    "occurred_at": occurred_at,
 }
 body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
 body_hash = hashlib.sha256(body).hexdigest()
@@ -152,8 +153,9 @@ wait_for_status "${READY_BASE_URL}/ready" "200" "ready before drill"
 WRITE_SUSPEND_STATE_FILE="${STATE_FILE}" python3 "${ROOT_DIR}/scripts/write_suspend_state.py" disable --reason drill_start >/dev/null || true
 
 baseline_event="ph1-baseline-${RUN_ID}"
+baseline_occurred_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 baseline_status_file="${REPORT_DIR}/baseline.status"
-write_request "${baseline_event}" "ph1-baseline-${RUN_ID}" "${REPORT_DIR}/baseline.json" "${baseline_status_file}" "${REPORT_DIR}/baseline.headers"
+write_request "${baseline_event}" "ph1-baseline-${RUN_ID}" "${REPORT_DIR}/baseline.json" "${baseline_status_file}" "${REPORT_DIR}/baseline.headers" "${baseline_occurred_at}"
 baseline_status="$(cat "${baseline_status_file}")"
 test "${baseline_status}" = "200"
 
@@ -162,8 +164,9 @@ postgres_stopped_by_drill=true
 wait_for_status "${READY_BASE_URL}/ready" "503" "ready while postgres down"
 
 blocked_event="ph1-blocked-${RUN_ID}"
+blocked_occurred_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 blocked_status_file="${REPORT_DIR}/blocked.status"
-write_request "${blocked_event}" "ph1-blocked-${RUN_ID}" "${REPORT_DIR}/blocked.json" "${blocked_status_file}" "${REPORT_DIR}/blocked.headers"
+write_request "${blocked_event}" "ph1-blocked-${RUN_ID}" "${REPORT_DIR}/blocked.json" "${blocked_status_file}" "${REPORT_DIR}/blocked.headers" "${blocked_occurred_at}"
 blocked_status="$(cat "${blocked_status_file}")"
 test "${blocked_status}" = "503"
 grep -qi '^Retry-After:' "${REPORT_DIR}/blocked.headers"
@@ -174,16 +177,18 @@ postgres_stopped_by_drill=false
 wait_for_status "${READY_BASE_URL}/ready" "200" "ready after postgres recovery"
 
 blocked_event_count="$(psql_scalar "SELECT COUNT(*) FROM transaction_events WHERE external_event_id = '${blocked_event}';")"
-duplicate_ledger_count="$(psql_scalar "SELECT COUNT(*) FROM (SELECT transaction_event_id FROM ledger_entries GROUP BY transaction_event_id HAVING COUNT(*) > 1) duplicated;")"
-duplicate_event_count="$(psql_scalar "SELECT COUNT(*) FROM (SELECT external_event_id FROM transaction_events GROUP BY external_event_id HAVING COUNT(*) > 1) duplicated;")"
+test "${blocked_event_count}" = "0"
 
 WRITE_SUSPEND_STATE_FILE="${STATE_FILE}" python3 "${ROOT_DIR}/scripts/write_suspend_state.py" disable --reason operator_resume > "${REPORT_DIR}/resume-state.json"
 
-retry_event="ph1-retry-${RUN_ID}"
-retry_status_file="${REPORT_DIR}/retry.status"
-write_request "${retry_event}" "ph1-retry-${RUN_ID}" "${REPORT_DIR}/retry.json" "${retry_status_file}" "${REPORT_DIR}/retry.headers"
-retry_status="$(cat "${retry_status_file}")"
-test "${retry_status}" = "200"
+blocked_retry_status_file="${REPORT_DIR}/blocked-retry.status"
+write_request "${blocked_event}" "ph1-blocked-${RUN_ID}" "${REPORT_DIR}/blocked-retry.json" "${blocked_retry_status_file}" "${REPORT_DIR}/blocked-retry.headers" "${blocked_occurred_at}"
+blocked_retry_status="$(cat "${blocked_retry_status_file}")"
+test "${blocked_retry_status}" = "200"
+
+blocked_event_count_after_retry="$(psql_scalar "SELECT COUNT(*) FROM transaction_events WHERE external_event_id = '${blocked_event}';")"
+duplicate_ledger_count="$(psql_scalar "SELECT COUNT(*) FROM (SELECT transaction_event_id FROM ledger_entries GROUP BY transaction_event_id HAVING COUNT(*) > 1) duplicated;")"
+duplicate_event_count="$(psql_scalar "SELECT COUNT(*) FROM (SELECT external_event_id FROM transaction_events GROUP BY external_event_id HAVING COUNT(*) > 1) duplicated;")"
 
 cat > "${REPORT_DIR}/report.md" <<EOF
 # PH1 Write Suspend DB-Down Drill
@@ -192,8 +197,9 @@ cat > "${REPORT_DIR}/report.md" <<EOF
 - baseline_write_status: ${baseline_status}
 - blocked_write_status: ${blocked_status}
 - retry_after_header_present: yes
-- retry_after_recovery_status: ${retry_status}
-- blocked_event_record_count: ${blocked_event_count}
+- same_idempotency_retry_status: ${blocked_retry_status}
+- blocked_event_record_count_before_retry: ${blocked_event_count}
+- blocked_event_record_count_after_retry: ${blocked_event_count_after_retry}
 - duplicate_event_count: ${duplicate_event_count}
 - duplicate_ledger_count: ${duplicate_ledger_count}
 - state_file: ${STATE_FILE}
@@ -202,10 +208,10 @@ cat > "${REPORT_DIR}/report.md" <<EOF
 
 PostgreSQL down caused readiness failure and financial write suspension.
 The blocked request returned 503 with Retry-After and was not recorded as a successful transaction.
-Operator resume was required before normal writes resumed.
+After operator resume, the same external_event_id, Idempotency-Key, and body were retried successfully once.
 EOF
 
-test "${blocked_event_count}" = "0"
+test "${blocked_event_count_after_retry}" = "1"
 test "${duplicate_ledger_count}" = "0"
 test "${duplicate_event_count}" = "0"
 

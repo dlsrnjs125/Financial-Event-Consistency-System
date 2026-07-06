@@ -58,3 +58,18 @@ def test_disable_records_resume_metadata(tmp_path):
     assert state.active is False
     assert state.resumed_by == "operator-a"
     assert state.resume_reason == "operator_resume"
+
+
+def test_corrupt_artifact_fails_closed(tmp_path):
+    state_file = tmp_path / "state.json"
+    state_file.write_text("{broken", encoding="utf-8")
+    service = WriteSuspensionService(
+        state_file=state_file,
+        retry_after_seconds=30,
+    )
+
+    state = service.status()
+
+    assert state.active is True
+    assert state.reason == "unknown"
+    assert state.source == "artifact_corrupt"

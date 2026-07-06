@@ -147,6 +147,7 @@ PostgreSQL down 상황에서도 write suspend 판단은 동작해야 하므로, 
 - active 상태에서는 `503 Service Unavailable`과 `Retry-After`를 반환한다.
 - `/health`, `/ready`, `/metrics`는 write suspend로 차단하지 않는다.
 - PostgreSQL probe 또는 SQLAlchemy DB 예외가 발생하면 `postgres_unavailable` 사유로 write suspend를 활성화한다.
+- state artifact가 손상되어 읽을 수 없으면 fail-closed로 active state를 반환한다.
 - DB가 회복되어도 자동 resume하지 않으며, 운영자가 `make ph1-write-suspend-resume`으로 재개한다.
 - PH1 구현 기록과 drill 절차는 [43-ph1-write-suspend-db-down-drill.md](43-ph1-write-suspend-db-down-drill.md)를 기준으로 관리한다.
 
@@ -237,7 +238,7 @@ PH1에서 구현/검증할 항목:
 
 - PostgreSQL stop 중 POST 요청이 `503` + `Retry-After`를 반환한다.
 - DB down 중 처리 성공 idempotency record가 생성되지 않는다.
-- PostgreSQL start 후 동일 `Idempotency-Key` 재시도 시 ledger 1건만 생성된다.
+- PostgreSQL start와 operator resume 후 동일 `Idempotency-Key`와 동일 body 재시도 시 ledger 1건만 생성된다.
 - 복구 후 consistency SQL 결과가 모두 0이다.
 - incident report에 원문 계좌번호, raw idempotency key, signature가 포함되지 않는다.
 

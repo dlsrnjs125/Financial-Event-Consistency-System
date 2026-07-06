@@ -17,6 +17,7 @@ PH1에서는 runtime write suspend를 추가했다.
 - active 상태에서는 `503` + `Retry-After`를 반환한다.
 - PostgreSQL probe 실패 또는 DB 예외가 발생하면 `postgres_unavailable`로 suspend를 활성화한다.
 - 상태는 runtime memory와 `reports/runtime/write-suspend-state.json`에 남긴다.
+- state artifact가 손상되면 fail-closed로 write suspend active 상태를 유지한다.
 - `/health`, `/ready`, `/metrics`는 차단하지 않는다.
 - resume은 자동이 아니라 운영자가 명시적으로 수행한다.
 
@@ -34,9 +35,9 @@ DB가 회복됐다는 사실만으로 write를 자동 재개하지 않고, consi
 5. write suspend artifact 생성
 6. PostgreSQL start
 7. blocked event가 성공 기록으로 남지 않았는지 확인
-8. duplicate event/ledger count 0
-9. operator resume
-10. 새 write 정상 처리
+8. operator resume
+9. 동일 external_event_id, 동일 Idempotency-Key, 동일 body 재시도 성공
+10. duplicate event/ledger count 0
 
 evidence는 `reports/production-hardening/ph1-write-suspend/{run_id}/report.md`에 남긴다.
 
