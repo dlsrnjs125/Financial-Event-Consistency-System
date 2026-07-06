@@ -78,6 +78,16 @@ def test_insufficient_evidence_without_manifest(tmp_path: Path) -> None:
     assert result["confidence_candidate"] == 0.4
 
 
+def test_missing_manifest_is_not_sanitization_risk(tmp_path: Path) -> None:
+    incident_dir = tmp_path / "inc-20260706-153000-postgres-down"
+    incident_dir.mkdir()
+
+    result = ph3_incident_analyzer.analyze_incident(incident_dir)
+
+    assert result["classification"] != "ARTIFACT_SANITIZATION_RISK"
+    assert result["classification"] == "INSUFFICIENT_EVIDENCE"
+
+
 def test_analyze_writes_and_validates_outputs(tmp_path: Path) -> None:
     incident_dir = _artifact(
         tmp_path,

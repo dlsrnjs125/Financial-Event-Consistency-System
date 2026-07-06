@@ -138,6 +138,13 @@ Conditions:
 - or `duplicate_event_count > 0`
 - or `reconciliation_failure_count > 0`
 
+PH3 recognized count-only consistency fields:
+
+- `duplicate_ledger_count`
+- `duplicate_external_event_count`
+- `duplicate_event_count`
+- `reconciliation_failure_count`
+
 Output:
 
 - classification: `CONSISTENCY_ISSUE_CANDIDATE`
