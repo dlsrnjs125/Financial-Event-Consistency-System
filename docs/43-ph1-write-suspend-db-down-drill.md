@@ -157,6 +157,15 @@ evidence 경로:
 reports/production-hardening/ph1-write-suspend/{run_id}/report.md
 ```
 
+PH2 연결:
+
+```bash
+make ph2-db-down-incident-artifact
+```
+
+이 target은 PH1 drill을 실행한 뒤 `reports/incidents/{incident_id}/`에 sanitized incident artifact bundle을 생성하고 검증한다.
+PH2 artifact는 PH1 report에서 count-only consistency summary만 읽으며, raw request body, raw headers, raw idempotency key, HMAC signature는 복사하지 않는다.
+
 ## 8. Verification
 
 자동 테스트:
@@ -207,13 +216,12 @@ make ph1-db-down-drill
 - `RUN_ID`는 drill SQL과 artifact path에 쓰이므로 `[A-Za-z0-9._-]` 문자만 허용한다.
 - PH1은 안전성을 우선해 write 요청마다 DB availability probe를 실행한다. 운영형에서는 probe TTL, readiness cache, DB pressure 시 probe 빈도 제한을 검토한다.
 - PH1의 `OperationalError` handler는 DB hard dependency 장애를 보수적으로 감지한다. 후속에서는 write route에서 발생한 DB unavailable과 read route의 일시적 오류를 더 세밀하게 분리한다.
-- DB 복구 후 `incident_events`/`recovery_cases` backfill은 후속 PH2/PH3 범위다.
+- PH2는 out-of-band artifact와 sanitized report skeleton까지만 구현하며, DB-backed incident/recovery table backfill은 후속 범위다.
 - PostgreSQL HA와 durable queue 도입은 `docs/40-postgres-ha-and-queue-tradeoff-adr.md`에서 별도 판단한다.
 
 ## 11. Follow-up
 
-- out-of-band incident artifact bundle 고도화
-- incident analyzer MVP
+- Incident Analyzer MVP
 - recovery case DB model과 manual approval workflow
 - stale PROCESSING recovery
 - multi-node write suspend drift detection

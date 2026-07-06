@@ -66,8 +66,17 @@ make ph1-write-suspend-resume
 make ph1-db-down-drill
 ```
 
+PH2 incident artifact 명령:
+
+```bash
+make ph2-incident-artifact
+make ph2-incident-artifact-validate
+make ph2-db-down-incident-artifact
+```
+
 `POST /api/v1/transaction-events`는 write suspend active 상태에서 `503 Service Unavailable`과 `Retry-After`를 반환한다.
 `/health`, `/ready`, `/metrics`는 write suspend 자체로 차단하지 않는다.
+PH2 artifact는 `reports/incidents/{incident_id}/`에 저장되며 `sanitized-report.md`는 raw account number, raw idempotency key, HMAC signature, Authorization header, raw request body를 포함하지 않아야 한다.
 
 ## 6. 복구 검증
 

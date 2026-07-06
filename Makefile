@@ -58,6 +58,7 @@ help: ## Show this help message
 	@echo "  make ops6-demo         # Run Ops Phase 6 alerting/runbook verification"
 	@echo "  make ops7-demo         # Run Ops Phase 7 incident timeline/postmortem drill"
 	@echo "  make ph1-db-down-drill # Run PH1 PostgreSQL-down write-suspend drill"
+	@echo "  make ph2-incident-artifact # Create PH2 sanitized incident artifact"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -252,6 +253,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/ops6_alert_rule_validation.sh
 	bash -n scripts/ops7_incident_timeline_drill.sh
 	bash -n scripts/ph1_db_down_drill.sh
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph2_incident_artifact.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -272,6 +274,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ops6_alert_rule_validation.sh
 	test -x scripts/ops7_incident_timeline_drill.sh
 	test -x scripts/ph1_db_down_drill.sh
+	test -x scripts/ph2_incident_artifact.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -461,6 +464,27 @@ ph1-db-down-drill: docker-check ## Run PH1 PostgreSQL-down write-suspend drill
 
 .PHONY: ops9-db-down-drill
 ops9-db-down-drill: ph1-db-down-drill ## Alias for PH1 PostgreSQL-down write-suspend drill
+
+# Production Hardening Phase 2 Incident Artifact / Sanitized Report
+.PHONY: ph2-incident-artifact
+ph2-incident-artifact: ## Create PH2 out-of-band incident artifact bundle
+	@python3 scripts/ph2_incident_artifact.py create --scenario POSTGRES_DOWN --source manual
+
+.PHONY: ph2-incident-artifact-validate
+ph2-incident-artifact-validate: ## Validate the latest PH2 incident artifact bundle
+	@python3 scripts/ph2_incident_artifact.py validate --latest
+
+.PHONY: ph2-db-down-incident-artifact
+ph2-db-down-incident-artifact: docker-check ## Run PH1 drill, then create and validate PH2 incident artifact
+	@set -e; \
+	RUN_ID=$${RUN_ID:-ph2-db-down-$$(date -u +%Y%m%dT%H%M%SZ)}; \
+	REPORT_DIR=$${REPORT_DIR:-reports/production-hardening/ph1-write-suspend/$$RUN_ID}; \
+	RUN_ID=$$RUN_ID REPORT_DIR=$$REPORT_DIR BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/ph1_db_down_drill.sh; \
+	python3 scripts/ph2_incident_artifact.py create --scenario POSTGRES_DOWN --run-id $$RUN_ID --source ph1_drill --ph1-report-dir $$REPORT_DIR; \
+	python3 scripts/ph2_incident_artifact.py validate --latest
+
+.PHONY: ops10-incident-artifact
+ops10-incident-artifact: ph2-incident-artifact ## Alias for PH2 out-of-band incident artifact bundle
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status

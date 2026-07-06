@@ -10,6 +10,8 @@ Production Hardening에서는 Prometheus metric, structured log, k6 summary, con
 
 이 설계는 AI 자동 복구가 아니다.
 우선순위는 deterministic rule 기반 판단이며, AI는 sanitized report를 요약하거나 Runbook 초안을 작성하는 보조 역할로만 둔다.
+PH2에서는 full Incident Analyzer를 구현하지 않고, 후속 analyzer가 사용할 out-of-band artifact bundle과 sanitized report skeleton만 먼저 구현했다.
+구현 세부사항은 [44-ph2-incident-artifact-sanitized-report.md](44-ph2-incident-artifact-sanitized-report.md)를 기준으로 한다.
 
 ## 2. 입력 데이터
 
@@ -198,8 +200,19 @@ AI에게 맡기면 안 되는 일:
 
 ## 11. 향후 Makefile target 후보
 
-이번 브랜치에서는 실제 target을 구현하지 않는다.
-후속 구현 후보로만 관리한다.
+PH2에서는 artifact 생성과 검증 target만 구현했다.
+full analyzer target은 후속 구현 후보로 관리한다.
+
+PH2 구현 target:
+
+```bash
+make ph2-incident-artifact
+make ph2-incident-artifact-validate
+make ph2-db-down-incident-artifact
+make ops10-incident-artifact
+```
+
+후속 analyzer 후보:
 
 ```bash
 make incident-analyze
