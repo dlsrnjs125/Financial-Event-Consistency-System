@@ -42,11 +42,15 @@
 | Development Track | Phase 1~12 | Done | consistency, idempotency, Redis fallback, k6, CI/CD, Blue-Green |
 | Ops Extension Track | Phase 1~8 | Done | monitoring, DR drill, security, incident runbook |
 | Supporting Docs | docs/27~34 | Supporting | threat model, SLO/SLI, evidence template, capacity appendix |
+| Production Hardening Track | PH Phase 0~8 | Planning | PostgreSQL failure policy, write suspend, incident diagnosis, recovery case, AI-safe governance |
 
 Ops Extension Track은 Phase 8 Incident Runbook에서 종료한다.
 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 증거를 보완하기 위한 supporting documents로 관리한다.
 
 Ops Phase 8에서는 장애 대응 Runbook을 최종 정리하고, Grafana p95/p99 지표와 rollback smoke/consistency gate 결과를 evidence로 남겼다.
+
+Production Hardening Track은 기존 구현 위에 PostgreSQL 자체 장애, failover 중 미확정 거래, stale PROCESSING, 자동 incident diagnosis, recovery case 승인 흐름, AI-safe 데이터 보호 기준을 설계하는 후속 보완 트랙이다.
+상세 설계는 README가 아니라 `docs/35-*` ~ `docs/40-*` 문서에서 관리한다.
 
 ## 5. Final Verification Summary
 
@@ -78,6 +82,7 @@ External Financial Systems
 
 PostgreSQL은 최종 Source of Truth다.
 Redis는 성능 최적화와 duplicate request 완화를 위한 보조 계층이며, Redis 장애가 발생해도 최종 정합성은 PostgreSQL transaction과 unique constraint로 검증한다.
+PostgreSQL write path가 불가능한 순간에는 신규 금융 거래를 성공으로 응답하지 않고, `503 Service Unavailable`과 `Retry-After`로 동일 Idempotency-Key 재시도를 유도한다.
 
 ## 7. Quick Start
 
@@ -120,6 +125,12 @@ make ops7-demo
 | [docs/26-incident-runbook-index.md](docs/26-incident-runbook-index.md) | Incident Runbook |
 | [docs/29-slo-sli-error-budget.md](docs/29-slo-sli-error-budget.md) | SLO/SLI와 장애 판단 기준 |
 | [docs/33-observability-evidence-plan.md](docs/33-observability-evidence-plan.md) | 증거 수집 계획 |
+| [docs/35-production-hardening-roadmap.md](docs/35-production-hardening-roadmap.md) | Production Hardening 후속 보완 로드맵 |
+| [docs/36-postgres-failure-and-write-suspend-policy.md](docs/36-postgres-failure-and-write-suspend-policy.md) | PostgreSQL 장애와 write suspend 정책 |
+| [docs/37-incident-diagnosis-automation-design.md](docs/37-incident-diagnosis-automation-design.md) | 장애 자동 진단 설계 |
+| [docs/38-recovery-case-quarantine-and-reconciliation-design.md](docs/38-recovery-case-quarantine-and-reconciliation-design.md) | Recovery case와 quarantine/reconciliation 설계 |
+| [docs/39-sensitive-data-ai-governance-and-encryption-tradeoff.md](docs/39-sensitive-data-ai-governance-and-encryption-tradeoff.md) | AI-safe 민감 데이터 보호와 암호화 trade-off |
+| [docs/40-postgres-ha-and-queue-tradeoff-adr.md](docs/40-postgres-ha-and-queue-tradeoff-adr.md) | PostgreSQL HA와 durable queue trade-off ADR |
 
 ## 10. Blog Series
 
@@ -146,8 +157,10 @@ make ops7-demo
 - Kubernetes 기반 운영 전환은 제외했다.
 - Loki/OpenTelemetry 기반 trace query evidence는 향후 고도화로 남겼다.
 - Capacity Planning, Change Management, Ansible, PowerShell 문서는 supporting/optional docs로 관리한다.
+- Production Hardening 문서는 현재 설계 단계이며, write suspend 구현, incident analyzer, recovery case DB 모델, PostgreSQL HA/Queue 도입은 후속 구현 후보로 남겼다.
 
 ## 12. 최종 요약
 
 Development Track에서는 금융 이벤트 정합성 처리 시스템을 구현했고, Ops Extension Track에서는 모니터링, DR Drill, 보안 통제, 장애 대응 Runbook까지 정리했다.
 Ops Phase 8 Incident Runbook을 마지막으로 운영 확장 트랙을 종료했으며, 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 evidence를 보완하는 supporting documents로 관리한다.
+Production Hardening Track은 운영 확장 종료 이후의 후속 설계 트랙으로, PostgreSQL 장애 중 성공 응답 금지, 자동 진단과 수동 승인 경계, 민감 데이터의 AI-safe 처리 원칙을 문서화한다.
