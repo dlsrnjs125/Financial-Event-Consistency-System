@@ -67,10 +67,12 @@ DB-down drill:
 ```bash
 make ph1-db-down-drill
 make ph2-db-down-incident-artifact
+make ph3-db-down-incident-analysis
 ```
 
 drill은 PostgreSQL stop, readiness failure, write `503` + `Retry-After`, operator resume, 복구 후 consistency count를 확인하고 `reports/production-hardening/ph1-write-suspend/{run_id}/report.md`에 evidence를 남긴다.
 PH2 target은 같은 흐름 뒤에 `reports/incidents/{incident_id}/` sanitized artifact bundle과 `sanitized-report.md`를 생성하고 검증한다.
+PH3 target은 같은 artifact를 rule-based analyzer로 분류하고 `analyzer-result.json`, `incident-analysis.md`를 생성한다.
 
 ## 6. Resume 승인 기준
 
@@ -83,6 +85,7 @@ PH2 target은 같은 흐름 뒤에 `reports/incidents/{incident_id}/` sanitized 
 PH1에서는 resume이 자동 실행되지 않는다.
 PostgreSQL readiness와 duplicate event/ledger count를 확인한 뒤 운영자가 명시적으로 resume한다.
 PH2 report는 resume 승인 전 검토할 evidence 초안이며, write resume 자체를 자동 승인하지 않는다.
+PH3 analyzer result도 resume 승인 후보를 정리할 뿐이며, write resume 자동 승인은 수행하지 않는다.
 
 ## 7. Rollback/abort 조건
 

@@ -12,3 +12,11 @@ files from this directory.
 
 PH2 does not collect raw logs by default. The `raw/` directory inside generated
 bundles is intentionally empty except for a README.
+
+PH3 analyzer samples:
+
+- `sample-analyzer-result.json`
+- `sample-incident-analysis.md`
+
+These samples are sanitized examples only. Real analyzer outputs inside `inc-*`
+directories remain local runtime evidence.
