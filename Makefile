@@ -57,6 +57,7 @@ help: ## Show this help message
 	@echo "  make ops5-demo         # Run Ops Phase 5 failure recovery runbook drill"
 	@echo "  make ops6-demo         # Run Ops Phase 6 alerting/runbook verification"
 	@echo "  make ops7-demo         # Run Ops Phase 7 incident timeline/postmortem drill"
+	@echo "  make ph1-db-down-drill # Run PH1 PostgreSQL-down write-suspend drill"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -250,6 +251,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/ops5_failure_recovery_drill.sh
 	bash -n scripts/ops6_alert_rule_validation.sh
 	bash -n scripts/ops7_incident_timeline_drill.sh
+	bash -n scripts/ph1_db_down_drill.sh
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -269,6 +271,8 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ops5_failure_recovery_drill.sh
 	test -x scripts/ops6_alert_rule_validation.sh
 	test -x scripts/ops7_incident_timeline_drill.sh
+	test -x scripts/ph1_db_down_drill.sh
+	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
 security-log-check: ## Scan backend app logs for direct sensitive-field logging
@@ -439,6 +443,24 @@ phase10-redis-down-check: docker-check ## Run Phase 10 Redis-down duplicate stor
 	trap '$(DOCKER_COMPOSE) start redis >/dev/null; $(DOCKER_COMPOSE) ps redis; echo "Readiness check: curl -i $(BASE_URL)/ready"' EXIT; \
 	$(MAKE) k6-redis-down-duplicate-storm; \
 	$(MAKE) k6-verify
+
+# Production Hardening Phase 1 Write Suspend / PostgreSQL Down
+.PHONY: ph1-write-suspend-status
+ph1-write-suspend-status: ## Show current PH1 write-suspend state
+	@WRITE_SUSPEND_STATE_FILE=$${WRITE_SUSPEND_STATE_FILE:-reports/runtime/write-suspend-state.json} \
+		python3 scripts/write_suspend_state.py status
+
+.PHONY: ph1-write-suspend-resume
+ph1-write-suspend-resume: ## Operator resume for PH1 write suspension
+	@WRITE_SUSPEND_STATE_FILE=$${WRITE_SUSPEND_STATE_FILE:-reports/runtime/write-suspend-state.json} \
+		python3 scripts/write_suspend_state.py disable --reason operator_resume
+
+.PHONY: ph1-db-down-drill
+ph1-db-down-drill: docker-check ## Run PH1 PostgreSQL-down write-suspend drill
+	@BASE_URL=$(BASE_URL) READY_BASE_URL=$(INTERNAL_BASE_URL) CLIENT_ID=$(CLIENT_ID) CLIENT_SECRET=$(CLIENT_SECRET) ACCOUNT_NO=$(ACCOUNT_NO) ./scripts/ph1_db_down_drill.sh
+
+.PHONY: ops9-db-down-drill
+ops9-db-down-drill: ph1-db-down-drill ## Alias for PH1 PostgreSQL-down write-suspend drill
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status

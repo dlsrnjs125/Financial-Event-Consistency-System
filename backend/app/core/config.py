@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     external_client_secrets: str = ""
     log_level: str = "INFO"
     metrics_enabled: bool = True
+    write_suspend_state_file: str = "reports/runtime/write-suspend-state.json"
+    write_suspend_retry_after_seconds: int = 30
 
     model_config = SettingsConfigDict(
         env_file=".env",

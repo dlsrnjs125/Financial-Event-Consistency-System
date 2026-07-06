@@ -61,6 +61,8 @@ redis_data/
 logs/
 
 # Operational evidence reports
+reports/runtime/
+reports/production-hardening/
 reports/**/raw/
 reports/**/tmp/
 *.har

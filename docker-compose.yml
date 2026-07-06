@@ -93,6 +93,7 @@ services:
         condition: service_started
     volumes:
       - ./backend/app:/app/app
+      - ./reports/runtime:/app/reports/runtime
     networks:
       - financial-network
     restart: unless-stopped
@@ -134,6 +135,7 @@ services:
         condition: service_started
     volumes:
       - ./backend/app:/app/app
+      - ./reports/runtime:/app/reports/runtime
     networks:
       - financial-network
     restart: unless-stopped

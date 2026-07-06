@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies.idempotency import get_idempotency_key
 from app.api.dependencies.security import verify_external_request_signature
+from app.api.dependencies.write_suspension import guard_financial_write
 from app.cache.idempotency_cache import IdempotencyResponseCache
 from app.cache.redis_errors import REDIS_FALLBACK_EXCEPTIONS, redis_failure_reason
 from app.cache.redis_lock import RedisLock
@@ -107,6 +108,7 @@ def create_transaction_event(
     request: TransactionEventCreateRequest,
     response: Response,
     _: None = Depends(verify_external_request_signature),
+    __: None = Depends(guard_financial_write),
     idempotency_key: str = Depends(get_idempotency_key),
     db: Session = Depends(get_db),
 ):

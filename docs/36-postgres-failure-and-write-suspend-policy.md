@@ -139,6 +139,17 @@ PostgreSQL down 상황에서도 write suspend 판단은 동작해야 하므로, 
 - PostgreSQL 복구 후 DB-backed flag와 `incident_events`에 상태를 backfill한다.
 - Redis는 보조 계층이므로 write suspend의 유일한 저장소로 사용하지 않는다.
 
+현재 PH1 구현:
+
+- 상태 파일 기본값은 `reports/runtime/write-suspend-state.json`이다.
+- API runtime memory와 local artifact를 함께 사용한다.
+- `POST /api/v1/transaction-events`만 신규 write 차단 대상이다.
+- active 상태에서는 `503 Service Unavailable`과 `Retry-After`를 반환한다.
+- `/health`, `/ready`, `/metrics`는 write suspend로 차단하지 않는다.
+- PostgreSQL probe 또는 SQLAlchemy DB 예외가 발생하면 `postgres_unavailable` 사유로 write suspend를 활성화한다.
+- DB가 회복되어도 자동 resume하지 않으며, 운영자가 `make ph1-write-suspend-resume`으로 재개한다.
+- PH1 구현 기록과 drill 절차는 [43-ph1-write-suspend-db-down-drill.md](43-ph1-write-suspend-db-down-drill.md)를 기준으로 관리한다.
+
 ### Multi-node 한계와 production 보완
 
 이번 프로젝트의 1차 구현은 Docker Compose 단일 API 인스턴스 기준으로 runtime flag와 local artifact를 검증한다.
@@ -222,14 +233,19 @@ Recovery mode에서 수행할 일:
 
 ## 11. k6/장애 drill로 검증할 항목
 
-후속 구현 후보:
+PH1에서 구현/검증할 항목:
 
 - PostgreSQL stop 중 POST 요청이 `503` + `Retry-After`를 반환한다.
 - DB down 중 처리 성공 idempotency record가 생성되지 않는다.
 - PostgreSQL start 후 동일 `Idempotency-Key` 재시도 시 ledger 1건만 생성된다.
-- failover-like stale connection 상황에서 write suspend가 유지된다.
 - 복구 후 consistency SQL 결과가 모두 0이다.
 - incident report에 원문 계좌번호, raw idempotency key, signature가 포함되지 않는다.
+
+후속 구현 후보:
+
+- failover-like stale connection 상황에서 write suspend가 유지된다.
+- multi-node 전역 write blocking을 Nginx/LB 또는 shared control plane과 연결한다.
+- out-of-band incident artifact를 DB-backed `incident_events`와 `recovery_cases`로 backfill한다.
 
 ## 12. Trade-off
 
