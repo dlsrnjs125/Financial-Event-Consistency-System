@@ -81,6 +81,8 @@ backups/postgres/*.log
 !reports/incidents/*-result.md
 !reports/incidents/README.md
 !reports/incidents/sample-sanitized-report.md
+!reports/incidents/sample-analyzer-result.json
+!reports/incidents/sample-incident-analysis.md
 
 # Docker
 docker-compose.override.yml

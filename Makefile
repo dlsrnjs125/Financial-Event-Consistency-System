@@ -59,6 +59,7 @@ help: ## Show this help message
 	@echo "  make ops7-demo         # Run Ops Phase 7 incident timeline/postmortem drill"
 	@echo "  make ph1-db-down-drill # Run PH1 PostgreSQL-down write-suspend drill"
 	@echo "  make ph2-incident-artifact # Create PH2 sanitized incident artifact"
+	@echo "  make ph3-incident-analyze # Analyze latest PH2 incident artifact"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -254,6 +255,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/ops7_incident_timeline_drill.sh
 	bash -n scripts/ph1_db_down_drill.sh
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph2_incident_artifact.py
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph3_incident_analyzer.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -275,6 +277,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ops7_incident_timeline_drill.sh
 	test -x scripts/ph1_db_down_drill.sh
 	test -x scripts/ph2_incident_artifact.py
+	test -x scripts/ph3_incident_analyzer.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -485,6 +488,24 @@ ph2-db-down-incident-artifact: docker-check ## Run PH1 drill, then create and va
 
 .PHONY: ops10-incident-artifact
 ops10-incident-artifact: ph2-incident-artifact ## Alias for PH2 out-of-band incident artifact bundle
+
+# Production Hardening Phase 3 Incident Analyzer MVP
+.PHONY: ph3-incident-analyze
+ph3-incident-analyze: ## Analyze the latest PH2 incident artifact
+	@python3 scripts/ph3_incident_analyzer.py analyze --latest
+
+.PHONY: ph3-incident-analyze-validate
+ph3-incident-analyze-validate: ## Validate latest PH3 incident analyzer output
+	@python3 scripts/ph3_incident_analyzer.py validate --latest
+
+.PHONY: ph3-db-down-incident-analysis
+ph3-db-down-incident-analysis: docker-check ## Run PH2 DB-down artifact flow, then analyze and validate it
+	@$(MAKE) ph2-db-down-incident-artifact
+	@python3 scripts/ph3_incident_analyzer.py analyze --latest
+	@python3 scripts/ph3_incident_analyzer.py validate --latest
+
+.PHONY: ops11-incident-analyze
+ops11-incident-analyze: ph3-incident-analyze ## Alias for PH3 rule-based incident analyzer MVP
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status

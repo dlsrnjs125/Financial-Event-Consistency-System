@@ -12,6 +12,8 @@ Production Hardening에서는 Prometheus metric, structured log, k6 summary, con
 우선순위는 deterministic rule 기반 판단이며, AI는 sanitized report를 요약하거나 Runbook 초안을 작성하는 보조 역할로만 둔다.
 PH2에서는 full Incident Analyzer를 구현하지 않고, 후속 analyzer가 사용할 out-of-band artifact bundle과 sanitized report skeleton만 먼저 구현했다.
 구현 세부사항은 [44-ph2-incident-artifact-sanitized-report.md](44-ph2-incident-artifact-sanitized-report.md)를 기준으로 한다.
+PH3에서는 PH2 artifact를 입력으로 사용하는 deterministic rule-based Incident Analyzer MVP를 구현했다.
+구현 세부사항과 rule priority는 [45-ph3-incident-analyzer-mvp.md](45-ph3-incident-analyzer-mvp.md)를 기준으로 한다.
 
 ## 2. 입력 데이터
 
@@ -200,8 +202,8 @@ AI에게 맡기면 안 되는 일:
 
 ## 11. 향후 Makefile target 후보
 
-PH2에서는 artifact 생성과 검증 target만 구현했다.
-full analyzer target은 후속 구현 후보로 관리한다.
+PH2에서는 artifact 생성과 검증 target을 구현했고, PH3에서는 artifact 기반 analyzer target을 구현했다.
+full recovery case 생성과 live metric query는 후속 구현 후보로 관리한다.
 
 PH2 구현 target:
 
@@ -212,11 +214,18 @@ make ph2-db-down-incident-artifact
 make ops10-incident-artifact
 ```
 
-후속 analyzer 후보:
+PH3 구현 target:
 
 ```bash
-make incident-analyze
-make incident-report
+make ph3-incident-analyze
+make ph3-incident-analyze-validate
+make ph3-db-down-incident-analysis
+make ops11-incident-analyze
+```
+
+후속 후보:
+
+```bash
 make recovery-cases
 make ai-safe-incident-context
 make latency-attribution-report

@@ -42,7 +42,7 @@
 | Development Track | Phase 1~12 | Done | consistency, idempotency, Redis fallback, k6, CI/CD, Blue-Green |
 | Ops Extension Track | Phase 1~8 | Done | monitoring, DR drill, security, incident runbook |
 | Supporting Docs | docs/27~34 | Supporting | threat model, SLO/SLI, evidence template, capacity appendix |
-| Production Hardening Track | PH Phase 0~10 | In Progress | PH1 write suspend implementation, PostgreSQL failure policy, incident diagnosis, recovery case, AI-safe governance, latency attribution drill |
+| Production Hardening Track | PH Phase 0~11 | In Progress | PH1 write suspend implementation, PostgreSQL failure policy, incident diagnosis, recovery case, AI-safe governance, latency attribution drill |
 
 Ops Extension Track은 Phase 8 Incident Runbook에서 종료한다.
 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 증거를 보완하기 위한 supporting documents로 관리한다.
@@ -52,7 +52,8 @@ Ops Phase 8에서는 장애 대응 Runbook을 최종 정리하고, Grafana p95/p
 Production Hardening Track은 기존 구현 위에 PostgreSQL 자체 장애, failover 중 미확정 거래, stale PROCESSING, 자동 incident diagnosis, recovery case 승인 흐름, AI-safe 데이터 보호 기준, latency attribution drill을 보완하는 후속 트랙이다.
 PH1에서는 PostgreSQL write path가 불가능할 때 신규 금융 write를 `503` + `Retry-After`로 fail-closed 처리하는 runtime write suspend와 DB-down drill을 구현했다.
 PH2에서는 PostgreSQL 장애 중 DB에 의존하지 않는 incident artifact bundle과 sanitized report skeleton을 추가했다.
-상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/43-*` 문서에서 관리한다.
+PH3에서는 PH2 incident artifact를 기반으로 deterministic rule-based incident analyzer MVP를 추가했다.
+상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/45-*` 문서에서 관리한다.
 
 ## 5. Final Verification Summary
 
@@ -114,6 +115,8 @@ make ops7-demo
 make ph1-db-down-drill
 make ph2-incident-artifact
 make ph2-incident-artifact-validate
+make ph3-incident-analyze
+make ph3-incident-analyze-validate
 make ph1-write-suspend-status
 make ph1-write-suspend-resume
 ```
@@ -142,6 +145,7 @@ make ph1-write-suspend-resume
 | [docs/42-latency-drill-test-plan.md](docs/42-latency-drill-test-plan.md) | k6 기반 latency attribution drill 테스트 계획 |
 | [docs/43-ph1-write-suspend-db-down-drill.md](docs/43-ph1-write-suspend-db-down-drill.md) | PH1 write suspend 구현과 PostgreSQL down drill |
 | [docs/44-ph2-incident-artifact-sanitized-report.md](docs/44-ph2-incident-artifact-sanitized-report.md) | PH2 out-of-band incident artifact와 sanitized report |
+| [docs/45-ph3-incident-analyzer-mvp.md](docs/45-ph3-incident-analyzer-mvp.md) | PH3 deterministic incident analyzer MVP |
 
 ## 10. Blog Series
 

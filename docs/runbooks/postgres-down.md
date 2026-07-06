@@ -74,9 +74,18 @@ make ph2-incident-artifact-validate
 make ph2-db-down-incident-artifact
 ```
 
+PH3 incident analyzer 명령:
+
+```bash
+make ph3-incident-analyze
+make ph3-incident-analyze-validate
+make ph3-db-down-incident-analysis
+```
+
 `POST /api/v1/transaction-events`는 write suspend active 상태에서 `503 Service Unavailable`과 `Retry-After`를 반환한다.
 `/health`, `/ready`, `/metrics`는 write suspend 자체로 차단하지 않는다.
 PH2 artifact는 `reports/incidents/{incident_id}/`에 저장되며 `sanitized-report.md`는 raw account number, raw idempotency key, HMAC signature, Authorization header, raw request body를 포함하지 않아야 한다.
+PH3 analyzer는 sanitized artifact를 `POSTGRES_DOWN_WRITE_SUSPENDED` 같은 rule-based classification 후보로 분류하지만, DB 복구나 write resume을 자동 승인하지 않는다.
 
 ## 6. 복구 검증
 

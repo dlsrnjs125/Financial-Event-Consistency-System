@@ -204,6 +204,16 @@ make ops10-incident-artifact
 PH2 reads the PH1 report only for count-only summaries such as duplicate event and ledger counts.
 It does not copy raw request bodies, raw headers, or PH1 response bodies into the incident bundle.
 
+PH3 connection:
+
+```bash
+make ph3-incident-analyze
+make ph3-incident-analyze-validate
+```
+
+PH3 reads the sanitized PH2 artifact and writes `analyzer-result.json` plus `incident-analysis.md`.
+It does not read `raw/` and does not execute recovery actions.
+
 ## 10. Verification Criteria
 
 Checks:
@@ -260,5 +270,5 @@ Limitations:
 Next step:
 
 ```text
-PH-Impl 3: Incident Analyzer MVP
+PH-Impl 4: Recovery Case / Quarantine / Manual Approval
 ```

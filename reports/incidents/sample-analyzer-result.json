@@ -1,0 +1,42 @@
+{
+  "analyzed_at": "2026-07-06T15:35:00+09:00",
+  "analyzer_version": "ph3-mvp-v1",
+  "auto_actions_observed": [
+    "sanitized_artifact_created",
+    "ph2_validation_checked",
+    "write_suspend_state_captured",
+    "count_only_consistency_summary_captured"
+  ],
+  "classification": "POSTGRES_DOWN_WRITE_SUSPENDED",
+  "confidence_candidate": 0.9,
+  "incident_id": "inc-20260706-153000-postgres-down",
+  "limits": [
+    "PH3 does not execute recovery actions",
+    "PH3 does not approve write resume",
+    "PH3 does not query live Prometheus metrics",
+    "PH3 does not call AI APIs"
+  ],
+  "manual_actions_required": [
+    "confirm PostgreSQL recovery",
+    "review consistency gate",
+    "approve write resume",
+    "decide whether recovery case creation is required in PH4"
+  ],
+  "manual_review_required": true,
+  "primary_signals": [
+    "classification=POSTGRES_DOWN_WRITE_SUSPENDED",
+    "scenario=POSTGRES_DOWN",
+    "write_suspend_state.active=true",
+    "write_suspend_state.reason=postgres_unavailable",
+    "ready_status=not_collected",
+    "consistency_result=captured",
+    "sensitive_data_included=false"
+  ],
+  "recommended_runbooks": [
+    "docs/runbooks/postgres-down.md",
+    "docs/runbooks/write-suspend-resume.md"
+  ],
+  "sensitive_data_included": false,
+  "severity_candidate": "SEV1",
+  "why_this_classification": "Scenario and write-suspend evidence point to PostgreSQL write path unavailability."
+}
