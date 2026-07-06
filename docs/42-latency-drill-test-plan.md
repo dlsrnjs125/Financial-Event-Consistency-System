@@ -302,6 +302,10 @@ internal_postgres_latency
   - `external_http_client_duration_seconds` 증가
   - DB/Redis phase 정상
   - blackbox probe와 app outbound metric 비교 가능
+- core write path 영향 범위:
+  - 현재 프로젝트에는 outbound external call이 없으므로 실제 구현 전까지 완전 검증으로 쓰지 않는다.
+  - mock partner는 먼저 post-commit side effect 후보로 설계한다.
+  - 외부 callback이 core write path에 직접 들어가면 원장 write transaction latency를 끌어올릴 수 있으므로 별도 ADR이 필요하다.
 - latency classification:
   - `external_dependency_latency`
   - `external_endpoint_slow`
@@ -345,7 +349,18 @@ internal_postgres_latency
 - Trade-off: local k6 환경의 network 지연은 실제 partner network와 다를 수 있다.
 - 후속 구현 후보: Nginx timing log parser.
 
-## 12. Latency Classification Matrix
+## 12. 운영 장애 추가 확인 시나리오
+
+| 시나리오 | 확인할 것 |
+| --- | --- |
+| Partner retry storm | client-level rate limit, partner quarantine, `429` 전환 기준, same-key retry와 신규 이벤트 폭주 구분 |
+| Write suspend 중 API process restart | local artifact로 suspend 상태 복구, Nginx write blocking route 2차 방어, DB 복구 전 write 재개 방지 |
+| Recovery action 중간 실패 | `EXECUTION_FAILED`, action idempotency, compensation ledger unique guard, 중복 보정 방지 |
+| Artifact sanitizer 실패 | report 생성 실패 처리, AI context 생성 차단, raw key/account/signature artifact scan |
+| DB 정상이나 Nginx timeout 먼저 발생 | commit 후 응답 실패의 `COMPLETED` replay, stale PROCESSING detector, timeout 순서 검증 |
+| 특정 partner만 latency 증가 | `partner_alias` cardinality 정책, partner evidence bundle, partner_request_id 기반 로그 대조 |
+
+## 13. Latency Classification Matrix
 
 | 테스트 결과 | 원인 후보 | Classification |
 | --- | --- | --- |
@@ -360,7 +375,7 @@ internal_postgres_latency
 | blackbox probe도 증가 | 외부 endpoint 자체 지연 가능성 | `external_endpoint_slow` |
 | blackbox probe 정상 + app outbound만 증가 | app HTTP client/DNS/pool 문제 | `app_http_client_path_issue` |
 
-## 13. Makefile Target 후보
+## 14. Makefile Target 후보
 
 이번 PR에서는 실제 target을 구현하지 않는다.
 
@@ -375,9 +390,9 @@ make latency-analyze
 make latency-report
 ```
 
-## 14. Trade-off
+## 15. Trade-off
 
-### 14.1 k6 단독 판단 vs 서버 metric/log와 상관분석
+### 15.1 k6 단독 판단 vs 서버 metric/log와 상관분석
 
 - 선택한 정책: k6는 증상 재현에 사용하고, 원인 귀속은 server metric/log와 상관분석한다.
 - 대안: k6 latency 결과만으로 원인을 판단한다.
@@ -386,7 +401,7 @@ make latency-report
 - 보완 전략: k6 summary, Nginx timing, app phase metric, consistency SQL을 같은 report에 묶는다.
 - 면접 답변용 한 문장: k6로 latency 증상을 만들고, 원인은 Nginx/FastAPI/DB/Redis metric을 함께 봐서 귀속하도록 설계했습니다.
 
-### 14.2 실제 외부 시스템 호출 vs mock partner service
+### 15.2 실제 외부 시스템 호출 vs mock partner service
 
 - 선택한 정책: 반복 가능한 drill은 mock partner service로 시작한다.
 - 대안: 실제 외부 시스템 sandbox를 호출한다.
@@ -395,7 +410,7 @@ make latency-report
 - 보완 전략: production-like 검증은 후속 통합 환경에서 별도 수행한다.
 - 면접 답변용 한 문장: 외부 장애는 먼저 mock partner로 재현성을 확보하고, 실제 외부사는 통합 환경 evidence로 보완했습니다.
 
-### 14.3 Redis down 테스트 vs Redis delay 테스트
+### 15.3 Redis down 테스트 vs Redis delay 테스트
 
 - 선택한 정책: Redis down과 Redis delay를 분리한다.
 - 대안: Redis down 테스트만 수행한다.
@@ -404,7 +419,7 @@ make latency-report
 - 보완 전략: Toxiproxy 또는 netem 기반 delay profile을 후속 후보로 둔다.
 - 면접 답변용 한 문장: Redis down은 fallback 검증이고, Redis delay는 tail latency 전파를 보기 위한 별도 drill로 분리했습니다.
 
-### 14.4 DB down 테스트 vs DB lock/pool pressure 테스트
+### 15.4 DB down 테스트 vs DB lock/pool pressure 테스트
 
 - 선택한 정책: DB down, pool pressure, lock contention을 분리한다.
 - 대안: DB down만 장애로 다룬다.
@@ -413,7 +428,7 @@ make latency-report
 - 보완 전략: 각 시나리오별 classification과 evidence를 따로 둔다.
 - 면접 답변용 한 문장: DB 장애를 down 하나로 보지 않고, pool pressure와 lock contention까지 분리해 latency 원인을 좁히도록 했습니다.
 
-### 14.5 test-only fault injection vs 실제 장애만 재현
+### 15.5 test-only fault injection vs 실제 장애만 재현
 
 - 선택한 정책: 반복 가능한 fault injection을 사용하되 production path에 섞지 않는다.
 - 대안: 실제 장애만 기다리거나 수동으로 재현한다.
@@ -422,7 +437,7 @@ make latency-report
 - 보완 전략: fault injection 범위와 한계를 report에 명시한다.
 - 면접 답변용 한 문장: 장애 주입은 테스트 경계에 두고, production logic에는 넣지 않아 재현성과 안전성을 함께 잡았습니다.
 
-### 14.6 phase metric 추가 vs full distributed tracing 도입
+### 15.6 phase metric 추가 vs full distributed tracing 도입
 
 - 선택한 정책: phase metric과 structured log를 먼저 추가하고, tracing은 후속 확장으로 둔다.
 - 대안: 처음부터 full distributed tracing을 도입한다.
@@ -431,7 +446,7 @@ make latency-report
 - 보완 전략: trace_id/request_id를 표준화해 OpenTelemetry 확장 가능성을 열어둔다.
 - 면접 답변용 한 문장: 먼저 phase metric으로 병목 구간을 숫자로 나누고, 이후 OpenTelemetry로 end-to-end trace를 붙일 수 있게 설계했습니다.
 
-## 15. 후속 구현 후보
+## 16. 후속 구현 후보
 
 - FastAPI middleware 기반 request phase timer
 - SQLAlchemy DB query/pool wait timer
@@ -447,7 +462,7 @@ make latency-report
 - k6 latency drill scenarios
 - `reports/latency/{run_id}/latency-analysis.md` generator
 
-## 16. 면접 답변용 요약
+## 17. 면접 답변용 요약
 
 k6 하나로 DB나 외부 시스템이 원인이라고 단정하지 않았습니다.
 k6는 latency 증상을 재현하는 도구로 쓰고, Nginx timing, FastAPI phase metric, Redis/PostgreSQL metric, external HTTP client metric, consistency SQL을 함께 비교해 `internal_postgres_latency`, `redis_degraded_latency`, `external_dependency_latency`, `edge_or_client_network_latency` 같은 원인 후보로 분류하도록 설계했습니다.

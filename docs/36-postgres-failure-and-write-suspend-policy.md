@@ -139,6 +139,20 @@ PostgreSQL down 상황에서도 write suspend 판단은 동작해야 하므로, 
 - PostgreSQL 복구 후 DB-backed flag와 `incident_events`에 상태를 backfill한다.
 - Redis는 보조 계층이므로 write suspend의 유일한 저장소로 사용하지 않는다.
 
+### Multi-node 한계와 production 보완
+
+이번 프로젝트의 1차 구현은 Docker Compose 단일 API 인스턴스 기준으로 runtime flag와 local artifact를 검증한다.
+다중 인스턴스 production 환경에서는 runtime flag 단독으로 write suspend를 보장할 수 없다.
+
+Production 보완 후보:
+
+- Nginx/LB route blocking으로 write path를 전역 차단한다.
+- shared config store 또는 deployment-level maintenance mode를 둔다.
+- 각 API instance가 suspend state를 주기적으로 확인하고 drift를 report한다.
+- instance restart 시 local file artifact 또는 global control plane에서 suspend 상태를 복구한다.
+
+따라서 runtime flag는 빠른 로컬 차단 수단이고, production 전역 차단은 Nginx/LB 또는 shared control plane과 함께 설계해야 한다.
+
 ## 7. Read-only mode
 
 `READ_ONLY`는 조회성 endpoint와 운영자 확인 endpoint만 제한적으로 유지하는 상태다.
@@ -202,6 +216,9 @@ Recovery mode에서 수행할 일:
 - `Retry-After`를 무시한 폭주 재시도는 `429` 또는 client quarantine 후보가 된다.
 - Idempotency record 보관 기간은 API contract와 data retention 정책에 맞춰 별도 명시한다.
 - 서버가 commit 후 응답 전에 죽은 경우, 동일 key/body 재시도는 기존 `COMPLETED` 결과 replay를 목표로 한다.
+- Nginx/client timeout은 곧바로 거래 실패를 의미하지 않는다.
+- 서버 내부 transaction이 commit되었을 수 있으므로 동일 `Idempotency-Key` 재시도 시 `request_hash`를 확인하고, `transaction_event`, `ledger_entry`, `account.balance`를 대조해 `COMPLETED` replay 또는 recovery case로 분기한다.
+- Nginx proxy timeout, app handler timeout, DB statement timeout의 순서는 후속 구현에서 명시적으로 테스트한다.
 
 ## 11. k6/장애 drill로 검증할 항목
 

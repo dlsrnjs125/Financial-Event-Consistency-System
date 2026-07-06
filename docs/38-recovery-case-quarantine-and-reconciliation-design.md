@@ -37,6 +37,7 @@ invalid state / balance mismatch / orphan idempotency 탐지
 | AUTO_ANALYZED | 자동 분석 완료 | proposed action 검토 |
 | WAITING_APPROVAL | 금전 상태 변경 가능성이 있어 승인 대기 | 운영자 승인 |
 | APPROVED | 승인 완료 | 실행 job 대기 |
+| EXECUTING | 승인된 action 실행 중 | 중복 실행 차단 |
 | EXECUTED | 복구 action 실행 | reconciliation 재검증 |
 | EXECUTION_FAILED | 승인된 action 실행 실패 | 실패 원인 분석, 재시도/재승인 판단 |
 | REJECTED | 제안 action 반려 | 재분석 또는 수동 처리 |
@@ -89,8 +90,11 @@ Guard 정책:
 - recovery action은 `recovery_case_id` 기준으로 idempotent해야 한다.
 - compensation ledger는 `recovery_case_id` 또는 `compensation_event_id`에 unique constraint를 둔다.
 - `APPROVED` 상태의 case만 실행할 수 있다.
+- 실행 시작 시 `EXECUTING`으로 전환하고, 같은 case에 대한 두 번째 executor를 차단한다.
 - `EXECUTED` 또는 `CLOSED` 상태의 case는 재실행할 수 없다.
-- 실행 실패 시 `EXECUTION_FAILED`로 전환하고, 같은 action을 재시도할지 재승인이 필요한지 별도 판단한다.
+- 실행 실패 시 `EXECUTION_FAILED`로 전환한다.
+- `EXECUTION_FAILED`는 재시도 가능 실패와 재승인 필요 실패로 나누어 판단한다.
+- 같은 recovery action을 재시도할 때도 `recovery_case_id`와 action attempt id를 기록해 중복 보정을 막는다.
 - `REJECTED` 상태는 evidence 추가 후 `AUTO_ANALYZED` 또는 `WAITING_APPROVAL`로 재분석할 수 있다.
 - 승인자와 실행자는 production 환경에서 분리하는 것을 권장한다.
 - 보정 ledger를 생성할 때도 별도 `compensation_event_id` 또는 recovery 전용 idempotency key를 사용한다.
@@ -176,9 +180,12 @@ recovery_cases
   -- scheduled_reconciliation, incident_analyzer, manual, ci_gate
 - detected_at
 - current_status
-  -- OPEN, AUTO_ANALYZED, WAITING_APPROVAL, APPROVED, EXECUTED, EXECUTION_FAILED, REJECTED, CLOSED
+  -- OPEN, AUTO_ANALYZED, WAITING_APPROVAL, APPROVED, EXECUTING, EXECUTED, EXECUTION_FAILED, REJECTED, CLOSED
 - proposed_action
   -- MARK_COMPLETED, MARK_FAILED_RETRYABLE, COMPENSATE_LEDGER, REPLAY_EVENT, NOOP
+- action_attempt_id
+- execution_failure_type
+  -- RETRYABLE, REAPPROVAL_REQUIRED
 - approval_required
 - approved_by
 - approved_at

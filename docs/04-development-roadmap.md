@@ -1163,6 +1163,27 @@ Ops Extension Track이 Phase 8 Incident Runbook에서 종료된 뒤, PostgreSQL 
 - 원장 보정, write resume, 고객 영향 판단, 보안 예외 승인은 사람이 승인한다.
 - README에는 요약과 링크만 두고, 상세 정책은 `docs/35-*` ~ `docs/42-*`에서 관리한다.
 
+### Production Hardening 구현 PR 순서
+
+설계 Phase는 주제별 관리 단위이고, 실제 개발 PR은 아래 순서로 진행한다.
+
+| 구현 PR | 우선순위 | 구현 범위 | 이유 |
+| --- | --- | --- | --- |
+| PH-Impl 1 | 최우선 | write suspend flag/service, `503` + `Retry-After`, DB down drill | PostgreSQL 장애 시 성공 응답 금지라는 핵심 안전장치 |
+| PH-Impl 2 | 최우선 | out-of-band incident artifact, sanitized report skeleton | DB down 중에도 evidence를 남기기 위한 기반 |
+| PH-Impl 3 | 높음 | Incident Analyzer MVP | 현재 사용 가능한 `/ready`, app metric, consistency SQL 기반 자동 분류 |
+| PH-Impl 4 | 높음 | `recovery_cases` migration, recovery case service, approval status | 차단 이후 복구 흐름 구현 |
+| PH-Impl 5 | 높음 | stale PROCESSING detector, reconciliation 확장 | 미확정 거래 처리 |
+| PH-Impl 6 | 중간 | AI-safe context sanitizer | 장애 분석/AI 활용 전 데이터 보호 |
+| PH-Impl 7 | 중간 | FastAPI phase timer, Nginx timing log parser | latency attribution 구현 기반 |
+| PH-Impl 8 | 중간 | k6 latency drill: baseline, DB pool/lock, Redis delay | 원인 귀속 테스트 |
+| PH-Impl 9 | 선택 | mock partner, outbound HTTP wrapper, blackbox probe | 외부 dependency 지연 검증 |
+| PH-Impl 10 | 선택 | partner secret version/rotation drill | 보안 운영 고도화 |
+| PH-Impl 11 | 선택 | HA/Queue PoC 여부 결정 | 범위가 커지므로 마지막에 별도 판단 |
+
+PH-Impl 1~2는 다른 구현보다 먼저 완료한다.
+write suspend와 out-of-band evidence가 없으면 DB 장애 중 성공 응답 금지와 복구 추적을 증명하기 어렵다.
+
 ### PH Phase 0. Production Readiness Gap Analysis
 
 **목표**

@@ -33,6 +33,19 @@ Redis는 lock/cache/fallback을 위한 보조 계층이며, Redis 장애는 degr
 | Write resume | consistency gate와 recovery case 검토 후 사람 승인 | DLQ/replay/reconciliation 검토 후 사람 승인 |
 | In-doubt event | recovery case로 격리 | queue offset, consumer idempotency, DB evidence를 함께 대조 |
 
+Local drill target:
+
+| 항목 | 목표 |
+| --- | --- |
+| DB down 감지 | 10초 이내 |
+| write suspend 활성화 | 감지 후 5초 이내 |
+| DB stop/start 후 readiness 회복 | 1~3분 내 |
+| consistency gate 완료 | 복구 후 1분 내 |
+| 수동 복구 절차 RTO | 로컬 drill 기준 3~5분 내 |
+
+이 값은 실제 운영 SLO가 아니라 로컬 drill과 포트폴리오 evidence를 위한 초기 목표다.
+운영 환경에서는 managed DB failover, network, data size, backup/restore 전략에 따라 별도 목표를 정의해야 한다.
+
 ## Decision
 
 1차 Production Hardening에서는 다음을 선택한다.

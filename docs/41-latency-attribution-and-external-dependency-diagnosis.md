@@ -58,6 +58,16 @@ Financial Event System
 Outbound에서는 우리 내부 처리 자체는 정상인데 외부 API 응답 지연 때문에 전체 요청이 느려질 수 있다.
 금융 확정 처리와 직접 관련 없는 outbound call은 core write path와 분리하거나 timeout/circuit breaker 후보로 관리한다.
 
+외부 dependency는 두 종류로 나눈다.
+
+| 유형 | 의미 | 장애 시 정책 |
+| --- | --- | --- |
+| Core write path dependency | 외부 응답 없이는 금융 이벤트를 확정할 수 없는 의존성 | timeout/circuit breaker, `503` 또는 `FAILED_RETRYABLE` 후보 |
+| Post-commit side effect dependency | 알림, callback, report 전송처럼 원장 확정 이후 수행 가능한 의존성 | core transaction과 분리, outbox/queue 후보 |
+
+현재 프로젝트에는 실제 outbound callback이 없으므로, 후속 구현에서 mock partner를 추가할 때는 post-commit side effect 후보로 먼저 설계한다.
+외부 지연이 `ledger_entries`와 `accounts.balance` write transaction latency를 끌어올리면 안 된다.
+
 ## 4. 전체 요청 latency 구간 분해
 
 개념적 분해:
@@ -95,7 +105,25 @@ external_client_total_latency
 OpenTelemetry는 후속 구현 후보로 둔다.
 HTTP server/client span을 도입하면 서비스 내부 처리와 외부 호출 구간을 같은 trace에서 연결할 수 있다.
 
-## 5. 내부 문제 vs 외부 문제 판단 Matrix
+## 5. Latency classification threshold 후보
+
+초기 latency classification은 고정값과 baseline 대비 증분을 함께 사용한다.
+이 값은 운영 환경에서 고정 불변 기준이 아니라, baseline 수집 후 조정할 후보 값이다.
+
+| 판단 | 초기 threshold 후보 |
+| --- | --- |
+| p95 high | `p95 > baseline_p95 * 2` and `p95 > 300ms` |
+| p99 high | `p99 > baseline_p99 * 2` and `p99 > 1000ms` |
+| DB phase dominant | DB phase가 total handler time의 60% 이상 |
+| Redis phase dominant | Redis phase가 total handler time의 40% 이상 |
+| External outbound dominant | outbound external call이 total handler time의 70% 이상 |
+| Edge/client suspected | Nginx request time high and upstream response time normal |
+| Partner-specific latency | 특정 `partner_alias`만 baseline 대비 2배 이상 증가 |
+
+threshold는 incident analyzer의 1차 분류를 돕는 기준이다.
+금융 정합성 위반처럼 0 tolerance인 신호와 달리, latency threshold는 실제 트래픽과 baseline을 기준으로 조정한다.
+
+## 6. 내부 문제 vs 외부 문제 판단 Matrix
 
 | 관측 결과 | 가능성 높은 원인 | 판단 근거 | 자동 조치 | 수동 확인 |
 | --- | --- | --- | --- | --- |
@@ -111,7 +139,7 @@ HTTP server/client span을 도입하면 서비스 내부 처리와 외부 호출
 | blackbox probe도 느림 | 외부 endpoint 또는 네트워크 문제 | probe 지연 | external dependency incident | 외부사 확인 |
 | blackbox probe는 정상인데 app outbound call만 느림 | app HTTP client pool/DNS/TLS 설정 문제 | probe와 app 지표 불일치 | app client 설정 점검 | pool/DNS/TLS 확인 |
 
-## 6. 수집해야 할 metrics
+## 7. 수집해야 할 metrics
 
 Metric 후보:
 
@@ -151,7 +179,7 @@ Metric 후보:
 Prometheus label에는 high-cardinality 값과 개인정보를 넣지 않는다.
 partner도 원문 client id가 아니라 제한된 enum 형태의 `partner_alias`를 사용한다.
 
-## 7. 구조화 로그 필드
+## 8. 구조화 로그 필드
 
 공통 필드:
 
@@ -233,7 +261,7 @@ Outbound 예시:
 - `app_http_client_path_issue`
 - `unknown_latency`
 
-## 8. 외부 시스템과의 관측 계약
+## 9. 외부 시스템과의 관측 계약
 
 Inbound 요청에서 외부 시스템이 보내면 좋은 header:
 
@@ -270,7 +298,20 @@ Outbound 외부 API 호출에서 남길 값:
 외부 timestamp는 clock skew, timezone, retry 구현 차이 때문에 참고 신호로만 사용한다.
 책임 구간 판단은 Nginx와 application timestamp를 우선하고, `X-Partner-Request-Id`로 양쪽 로그를 대조한다.
 
-## 9. Incident Analyzer rule 확장
+## 10. Timeout과 idempotency 연결
+
+Nginx/client timeout은 곧바로 거래 실패를 의미하지 않는다.
+Nginx proxy timeout이 먼저 발생해 client가 실패로 인식하더라도, FastAPI 내부 transaction이 뒤늦게 commit되었을 수 있다.
+
+운영 원칙:
+
+- 동일 `Idempotency-Key` 재시도는 `request_hash`를 먼저 확인한다.
+- `transaction_event`, `ledger_entry`, `account.balance`가 일관되면 `COMPLETED` replay를 우선한다.
+- 일부 반영 흔적이 있거나 failover/in-doubt window에 걸리면 recovery case로 분기한다.
+- stale `PROCESSING` detector는 timeout만 보고 `FAILED`로 단정하지 않는다.
+- Nginx proxy timeout, app timeout, DB statement timeout의 순서는 latency drill에서 별도 검증한다.
+
+## 11. Incident Analyzer rule 확장
 
 | Rule | 조건 | 분류 | Severity | 자동 조치 | 수동 확인 |
 | --- | --- | --- | --- | --- | --- |
@@ -284,9 +325,9 @@ Outbound 외부 API 호출에서 남길 값:
 | LAT-008 | blackbox probe high + app outbound high | `external_endpoint_slow` | SEV2 | external dependency incident 생성 | 외부사 확인 |
 | LAT-009 | blackbox probe normal + app outbound high | `app_http_client_path_issue` | SEV2 | app client config 점검 | pool/DNS/TLS 확인 |
 
-## 10. Trade-off
+## 12. Trade-off
 
-### 10.1 Metrics/Logs만 사용할 것인가, Trace까지 도입할 것인가
+### 12.1 Metrics/Logs만 사용할 것인가, Trace까지 도입할 것인가
 
 - 선택한 정책: 1차는 metrics + structured logs, 후속으로 OpenTelemetry trace 도입.
 - 대안: 처음부터 full distributed tracing 도입.
@@ -295,7 +336,7 @@ Outbound 외부 API 호출에서 남길 값:
 - 보완 전략: trace_id/request_id를 먼저 표준화하고, 나중에 OTel Collector/Tempo/Loki로 확장.
 - 면접 답변용 한 문장: 처음부터 tracing stack을 붙이기보다, 먼저 phase latency를 구조화 로그와 Prometheus metric으로 분해하고 trace_id를 표준화해 OpenTelemetry 확장 가능성을 열어뒀습니다.
 
-### 10.2 외부 시스템 timestamp를 신뢰할 것인가
+### 12.2 외부 시스템 timestamp를 신뢰할 것인가
 
 - 선택한 정책: 외부 timestamp는 참고 신호로만 사용한다.
 - 대안: 외부 timestamp를 기준으로 latency를 계산한다.
@@ -304,7 +345,7 @@ Outbound 외부 API 호출에서 남길 값:
 - 보완 전략: `X-Partner-Request-Id`로 상호 로그 대조, NTP/clock skew 기준 명시.
 - 면접 답변용 한 문장: 외부 timestamp는 장애 분석의 보조 근거로만 쓰고, 우리 시스템의 책임 구간은 Nginx와 application timestamp 기준으로 판단했습니다.
 
-### 10.3 상세 server timing을 외부에 노출할 것인가
+### 12.3 상세 server timing을 외부에 노출할 것인가
 
 - 선택한 정책: `X-Server-Processing-Ms`처럼 제한된 정보만 노출한다.
 - 대안: DB/Redis/validation별 상세 시간을 header로 노출한다.
@@ -313,7 +354,7 @@ Outbound 외부 API 호출에서 남길 값:
 - 보완 전략: 내부 상세 phase breakdown은 incident report로만 관리한다.
 - 면접 답변용 한 문장: 외부에는 총 server processing time만 제공하고, DB/Redis 같은 내부 세부 구간은 보안상 내부 incident evidence로만 남겼습니다.
 
-### 10.4 Blackbox Probe vs Application Client Metric
+### 12.4 Blackbox Probe vs Application Client Metric
 
 - 선택한 정책: 둘 다 사용하되 목적을 분리한다.
 - 대안: application metric만 사용한다.
@@ -322,7 +363,7 @@ Outbound 외부 API 호출에서 남길 값:
 - 보완 전략: 핵심 외부 endpoint만 probe 대상에 포함한다.
 - 면접 답변용 한 문장: 외부 API 지연은 app client metric과 blackbox probe를 함께 비교해, 외부 endpoint 자체 문제인지 우리 app client 경로 문제인지 분리했습니다.
 
-### 10.5 외부 지연 시 동기 대기 vs Circuit Breaker
+### 12.5 외부 지연 시 동기 대기 vs Circuit Breaker
 
 - 선택한 정책: 금융 확정 처리와 직접 관련 없는 outbound call은 timeout + circuit breaker 후보로 관리한다.
 - 대안: 외부 응답이 올 때까지 동기 대기한다.
@@ -331,7 +372,7 @@ Outbound 외부 API 호출에서 남길 값:
 - 보완 전략: 후속 queue/outbox 패턴 ADR에서 비동기 전환 후보 검토.
 - 면접 답변용 한 문장: 외부 시스템 지연이 내부 정합성 처리까지 전파되지 않도록, 핵심 write path와 부가 outbound dependency를 분리하는 방향으로 설계했습니다.
 
-### 10.6 per-partner metric label vs high-cardinality 위험
+### 12.6 per-partner metric label vs high-cardinality 위험
 
 - 선택한 정책: 제한된 enum 형태의 `partner_alias`만 label로 허용한다.
 - 대안: client id, account id, raw partner id를 label로 사용한다.
@@ -340,7 +381,7 @@ Outbound 외부 API 호출에서 남길 값:
 - 보완 전략: 상세 분석은 sanitized structured log와 incident artifact에서 수행한다.
 - 면접 답변용 한 문장: Prometheus label은 제한된 alias로만 관리하고, 고유 식별자 분석은 sanitized log evidence로 분리했습니다.
 
-### 10.7 full request/response logging vs sanitized structured logging
+### 12.7 full request/response logging vs sanitized structured logging
 
 - 선택한 정책: full request/response body를 남기지 않고 sanitized structured logging을 사용한다.
 - 대안: 장애 분석 편의를 위해 raw payload를 저장한다.
@@ -349,7 +390,7 @@ Outbound 외부 API 호출에서 남길 값:
 - 보완 전략: request_hash, masked/tokenized identifier, schema validation error code, trace_id로 대체한다.
 - 면접 답변용 한 문장: 장애 분석보다 민감정보 보호가 우선이므로 raw payload 대신 구조화된 sanitized evidence만 남기도록 설계했습니다.
 
-## 11. 후속 구현 후보
+## 13. 후속 구현 후보
 
 이번 PR에서는 구현하지 않는다.
 후속 구현 후보:
@@ -367,6 +408,6 @@ Outbound 외부 API 호출에서 남길 값:
 구현하지 않은 항목은 완료된 것처럼 쓰지 않는다.
 구체적인 k6 latency drill 시나리오와 evidence 저장 구조는 [42-latency-drill-test-plan.md](42-latency-drill-test-plan.md)에서 관리한다.
 
-## 12. 면접 답변용 요약
+## 14. 면접 답변용 요약
 
 단순히 p95/p99가 높다고 내부 장애로 단정하지 않고, Nginx request time, upstream response time, FastAPI phase duration, DB/Redis duration, outbound external call duration, blackbox probe를 함께 비교해 내부 병목인지 외부 dependency 문제인지 구간별로 분리하도록 설계했습니다.
