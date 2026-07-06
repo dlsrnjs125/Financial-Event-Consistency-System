@@ -63,6 +63,7 @@ logs/
 # Operational evidence reports
 reports/runtime/
 reports/production-hardening/
+reports/incidents/inc-*/
 reports/**/raw/
 reports/**/tmp/
 *.har
@@ -78,6 +79,8 @@ backups/postgres/*.log
 !reports/k6/*-summary.json
 !reports/dr-drill/*-result.md
 !reports/incidents/*-result.md
+!reports/incidents/README.md
+!reports/incidents/sample-sanitized-report.md
 
 # Docker
 docker-compose.override.yml

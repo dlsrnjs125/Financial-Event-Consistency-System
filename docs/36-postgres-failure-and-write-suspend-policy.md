@@ -75,6 +75,8 @@ out-of-band incident artifact
 
 이 정책은 "DB가 죽었을 때 DB에 장애 정보를 저장한다"는 모순을 피하기 위한 것이다.
 artifact에는 raw account number, raw idempotency key, HMAC signature, raw request body, secret을 포함하지 않는다.
+PH2 구현에서는 이 구조를 `reports/incidents/{incident_id}/` bundle, `manifest.json`, `sanitized-report.md`로 구체화했다.
+자세한 실행 방법과 schema는 [44-ph2-incident-artifact-sanitized-report.md](44-ph2-incident-artifact-sanitized-report.md)를 기준으로 한다.
 
 ## 4. PostgreSQL write 불가 시 fail-closed 정책
 
