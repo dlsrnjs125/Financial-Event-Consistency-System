@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import importlib.util
+from importlib import util
 from pathlib import Path
 from typing import Any
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts/ph2_incident_artifact.py"
-SPEC = importlib.util.spec_from_file_location("ph2_incident_artifact", SCRIPT_PATH)
-ph2_incident_artifact = importlib.util.module_from_spec(SPEC)
+SPEC = util.spec_from_file_location("ph2_incident_artifact", SCRIPT_PATH)
+ph2_incident_artifact = util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(ph2_incident_artifact)
 
