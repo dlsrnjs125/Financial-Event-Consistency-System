@@ -93,7 +93,9 @@ Conditions:
 
 - `manifest.scenario == POSTGRES_DOWN`
 - or `write-suspend-state.reason == postgres_unavailable`
-- or `write-suspend-state.active == true` with source `postgres_probe`, `runtime`, or `artifact`
+- or `write-suspend-state.active == true` with source `postgres_probe`
+
+`runtime` or `artifact` source without a PostgreSQL-specific reason is classified by the unknown dependency rule instead of being assumed to be PostgreSQL down.
 
 Output:
 

@@ -288,6 +288,8 @@ def _rule(
 
 def _has_sanitization_risk(context: dict[str, Any]) -> bool:
     manifest = context["manifest"]
+    if not manifest:
+        return False
     if manifest.get("sensitive_data_included") is not False:
         return True
     for error in context["validation_errors"]:
@@ -319,7 +321,7 @@ def _is_postgres_down_write_suspended(context: dict[str, Any]) -> bool:
         return True
     return bool(
         write_state.get("active") is True
-        and write_state.get("source") in {"postgres_probe", "runtime", "artifact"}
+        and write_state.get("source") == "postgres_probe"
     )
 
 
