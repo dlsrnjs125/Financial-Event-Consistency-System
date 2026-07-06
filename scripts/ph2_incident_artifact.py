@@ -160,10 +160,8 @@ def create_artifact(
             "dependency": "postgres",
         },
     )
-    _write_json(
-        incident_dir / "consistency-summary.json",
-        _consistency_summary(ph1_report_dir),
-    )
+    consistency = _consistency_summary(ph1_report_dir)
+    _write_json(incident_dir / "consistency-summary.json", consistency)
     _write_json(
         incident_dir / "command-results.json",
         {
@@ -178,7 +176,7 @@ def create_artifact(
         encoding="utf-8",
     )
     (incident_dir / "sanitized-report.md").write_text(
-        render_report(manifest, _consistency_summary(ph1_report_dir)),
+        render_report(manifest, consistency),
         encoding="utf-8",
     )
     return incident_dir

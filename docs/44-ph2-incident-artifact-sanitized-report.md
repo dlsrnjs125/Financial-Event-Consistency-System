@@ -68,6 +68,8 @@ reports/incidents/{incident_id}/
 `raw/` is intentionally empty by default.
 Real `inc-*` directories are ignored by git; commit only reviewed samples and templates.
 If the same scenario is created more than once in the same second, PH2 appends a numeric suffix such as `-001` to avoid overwriting an existing artifact.
+`validate` currently scans all files under the incident directory, including `raw/README.md`.
+If later phases add optional raw evidence collection, raw evidence validation must be an explicit policy decision instead of an accidental side effect.
 
 ## 5. Manifest Schema
 
@@ -232,15 +234,21 @@ Docker-dependent drill:
 make ph2-db-down-incident-artifact
 ```
 
-## 11. Troubleshooting Notes
+## 11. Troubleshooting
+
+- Corrupt `write-suspend-state.json`: PH2 keeps artifact creation alive and writes `result=invalid_state_json` in the sanitized state summary.
+- Same-second incident ID collision: PH2 appends a numeric suffix such as `-001` so repeated local drills do not overwrite an existing artifact.
+
+## 12. Operational Notes
 
 - If `validate --latest` fails with no incident directories, run `make ph2-incident-artifact` first.
 - If validation reports a sensitive key, inspect generated JSON files and remove the raw field at the source.
-- If `write-suspend-state.json` is corrupt, PH2 keeps artifact creation alive and writes `result=invalid_state_json` in the sanitized state summary.
 - If Docker Compose status is `not_collected`, Docker was unavailable or the stack was not running. This does not invalidate the standalone artifact.
 - Real `reports/incidents/inc-*` directories are local runtime evidence and should not be committed.
+- `latest` currently selects the lexicographically greatest incident directory name.
+  This is stable for the current `inc-YYYYMMDD-HHMMSS-scenario[-NNN]` format, but should be revisited if the incident ID format changes.
 
-## 12. Limitations And Follow-up
+## 13. Limitations And Follow-up
 
 Limitations:
 
