@@ -1,0 +1,13 @@
+{
+  "approval_required": true,
+  "approved_by": null,
+  "case_id": "rc-sample",
+  "case_type": "POSTGRES_DOWN_WRITE_SUSPENDED",
+  "classification": "POSTGRES_DOWN_WRITE_SUSPENDED",
+  "current_status": "WAITING_APPROVAL",
+  "evidence_path": "reports/incidents/sample-incident-analysis.md",
+  "proposed_action": "NOOP_REVIEW_ONLY",
+  "sensitive_data_included": false,
+  "source_incident_id": "sample-incident",
+  "source_key": "sample-incident:POSTGRES_DOWN_WRITE_SUSPENDED:GLOBAL_WRITE:sample-incident:unknown"
+}

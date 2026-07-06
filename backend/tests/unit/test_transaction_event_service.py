@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from sqlalchemy.exc import IntegrityError
 
 from app.cache.redis_lock import RedisLockResult
+from app.domain.exceptions import TargetQuarantined
 from app.domain.idempotency import IdempotencyCheckResult, IdempotencyDecision
+from app.domain.recovery import QuarantineTargetType
 from app.domain.transaction_status import TransactionStatus
 from app.schemas.transaction_event import TransactionEventCreateRequest
 from app.services.transaction_event_service import TransactionEventService
@@ -128,6 +130,13 @@ class FakeRedisLock:
         self.released.append((key, token))
 
 
+class FakeQuarantineService:
+    def assert_not_quarantined(self, target_type, target_id):
+        assert target_type == QuarantineTargetType.ACCOUNT
+        assert target_id == "1"
+        raise TargetQuarantined(target_type.value, "qr-test")
+
+
 def make_request(external_event_id="ext-001", amount=1000):
     return TransactionEventCreateRequest(
         external_event_id=external_event_id,
@@ -139,7 +148,7 @@ def make_request(external_event_id="ext-001", amount=1000):
     )
 
 
-def make_service(decision, account=None, redis_lock=None):
+def make_service(decision, account=None, redis_lock=None, quarantine_service=None):
     idempotency_service = FakeIdempotencyService(decision)
     event_repository = FakeTransactionEventRepository()
     session = FakeSession()
@@ -151,6 +160,7 @@ def make_service(decision, account=None, redis_lock=None):
         ledger_service=FakeLedgerService(),
         transaction_state_service=FakeTransactionStateService(),
         redis_lock=redis_lock,
+        quarantine_service=quarantine_service,
     )
     return service, idempotency_service, event_repository, session
 
@@ -208,6 +218,22 @@ def test_account_not_found_marks_idempotency_failed():
 
     assert result.status_code == 404
     assert result.body["code"] == "AccountNotFound"
+    assert idempotency_service.failed
+
+
+def test_quarantined_account_marks_idempotency_failed():
+    account = SimpleNamespace(id=1, balance=10000)
+    service, idempotency_service, _, _ = make_service(
+        IdempotencyCheckResult(IdempotencyDecision.STARTED, 1),
+        account=account,
+        quarantine_service=FakeQuarantineService(),
+    )
+
+    result = service.process("idem-001", make_request())
+
+    assert result.status_code == 409
+    assert result.body["code"] == "TargetQuarantined"
+    assert "1234567890" not in result.body["message"]
     assert idempotency_service.failed
 
 

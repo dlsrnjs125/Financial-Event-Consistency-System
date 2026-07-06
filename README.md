@@ -53,6 +53,7 @@ Production Hardening Track은 기존 구현 위에 PostgreSQL 자체 장애, fai
 PH1에서는 PostgreSQL write path가 불가능할 때 신규 금융 write를 `503` + `Retry-After`로 fail-closed 처리하는 runtime write suspend와 DB-down drill을 구현했다.
 PH2에서는 PostgreSQL 장애 중 DB에 의존하지 않는 incident artifact bundle과 sanitized report skeleton을 추가했다.
 PH3에서는 PH2 incident artifact를 기반으로 deterministic rule-based incident analyzer MVP를 추가했다.
+PH4에서는 PH3 analyzer 결과를 recovery case로 등록하고 account quarantine write guard와 수동 승인 전 실행 차단을 추가했다.
 상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/45-*` 문서에서 관리한다.
 
 ## 5. Final Verification Summary
@@ -117,6 +118,9 @@ make ph2-incident-artifact
 make ph2-incident-artifact-validate
 make ph3-incident-analyze
 make ph3-incident-analyze-validate
+make ph4-recovery-case-from-latest
+make ph4-recovery-cases
+make ph4-quarantines
 make ph1-write-suspend-status
 make ph1-write-suspend-resume
 ```
@@ -146,6 +150,7 @@ make ph1-write-suspend-resume
 | [docs/43-ph1-write-suspend-db-down-drill.md](docs/43-ph1-write-suspend-db-down-drill.md) | PH1 write suspend 구현과 PostgreSQL down drill |
 | [docs/44-ph2-incident-artifact-sanitized-report.md](docs/44-ph2-incident-artifact-sanitized-report.md) | PH2 out-of-band incident artifact와 sanitized report |
 | [docs/45-ph3-incident-analyzer-mvp.md](docs/45-ph3-incident-analyzer-mvp.md) | PH3 deterministic incident analyzer MVP |
+| [docs/46-ph4-recovery-case-quarantine-manual-approval.md](docs/46-ph4-recovery-case-quarantine-manual-approval.md) | PH4 recovery case, quarantine, manual approval 구현 |
 
 ## 10. Blog Series
 
@@ -173,7 +178,8 @@ make ph1-write-suspend-resume
 - Loki/OpenTelemetry 기반 trace query evidence는 향후 고도화로 남겼다.
 - Capacity Planning, Change Management, Ansible, PowerShell 문서는 supporting/optional docs로 관리한다.
 - Production Hardening PH1 write suspend는 단일 API 인스턴스 기준으로 구현했다.
-- Incident analyzer, recovery case DB 모델, PostgreSQL HA/Queue 도입, latency attribution instrumentation과 k6 latency drill은 후속 구현 후보로 남겼다.
+- PH4 recovery case/quarantine은 자동 보정 실행이 아니라 수동 승인 전 실행 차단과 evidence 연결까지 구현했다.
+- PostgreSQL HA/Queue 도입, latency attribution instrumentation과 k6 latency drill은 후속 구현 후보로 남겼다.
 
 ## 12. 최종 요약
 

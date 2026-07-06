@@ -8,6 +8,8 @@ if TYPE_CHECKING:
     from app.models.event_state_history import EventStateHistory
     from app.models.idempotency_record import IdempotencyRecord
     from app.models.ledger_entry import LedgerEntry
+    from app.models.quarantine_record import QuarantineRecord
+    from app.models.recovery_case import RecoveryCase
     from app.models.transaction_event import TransactionEvent
 
 _MODEL_EXPORTS = {
@@ -16,6 +18,8 @@ _MODEL_EXPORTS = {
     "LedgerEntry": "app.models.ledger_entry",
     "IdempotencyRecord": "app.models.idempotency_record",
     "EventStateHistory": "app.models.event_state_history",
+    "RecoveryCase": "app.models.recovery_case",
+    "QuarantineRecord": "app.models.quarantine_record",
 }
 
 
@@ -39,5 +43,7 @@ __all__ = [
     "LedgerEntry",
     "IdempotencyRecord",
     "EventStateHistory",
+    "RecoveryCase",
+    "QuarantineRecord",
     "import_all_models",
 ]

@@ -87,6 +87,17 @@ make ph3-db-down-incident-analysis
 PH2 artifact는 `reports/incidents/{incident_id}/`에 저장되며 `sanitized-report.md`는 raw account number, raw idempotency key, HMAC signature, Authorization header, raw request body를 포함하지 않아야 한다.
 PH3 analyzer는 sanitized artifact를 `POSTGRES_DOWN_WRITE_SUSPENDED` 같은 rule-based classification 후보로 분류하지만, DB 복구나 write resume을 자동 승인하지 않는다.
 
+PH4 recovery case 명령:
+
+```bash
+make ph4-recovery-case-from-latest
+make ph4-recovery-cases
+make ph4-quarantines
+```
+
+PH4는 PH3 analyzer result를 recovery case로 등록하고 수동 승인 전 실행을 차단한다.
+금전 보정, write resume 승인, compensation ledger 생성은 여전히 운영자 판단과 후속 범위다.
+
 ## 6. 복구 검증
 
 - `/ready` 200 회복

@@ -20,6 +20,7 @@ from app.redis.client import get_redis_client
 from app.repositories.account_repository import AccountRepository
 from app.repositories.idempotency_record_repository import IdempotencyRecordRepository
 from app.repositories.ledger_entry_repository import LedgerEntryRepository
+from app.repositories.quarantine_repository import QuarantineRepository
 from app.repositories.transaction_event_repository import TransactionEventRepository
 from app.schemas.transaction_event import (
     AccountBalanceResponse,
@@ -30,6 +31,7 @@ from app.schemas.transaction_event import (
 from app.services.cached_idempotency_service import CachedIdempotencyService
 from app.services.idempotency_service import IdempotencyService
 from app.services.ledger_service import LedgerService
+from app.services.quarantine_service import QuarantineService
 from app.services.transaction_event_service import TransactionEventService
 from app.services.transaction_state_service import TransactionStateService
 
@@ -100,6 +102,7 @@ def build_transaction_event_service(session: Session) -> TransactionEventService
         ledger_service=ledger_service,
         transaction_state_service=TransactionStateService(session),
         redis_lock=build_redis_lock(),
+        quarantine_service=QuarantineService(QuarantineRepository(session)),
     )
 
 

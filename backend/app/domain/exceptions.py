@@ -77,3 +77,44 @@ class TransactionAlreadyCancelled(Exception):
 class TransactionAlreadySettled(Exception):
     def __init__(self) -> None:
         super().__init__("Settled transaction event cannot be cancelled")
+
+
+class RecoveryCaseNotFound(Exception):
+    def __init__(self) -> None:
+        super().__init__("Recovery case not found")
+
+
+class InvalidRecoveryCaseTransition(Exception):
+    def __init__(self, current_status: str, next_status: str) -> None:
+        self.current_status = current_status
+        self.next_status = next_status
+        super().__init__(
+            f"Cannot transition recovery case from {current_status} to {next_status}."
+        )
+
+
+class RecoveryApprovalRequired(Exception):
+    def __init__(self) -> None:
+        super().__init__("Recovery case requires manual approval before execution")
+
+
+class RecoveryApprovalMissingActor(Exception):
+    def __init__(self) -> None:
+        super().__init__("Recovery approval requires approved_by")
+
+
+class UnsafeAnalyzerResult(Exception):
+    def __init__(self) -> None:
+        super().__init__("Analyzer result contains sensitive data metadata")
+
+
+class QuarantineRecordNotFound(Exception):
+    def __init__(self) -> None:
+        super().__init__("Quarantine record not found")
+
+
+class TargetQuarantined(Exception):
+    def __init__(self, target_type: str, quarantine_id: str) -> None:
+        self.target_type = target_type
+        self.quarantine_id = quarantine_id
+        super().__init__(f"{target_type} target is quarantined")

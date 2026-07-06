@@ -3,6 +3,12 @@
 > 잘못된 상태를 차단한 뒤에는 끝이 아니라 복구 case로 관리해야 한다.
 > 차단, 격리, 분석, 승인, 보정, 검증, 사후 기록까지 하나의 lifecycle로 다룬다.
 
+Implementation note:
+
+- PH4 implements `recovery_cases` and `quarantine_records`, PH3 analyzer ingestion, account quarantine write guard, read-only APIs, and CLI approval/release commands.
+- PH4 intentionally does not execute compensation ledger creation, balance correction, automatic recovery, or write resume approval.
+- Detailed implementation notes are tracked in [46-ph4-recovery-case-quarantine-manual-approval.md](46-ph4-recovery-case-quarantine-manual-approval.md).
+
 ## 1. 왜 차단 이후 recovery case가 필요한가
 
 금융 이벤트 시스템에서 단순 실패보다 어려운 상태는 처리 여부가 불명확한 상태다.
