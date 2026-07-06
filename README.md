@@ -42,15 +42,15 @@
 | Development Track | Phase 1~12 | Done | consistency, idempotency, Redis fallback, k6, CI/CD, Blue-Green |
 | Ops Extension Track | Phase 1~8 | Done | monitoring, DR drill, security, incident runbook |
 | Supporting Docs | docs/27~34 | Supporting | threat model, SLO/SLI, evidence template, capacity appendix |
-| Production Hardening Track | PH Phase 0~8 | Planning | PostgreSQL failure policy, write suspend, incident diagnosis, recovery case, AI-safe governance |
+| Production Hardening Track | PH Phase 0~9 | Planning | PostgreSQL failure policy, write suspend, incident diagnosis, recovery case, AI-safe governance, latency attribution |
 
 Ops Extension Track은 Phase 8 Incident Runbook에서 종료한다.
 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 증거를 보완하기 위한 supporting documents로 관리한다.
 
 Ops Phase 8에서는 장애 대응 Runbook을 최종 정리하고, Grafana p95/p99 지표와 rollback smoke/consistency gate 결과를 evidence로 남겼다.
 
-Production Hardening Track은 기존 구현 위에 PostgreSQL 자체 장애, failover 중 미확정 거래, stale PROCESSING, 자동 incident diagnosis, recovery case 승인 흐름, AI-safe 데이터 보호 기준을 설계하는 후속 보완 트랙이다.
-상세 설계는 README가 아니라 `docs/35-*` ~ `docs/40-*` 문서에서 관리한다.
+Production Hardening Track은 기존 구현 위에 PostgreSQL 자체 장애, failover 중 미확정 거래, stale PROCESSING, 자동 incident diagnosis, recovery case 승인 흐름, AI-safe 데이터 보호 기준, latency attribution을 설계하는 후속 보완 트랙이다.
+상세 설계는 README가 아니라 `docs/35-*` ~ `docs/41-*` 문서에서 관리한다.
 
 ## 5. Final Verification Summary
 
@@ -131,6 +131,7 @@ make ops7-demo
 | [docs/38-recovery-case-quarantine-and-reconciliation-design.md](docs/38-recovery-case-quarantine-and-reconciliation-design.md) | Recovery case와 quarantine/reconciliation 설계 |
 | [docs/39-sensitive-data-ai-governance-and-encryption-tradeoff.md](docs/39-sensitive-data-ai-governance-and-encryption-tradeoff.md) | AI-safe 민감 데이터 보호와 암호화 trade-off |
 | [docs/40-postgres-ha-and-queue-tradeoff-adr.md](docs/40-postgres-ha-and-queue-tradeoff-adr.md) | PostgreSQL HA와 durable queue trade-off ADR |
+| [docs/41-latency-attribution-and-external-dependency-diagnosis.md](docs/41-latency-attribution-and-external-dependency-diagnosis.md) | 내부/외부 구간별 latency 원인 분리 설계 |
 
 ## 10. Blog Series
 
@@ -157,7 +158,7 @@ make ops7-demo
 - Kubernetes 기반 운영 전환은 제외했다.
 - Loki/OpenTelemetry 기반 trace query evidence는 향후 고도화로 남겼다.
 - Capacity Planning, Change Management, Ansible, PowerShell 문서는 supporting/optional docs로 관리한다.
-- Production Hardening 문서는 현재 설계 단계이며, write suspend 구현, incident analyzer, recovery case DB 모델, PostgreSQL HA/Queue 도입은 후속 구현 후보로 남겼다.
+- Production Hardening 문서는 현재 설계 단계이며, write suspend 구현, incident analyzer, recovery case DB 모델, PostgreSQL HA/Queue 도입, latency attribution instrumentation은 후속 구현 후보로 남겼다.
 
 ## 12. 최종 요약
 
