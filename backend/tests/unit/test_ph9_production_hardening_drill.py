@@ -66,6 +66,18 @@ def test_destructive_command_fails_validation():
     assert any("destructive/manual command" in error for error in errors)
 
 
+def test_candidate_command_must_be_allowlisted():
+    report = ph9_production_hardening_drill.build_report()
+    tampered = copy.deepcopy(report)
+    _drill(tampered, "ph8-postgres-ha-queue-decision-evidence")[
+        "candidate_commands"
+    ].append("make latency-analyze")
+
+    errors = ph9_production_hardening_drill.validate_report_payload(tampered)
+
+    assert any("candidate command is not allowlisted" in error for error in errors)
+
+
 def test_linked_docs_must_not_be_empty():
     report = ph9_production_hardening_drill.build_report()
     tampered = copy.deepcopy(report)
@@ -153,7 +165,13 @@ def test_markdown_report_contains_boundaries_and_followups():
         assert phase in markdown
     assert "Automation Boundary" in markdown
     assert "Manual Approval Boundary" in markdown
+    assert "Safety Notes" in markdown
     assert "Follow-up Candidates" in markdown
+    assert "destructive drills" in markdown
+    assert "ACCEPTED" in markdown
+    assert "COMPLETED" in markdown
+    assert "AI-safe context" in markdown
+    assert "candidate_commands are not default auto-run commands" in markdown
 
 
 def test_list_output_contains_only_safe_summary_fields():

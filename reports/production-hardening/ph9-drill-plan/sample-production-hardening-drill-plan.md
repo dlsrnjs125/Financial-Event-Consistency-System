@@ -44,6 +44,14 @@
 - queue replay or DLQ redrive
 - AI-assisted recovery proposal adoption
 
+## Safety Notes
+
+- PH9 does not run destructive drills by default.
+- PH10/PH11 latency work is listed only as follow-up candidates.
+- AI-safe context generation does not authorize recovery execution.
+- Queue-first architecture must split `ACCEPTED` and `COMPLETED`.
+- Candidate commands note: candidate_commands are not default auto-run commands. Operators must read the linked drill document and confirm the manual boundary before running them.
+
 ## Follow-up Candidates
 
 - PH10: Latency attribution instrumentation (follow_up_candidate)

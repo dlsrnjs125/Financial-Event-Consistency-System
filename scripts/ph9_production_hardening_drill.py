@@ -26,6 +26,7 @@ REQUIRED_TOP_LEVEL_FIELDS = {
     "drills",
     "manual_approval_boundaries",
     "automation_boundaries",
+    "candidate_commands_note",
     "follow_up_candidates",
     "validation_summary",
 }
@@ -41,6 +42,7 @@ REQUIRED_DRILL_FIELDS = {
     "requires_k6",
     "requires_database",
     "commands",
+    "candidate_commands",
     "expected_evidence",
     "safety_boundary",
     "manual_approval_required_for",
@@ -80,6 +82,16 @@ DESTRUCTIVE_COMMAND_PATTERNS = [
         r"latency-",
     )
 ]
+CANDIDATE_COMMAND_ALLOW_TARGETS = {
+    "ph1-db-down-drill",
+    "ph2-db-down-incident-artifact",
+    "ph3-db-down-incident-analysis",
+    "ph4-recovery-case-from-latest",
+    "ph5-reconciliation-run",
+    "ph6-ai-context-sanitize-latest",
+    "ph6-ai-context-recovery",
+    "ph7-hmac-rotation-smoke",
+}
 SENSITIVE_TEXT_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -212,6 +224,11 @@ def build_report() -> dict[str, Any]:
             "run safe validators and read-only evidence checks",
             "leave state-changing drills as manual-run candidates",
         ],
+        "candidate_commands_note": (
+            "candidate_commands are not default auto-run commands. Operators must "
+            "read the linked drill document and confirm the manual boundary before "
+            "running them."
+        ),
         "follow_up_candidates": [
             {
                 "phase": "PH10",
@@ -341,6 +358,14 @@ def render_markdown_report(report: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## Safety Notes",
+            "",
+            "- PH9 does not run destructive drills by default.",
+            "- PH10/PH11 latency work is listed only as follow-up candidates.",
+            "- AI-safe context generation does not authorize recovery execution.",
+            "- Queue-first architecture must split `ACCEPTED` and `COMPLETED`.",
+            f"- Candidate commands note: {report['candidate_commands_note']}",
+            "",
             "## Follow-up Candidates",
             "",
         ]
@@ -410,6 +435,16 @@ def _validate_drill(
             continue
         _validate_command(label, command, make_targets, errors)
 
+    candidate_commands = drill.get("candidate_commands", [])
+    if not isinstance(candidate_commands, list):
+        errors.append(f"{label} candidate_commands must be a list")
+        candidate_commands = []
+    for command in candidate_commands:
+        if not isinstance(command, str):
+            errors.append(f"{label} candidate command must be a string")
+            continue
+        _validate_candidate_command(label, command, errors)
+
     if drill.get("safe_to_auto_run") is True:
         approval_terms = _manual_terms(drill.get("manual_approval_required_for", []))
         if approval_terms:
@@ -438,6 +473,20 @@ def _validate_command(
     parts = command.split()
     if len(parts) < 2 or parts[1] not in make_targets:
         errors.append(f"{label} command target does not exist: {command}")
+
+
+def _validate_candidate_command(
+    label: str,
+    command: str,
+    errors: list[str],
+) -> None:
+    if not command.startswith("make "):
+        errors.append(f"{label} candidate command must use make: {command}")
+        return
+    parts = command.split()
+    target = parts[1] if len(parts) >= 2 else ""
+    if target not in CANDIDATE_COMMAND_ALLOW_TARGETS:
+        errors.append(f"{label} candidate command is not allowlisted: {command}")
 
 
 def _validate_follow_up_candidates(payload: dict[str, Any], errors: list[str]) -> None:

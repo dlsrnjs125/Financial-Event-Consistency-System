@@ -44,6 +44,8 @@ PH9에서는 production hardening drill catalog를 만들었다.
 
 기본 demo는 JSON/Markdown report만 생성한다. DB down, write resume, failover, recovery approval 같은 작업은 default command가 아니라 manual boundary나 candidate command로 남긴다.
 
+generated Markdown report에는 Safety Notes도 넣었다. PH9는 destructive drill을 기본 실행하지 않고, PH10/PH11 latency work는 follow-up candidate이며, AI-safe context는 복구 실행 권한이 아니고, queue-first는 `ACCEPTED`와 `COMPLETED`를 분리해야 한다는 내용을 명시한다.
+
 ## 4. 구현 중 트러블슈팅
 
 ### 자동화 범위가 과도해지는 문제

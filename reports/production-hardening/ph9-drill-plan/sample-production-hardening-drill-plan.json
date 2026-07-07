@@ -6,6 +6,7 @@
     "run safe validators and read-only evidence checks",
     "leave state-changing drills as manual-run candidates"
   ],
+  "candidate_commands_note": "candidate_commands are not default auto-run commands. Operators must read the linked drill document and confirm the manual boundary before running them.",
   "current_status": "Implemented as a safe catalog/report/validator. Destructive drills, write resume, failover promote, financial correction, partner key retirement, and AI recovery adoption remain human-approved.",
   "drill_count": 8,
   "drills": [

@@ -134,6 +134,15 @@ status
 
 The `commands` field is restricted to existing Makefile targets and must not contain destructive or manual approval actions. More invasive drill commands are listed as candidates, not as default auto-run commands.
 
+Candidate commands are not default auto-run commands. Operators must read the linked drill document and confirm the manual boundary before running them.
+
+Generated Markdown reports also include safety notes:
+
+- PH9 does not run destructive drills by default.
+- PH10/PH11 latency work is listed only as follow-up candidates.
+- AI-safe context generation does not authorize recovery execution.
+- Queue-first architecture must split `ACCEPTED` and `COMPLETED`.
+
 ## 8. CLI and Makefile
 
 CLI:
