@@ -393,6 +393,9 @@ Nginx proxy timeout이 먼저 발생해 client가 실패로 인식하더라도, 
 ## 13. 후속 구현 후보
 
 이번 PR에서는 구현하지 않는다.
+PH9 production hardening drill catalog는 latency attribution으로 넘어가기 전에 PH1~PH8 장애 drill의 자동화 가능 범위와 수동 승인 경계를 정리했다.
+따라서 이 문서의 latency attribution 항목은 PH9에서 완료된 기능이 아니라 후속 구현 후보로 남는다.
+
 후속 구현 후보:
 
 - FastAPI middleware 기반 request phase timer

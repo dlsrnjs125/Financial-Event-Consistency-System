@@ -1,0 +1,398 @@
+{
+  "automation_boundaries": [
+    "generate deterministic drill catalog",
+    "validate required evidence and safety boundaries",
+    "create sanitized JSON and Markdown reports",
+    "run safe validators and read-only evidence checks",
+    "leave state-changing drills as manual-run candidates"
+  ],
+  "current_status": "Implemented as a safe catalog/report/validator. Destructive drills, write resume, failover promote, financial correction, partner key retirement, and AI recovery adoption remain human-approved.",
+  "drill_count": 8,
+  "drills": [
+    {
+      "candidate_commands": [
+        "make ph1-db-down-drill"
+      ],
+      "commands": [
+        "make ph1-write-suspend-status"
+      ],
+      "drill_id": "ph1-postgres-write-suspend-db-down",
+      "expected_evidence": [
+        "write suspend mode",
+        "Retry-After response",
+        "DB readiness failure",
+        "post-recovery consistency check"
+      ],
+      "failure_signals": [
+        "successful write while write path is unavailable",
+        "missing Retry-After",
+        "automatic write resume"
+      ],
+      "goal": "Confirm that unavailable PostgreSQL write path returns 503 + Retry-After and never reports financial completion.",
+      "linked_docs": [
+        "docs/36-postgres-failure-and-write-suspend-policy.md",
+        "docs/43-ph1-write-suspend-db-down-drill.md"
+      ],
+      "manual_approval_required_for": [
+        "write resume after DB recovery",
+        "failover promote"
+      ],
+      "manual_run_required": true,
+      "name": "PostgreSQL Write Suspend / DB Down Drill",
+      "phase": "PH1",
+      "requires_database": true,
+      "requires_docker": true,
+      "requires_k6": false,
+      "safe_to_auto_run": false,
+      "safety_boundary": "The drill may stop PostgreSQL locally, so PH9 records it as a manual-run candidate instead of running it by default.",
+      "sensitive_data_policy": "Plain financial identifiers, request payload content, signing material, authorization headers, and database URLs are prohibited.",
+      "status": "implemented_manual_drill",
+      "success_criteria": [
+        "new financial writes are not successful while DB writes are unavailable",
+        "503 + Retry-After is returned",
+        "resume is not automatic"
+      ]
+    },
+    {
+      "candidate_commands": [
+        "make ph2-db-down-incident-artifact"
+      ],
+      "commands": [
+        "make ph2-incident-artifact",
+        "make ph2-incident-artifact-validate"
+      ],
+      "drill_id": "ph2-incident-artifact-sanitized-report",
+      "expected_evidence": [
+        "incident artifact",
+        "sanitized report",
+        "sensitive scan result"
+      ],
+      "failure_signals": [
+        "unsafe evidence value",
+        "missing manifest",
+        "validation error"
+      ],
+      "goal": "Create out-of-band incident evidence during DB failure without depending on the database.",
+      "linked_docs": [
+        "docs/44-ph2-incident-artifact-sanitized-report.md"
+      ],
+      "manual_approval_required_for": [],
+      "manual_run_required": false,
+      "name": "Incident Artifact / Sanitized Report Drill",
+      "phase": "PH2",
+      "requires_database": false,
+      "requires_docker": false,
+      "requires_k6": false,
+      "safe_to_auto_run": true,
+      "safety_boundary": "PH2 default command creates sanitized local evidence only.",
+      "sensitive_data_policy": "Plain financial identifiers, retry keys, request payload content, signing material, authorization headers, and database URLs are prohibited.",
+      "status": "implemented_safe_drill",
+      "success_criteria": [
+        "artifact exists outside PostgreSQL",
+        "sanitized report validates",
+        "sensitive scan passes"
+      ]
+    },
+    {
+      "candidate_commands": [
+        "make ph3-db-down-incident-analysis"
+      ],
+      "commands": [
+        "make ph3-incident-analyze",
+        "make ph3-incident-analyze-validate"
+      ],
+      "drill_id": "ph3-incident-analyzer-mvp",
+      "expected_evidence": [
+        "analyzer output",
+        "classification",
+        "severity candidate",
+        "recommended action candidate"
+      ],
+      "failure_signals": [
+        "missing classification",
+        "unsafe artifact",
+        "automatic recovery language"
+      ],
+      "goal": "Classify incident artifacts with deterministic rules and count-only consistency summaries.",
+      "linked_docs": [
+        "docs/45-ph3-incident-analyzer-mvp.md"
+      ],
+      "manual_approval_required_for": [],
+      "manual_run_required": false,
+      "name": "Incident Analyzer MVP Drill",
+      "phase": "PH3",
+      "requires_database": false,
+      "requires_docker": false,
+      "requires_k6": false,
+      "safe_to_auto_run": true,
+      "safety_boundary": "Analyzer output is advisory and never executes recovery.",
+      "sensitive_data_policy": "Only sanitized PH2 evidence and count summaries are allowed.",
+      "status": "implemented_safe_drill",
+      "success_criteria": [
+        "classification is deterministic",
+        "manual review remains required",
+        "no recovery action is executed"
+      ]
+    },
+    {
+      "candidate_commands": [
+        "make ph4-recovery-case-from-latest"
+      ],
+      "commands": [
+        "make ph4-recovery-cases",
+        "make ph4-quarantines"
+      ],
+      "drill_id": "ph4-recovery-case-quarantine-manual-approval",
+      "expected_evidence": [
+        "recovery case report",
+        "quarantine record",
+        "approval boundary"
+      ],
+      "failure_signals": [
+        "case execution without approval",
+        "quarantine duplicate ambiguity",
+        "unsafe identifier exposure"
+      ],
+      "goal": "Record recovery cases and quarantine evidence while keeping execution blocked until operator approval.",
+      "linked_docs": [
+        "docs/46-ph4-recovery-case-quarantine-manual-approval.md"
+      ],
+      "manual_approval_required_for": [
+        "recovery execution",
+        "quarantine release",
+        "ledger correction"
+      ],
+      "manual_run_required": true,
+      "name": "Recovery Case / Quarantine / Manual Approval Drill",
+      "phase": "PH4",
+      "requires_database": true,
+      "requires_docker": false,
+      "requires_k6": false,
+      "safe_to_auto_run": false,
+      "safety_boundary": "PH4 list commands are safe; case creation needs prepared evidence.",
+      "sensitive_data_policy": "Recovery evidence uses masked or internal identifiers only.",
+      "status": "implemented_manual_drill",
+      "success_criteria": [
+        "wrong-state transition is blocked",
+        "quarantine is visible as evidence",
+        "execution remains approval-gated"
+      ]
+    },
+    {
+      "candidate_commands": [
+        "make ph5-reconciliation-run"
+      ],
+      "commands": [
+        "make ph5-reconciliation-validate"
+      ],
+      "drill_id": "ph5-stale-processing-reconciliation",
+      "expected_evidence": [
+        "stale processing count",
+        "reconciliation summary",
+        "manual action candidate"
+      ],
+      "failure_signals": [
+        "automatic completion",
+        "automatic failure",
+        "missing count summary"
+      ],
+      "goal": "Detect stale processing and count-only reconciliation issues without automatically completing or failing financial events.",
+      "linked_docs": [
+        "docs/47-ph5-stale-processing-reconciliation.md"
+      ],
+      "manual_approval_required_for": [
+        "mark completed decision",
+        "mark failed decision",
+        "ledger correction"
+      ],
+      "manual_run_required": true,
+      "name": "Stale PROCESSING Reconciliation Drill",
+      "phase": "PH5",
+      "requires_database": true,
+      "requires_docker": false,
+      "requires_k6": false,
+      "safe_to_auto_run": false,
+      "safety_boundary": "PH5 proposes recovery cases and does not mutate money state.",
+      "sensitive_data_policy": "Reports contain counts and masked recovery references only.",
+      "status": "implemented_manual_drill",
+      "success_criteria": [
+        "stale records are counted after threshold",
+        "fresh processing is excluded",
+        "manual action candidate is generated only as evidence"
+      ]
+    },
+    {
+      "candidate_commands": [
+        "make ph6-ai-context-sanitize-latest",
+        "make ph6-ai-context-recovery"
+      ],
+      "commands": [
+        "make ph6-ai-context-demo",
+        "make ph6-ai-context-validate"
+      ],
+      "drill_id": "ph6-ai-safe-context-sanitizer",
+      "expected_evidence": [
+        "sanitized context JSON",
+        "sanitized context Markdown",
+        "validate result"
+      ],
+      "failure_signals": [
+        "unsafe value remains",
+        "redaction summary leaks value",
+        "AI execution language appears"
+      ],
+      "goal": "Convert incident, recovery, and reconciliation evidence into allowlist-based AI-safe context.",
+      "linked_docs": [
+        "docs/48-ph6-ai-safe-context-sanitizer.md"
+      ],
+      "manual_approval_required_for": [],
+      "manual_run_required": false,
+      "name": "AI-safe Context Sanitizer Drill",
+      "phase": "PH6",
+      "requires_database": false,
+      "requires_docker": false,
+      "requires_k6": false,
+      "safe_to_auto_run": true,
+      "safety_boundary": "PH6 creates context only; it does not call external AI APIs or execute recovery.",
+      "sensitive_data_policy": "Only approved masked values, tokens, hashes, counts, and statuses are allowed.",
+      "status": "implemented_safe_drill",
+      "success_criteria": [
+        "allowlist keeps safe evidence",
+        "redaction summary contains no original unsafe value",
+        "validator rejects unsafe input"
+      ]
+    },
+    {
+      "candidate_commands": [
+        "make ph7-hmac-rotation-smoke"
+      ],
+      "commands": [
+        "make ph7-hmac-rotation-demo",
+        "make ph7-hmac-rotation-validate"
+      ],
+      "drill_id": "ph7-partner-hmac-rotation",
+      "expected_evidence": [
+        "HMAC rotation report",
+        "next dry-run rejection on write API",
+        "validate result"
+      ],
+      "failure_signals": [
+        "staged key accepted on write path",
+        "unbounded previous key",
+        "signing material exposure"
+      ],
+      "goal": "Verify current, previous, revoked, disabled, and next dry-run HMAC cases without exposing signing material.",
+      "linked_docs": [
+        "docs/49-ph7-partner-secret-rotation-hmac-hardening.md"
+      ],
+      "manual_approval_required_for": [],
+      "manual_run_required": false,
+      "name": "Partner HMAC Rotation Drill",
+      "phase": "PH7",
+      "requires_database": false,
+      "requires_docker": false,
+      "requires_k6": false,
+      "safe_to_auto_run": true,
+      "safety_boundary": "The drill verifies rotation cases only. Final key retirement remains an approval decision.",
+      "sensitive_data_policy": "Evidence may include key status and hashes, but never signing material or request payload content.",
+      "status": "implemented_safe_drill",
+      "success_criteria": [
+        "current and bounded previous cases pass",
+        "revoked and disabled cases fail",
+        "next staged key cannot write"
+      ]
+    },
+    {
+      "candidate_commands": [],
+      "commands": [
+        "make ph8-ha-queue-decision-demo",
+        "make ph8-ha-queue-decision-validate"
+      ],
+      "drill_id": "ph8-postgres-ha-queue-decision-evidence",
+      "expected_evidence": [
+        "decision matrix report",
+        "validator result",
+        "API contract boundary"
+      ],
+      "failure_signals": [
+        "enqueue described as ledger completion",
+        "HA described as replacing consistency gate",
+        "score treated as benchmark"
+      ],
+      "goal": "Explain why direct PostgreSQL transaction plus fail-closed remains current behavior and why queue-first needs ACCEPTED/COMPLETED split.",
+      "linked_docs": [
+        "docs/40-postgres-ha-and-queue-tradeoff-adr.md",
+        "docs/50-ph8-postgres-ha-queue-decision-evidence.md"
+      ],
+      "manual_approval_required_for": [],
+      "manual_run_required": false,
+      "name": "PostgreSQL HA / Durable Queue Decision Evidence",
+      "phase": "PH8",
+      "requires_database": false,
+      "requires_docker": false,
+      "requires_k6": false,
+      "safe_to_auto_run": true,
+      "safety_boundary": "PH8 creates architecture evidence only; it does not provision HA or queue middleware.",
+      "sensitive_data_policy": "Architecture evidence contains no runtime data.",
+      "status": "implemented_safe_drill",
+      "success_criteria": [
+        "direct PostgreSQL remains current decision",
+        "queue-first splits ACCEPTED and COMPLETED",
+        "HA still requires consistency gate and write resume approval"
+      ]
+    }
+  ],
+  "follow_up_candidates": [
+    {
+      "linked_docs": [
+        "docs/41-latency-attribution-and-external-dependency-diagnosis.md"
+      ],
+      "name": "Latency attribution instrumentation",
+      "note": "PH9 does not implement latency attribution. k6 symptoms must be correlated with Nginx, FastAPI, PostgreSQL, Redis, and external dependency metrics in a later phase.",
+      "phase": "PH10",
+      "status": "follow_up_candidate"
+    },
+    {
+      "linked_docs": [
+        "docs/42-latency-drill-test-plan.md"
+      ],
+      "name": "Latency drill test plan execution",
+      "note": "Latency drill targets remain candidate commands, not PH9 completed drill commands.",
+      "phase": "PH11",
+      "status": "follow_up_candidate"
+    }
+  ],
+  "generated_at": "2026-07-07T00:00:00+00:00",
+  "manual_approval_boundaries": [
+    "PostgreSQL failover promote",
+    "write resume after DB recovery or failover",
+    "ledger correction or compensation",
+    "customer or partner impact confirmation",
+    "partner secret rotation approval",
+    "queue replay or DLQ redrive",
+    "AI-assisted recovery proposal adoption"
+  ],
+  "phase": "PH9 Production Hardening Drill Plan & Evidence Runner",
+  "run_id": "ph9-production-hardening-drill-plan-sample",
+  "scope": [
+    "PH1~PH8 hardening drill catalog",
+    "safe evidence report generation",
+    "validation of automation and manual approval boundaries",
+    "PH10/PH11 latency work linked only as follow-up candidates"
+  ],
+  "validation_summary": {
+    "destructive_commands_allowed": false,
+    "latency_drills_completed_in_ph9": false,
+    "required_phases": [
+      "PH1",
+      "PH2",
+      "PH3",
+      "PH4",
+      "PH5",
+      "PH6",
+      "PH7",
+      "PH8"
+    ],
+    "sensitive_data_included": false
+  }
+}

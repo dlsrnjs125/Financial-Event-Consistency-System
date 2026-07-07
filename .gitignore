@@ -95,6 +95,11 @@ backups/postgres/*.log
 !reports/ai-context/README.md
 !reports/ai-context/sample-ai-context.json
 !reports/ai-context/sample-ai-context.md
+!reports/production-hardening/
+reports/production-hardening/*
+!reports/production-hardening/ph9-drill-plan/
+!reports/production-hardening/ph9-drill-plan/sample-production-hardening-drill-plan.json
+!reports/production-hardening/ph9-drill-plan/sample-production-hardening-drill-plan.md
 
 # Docker
 docker-compose.override.yml
