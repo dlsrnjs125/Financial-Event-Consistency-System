@@ -32,6 +32,7 @@ ALLOWED_KEYS = {
     "masked_account_no",
     "masked_client_id",
     "masked_idempotency_key",
+    "masked_target_id",
     "metric_summary",
     "primary_signals",
     "proposed_action",

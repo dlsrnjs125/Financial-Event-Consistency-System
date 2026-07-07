@@ -1,7 +1,19 @@
 {
   "redaction_summary": {
-    "removed_field_count": 2,
+    "removed_field_count": 5,
     "removed_fields": [
+      {
+        "path": "$.account_no",
+        "reason": "sensitive_field_name"
+      },
+      {
+        "path": "$.idempotency_key",
+        "reason": "sensitive_field_name"
+      },
+      {
+        "path": "$.hmac_signature",
+        "reason": "sensitive_field_name"
+      },
       {
         "path": "$.raw_request_body",
         "reason": "sensitive_field_name"
@@ -22,6 +34,7 @@
     },
     "idempotency_key_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "incident_id": "inc-sample",
+    "masked_target_id": "acct-****-001",
     "run_id": "ph6-sample",
     "severity": "SEV2",
     "status": "WAITING_APPROVAL"

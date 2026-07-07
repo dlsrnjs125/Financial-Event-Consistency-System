@@ -35,7 +35,9 @@ def main() -> int:
 
     latest_parser = subparsers.add_parser("sanitize-latest")
     latest_parser.add_argument(
-        "--source", choices=["incidents", "reconciliation"], default="incidents"
+        "--source",
+        choices=["incidents", "recovery-cases", "reconciliation"],
+        default="incidents",
     )
     latest_parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_ROOT)
 
@@ -143,6 +145,12 @@ def _latest_source_dir(source: str) -> Path:
     if source == "incidents":
         root = ROOT_DIR / "reports/incidents"
         candidates = sorted(path for path in root.glob("inc-*") if path.is_dir())
+    elif source == "recovery-cases":
+        root = ROOT_DIR / "reports/recovery-cases"
+        candidates = sorted(path for path in root.glob("rc-*") if path.is_dir())
+        candidates.extend(
+            sorted(path for path in root.glob("*.json") if path.is_file())
+        )
     else:
         root = ROOT_DIR / "reports/reconciliation"
         candidates = sorted(path for path in root.glob("run-*") if path.is_dir())

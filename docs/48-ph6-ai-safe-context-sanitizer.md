@@ -64,6 +64,7 @@ Allowed examples:
 - `account_token`
 - `event_token`
 - `idempotency_key_hash`
+- `masked_target_id`
 - `request_hash`
 - `consistency_counts`
 - `metric_summary`
@@ -118,6 +119,8 @@ python3 scripts/ph6_ai_context.py demo
 python3 scripts/ph6_ai_context.py validate --input reports/ai-context/sample-ai-context.json
 python3 scripts/ph6_ai_context.py sanitize --input reports/incidents/sample-analyzer-result.json
 python3 scripts/ph6_ai_context.py sanitize-latest --source incidents
+python3 scripts/ph6_ai_context.py sanitize-latest --source recovery-cases
+python3 scripts/ph6_ai_context.py sanitize-latest --source reconciliation
 ```
 
 Makefile:
@@ -126,6 +129,7 @@ Makefile:
 make ph6-ai-context-demo
 make ph6-ai-context-validate
 make ph6-ai-context-sanitize-latest
+make ph6-ai-context-sanitize-latest-recovery-case
 ```
 
 ## 8. Report Artifact Structure
@@ -163,23 +167,38 @@ Runtime `run-*` directories are ignored by git.
 
 ### Denylist-only Sanitizing Is Not Enough
 
-New fields can be added to incident or reconciliation artifacts. A denylist-only sanitizer can miss those fields, so PH6 outputs only allowlisted keys.
+- Problem: new fields can be added to incident or reconciliation artifacts.
+- Cause: a denylist-only sanitizer can miss newly introduced sensitive fields.
+- Fix: PH6 outputs only allowlisted keys and treats unknown fields as `not_in_allowlist`.
+- Verification: `test_unknown_fields_are_removed` checks that unlisted fields are removed.
 
 ### Token Is Too Broad As A Deny Rule
 
-Blocking every field that contains `token` would remove safe pseudonymous identifiers such as `account_token` and `event_token`. PH6 handles this with allowlist-first exceptions.
+- Problem: blocking every field containing `token` removes safe pseudonymous identifiers such as `account_token` and `event_token`.
+- Cause: denylist regex cannot distinguish safe pseudonymous identifiers from access tokens by name alone.
+- Fix: PH6 evaluates the allowlist first and explicitly allows `account_token`, `event_token`, `idempotency_key_hash`, and `request_hash`.
+- Verification: `test_tokens_and_hashes_are_allowed` confirms safe token/hash fields are preserved.
 
 ### Nested Structures Can Hide Unsafe Fields
 
-Incident and reconciliation artifacts can contain lists of signals or nested count summaries. PH6 recursively sanitizes dict/list values and tests nested removals.
+- Problem: incident and reconciliation artifacts can contain lists of signals or nested count summaries.
+- Cause: shallow sanitizing can leave unsafe fields inside nested dict/list values.
+- Fix: PH6 recursively sanitizes nested dict/list structures.
+- Verification: `test_nested_sensitive_fields_are_removed_without_dropping_safe_siblings` confirms nested sensitive fields are removed while safe siblings remain.
 
 ### Redaction Summary Can Leak Data
 
-The redaction summary stores only field paths and reasons. It does not store removed values.
+- Problem: a redaction summary can become another leak path if it records removed raw values.
+- Cause: removed values may include request bodies, credentials, signatures, or raw identifiers.
+- Fix: PH6 stores only field paths and reasons in `redaction_summary`.
+- Verification: `test_redaction_summary_does_not_include_raw_values` checks that raw values are absent from the summary.
 
 ### Runtime Artifacts Should Not Be Committed
 
-`reports/ai-context/run-*/` is ignored. Only curated samples are committed.
+- Problem: generated runtime context files can be environment-specific.
+- Cause: `demo` and `sanitize-latest` write timestamped `run-*` directories.
+- Fix: `reports/ai-context/run-*/` is ignored and only curated samples are committed.
+- Verification: `git status --ignored --short reports/ai-context` shows runtime directories as ignored.
 
 ## 11. Limits And Next Steps
 

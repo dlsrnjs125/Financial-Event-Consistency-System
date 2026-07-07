@@ -103,6 +103,7 @@ def test_tokens_and_hashes_are_allowed() -> None:
             "account_token": "acctok_safe_001",
             "event_token": "evttok_safe_001",
             "idempotency_key_hash": "a" * 64,
+            "masked_target_id": "acct-****-001",
             "request_hash": "b" * 64,
         }
     )
@@ -111,6 +112,7 @@ def test_tokens_and_hashes_are_allowed() -> None:
         "account_token": "acctok_safe_001",
         "event_token": "evttok_safe_001",
         "idempotency_key_hash": "a" * 64,
+        "masked_target_id": "acct-****-001",
         "request_hash": "b" * 64,
     }
 

@@ -6,7 +6,7 @@
 - Run ID: ph6-sample
 - Classification: STALE_PROCESSING_DETECTED
 - Severity: SEV2
-- Removed Field Count: 2
+- Removed Field Count: 5
 - Sensitive Data Included: false
 
 ## Boundaries
