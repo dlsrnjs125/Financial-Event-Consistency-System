@@ -61,6 +61,7 @@ help: ## Show this help message
 	@echo "  make ph2-incident-artifact # Create PH2 sanitized incident artifact"
 	@echo "  make ph3-incident-analyze # Analyze latest PH2 incident artifact"
 	@echo "  make ph4-recovery-case-from-latest # Create PH4 recovery case from latest PH3 analysis"
+	@echo "  make ph5-reconciliation-run # Run PH5 stale detector and reconciliation"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -258,6 +259,7 @@ scripts-check: ## Check shell script syntax
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph2_incident_artifact.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph3_incident_analyzer.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph4_recovery_case.py
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph5_reconciliation.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -281,6 +283,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ph2_incident_artifact.py
 	test -x scripts/ph3_incident_analyzer.py
 	test -x scripts/ph4_recovery_case.py
+	test -x scripts/ph5_reconciliation.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -525,6 +528,26 @@ ph4-quarantines: ## List PH4 quarantine records
 
 .PHONY: ops12-recovery-case
 ops12-recovery-case: ph4-recovery-case-from-latest ## Alias for PH4 recovery case creation
+
+# Production Hardening Phase 5 Stale Processing / Reconciliation
+.PHONY: ph5-detect-stale-processing
+ph5-detect-stale-processing: ## Detect stale PROCESSING idempotency records
+	@python3 scripts/ph5_reconciliation.py detect-stale --threshold-minutes 5
+
+.PHONY: ph5-reconcile
+ph5-reconcile: ## Run PH5 count-only reconciliation
+	@python3 scripts/ph5_reconciliation.py reconcile --threshold-minutes 5
+
+.PHONY: ph5-reconciliation-run
+ph5-reconciliation-run: ## Run PH5 stale detector, reconciliation, report, and validate
+	@python3 scripts/ph5_reconciliation.py run --threshold-minutes 5
+
+.PHONY: ph5-reconciliation-validate
+ph5-reconciliation-validate: ## Validate latest PH5 reconciliation artifact
+	@python3 scripts/ph5_reconciliation.py validate --latest
+
+.PHONY: ops13-reconciliation
+ops13-reconciliation: ph5-reconciliation-run ## Alias for PH5 reconciliation run
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status

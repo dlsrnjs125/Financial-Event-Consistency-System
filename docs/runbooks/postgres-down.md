@@ -98,6 +98,15 @@ make ph4-quarantines
 PH4는 PH3 analyzer result를 recovery case로 등록하고 수동 승인 전 실행을 차단한다.
 금전 보정, write resume 승인, compensation ledger 생성은 여전히 운영자 판단과 후속 범위다.
 
+PH5 recovery follow-up 명령:
+
+```bash
+make ph5-reconciliation-run
+make ph5-reconciliation-validate
+```
+
+PH5는 DB 복구 후 실행하는 절차이며, DB가 unavailable이면 PH1 write suspend와 PH2/PH3 incident artifact/analyzer 흐름을 먼저 사용한다.
+
 ## 6. 복구 검증
 
 - `/ready` 200 회복

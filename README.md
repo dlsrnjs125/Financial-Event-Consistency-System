@@ -55,7 +55,8 @@ PH2에서는 PostgreSQL 장애 중 DB에 의존하지 않는 incident artifact b
 PH3에서는 PH2 incident artifact를 기반으로 deterministic rule-based incident analyzer MVP를 추가했다.
 PH4에서는 PH3 analyzer 결과를 recovery case로 등록하고 account quarantine write guard와 수동 승인 전 실행 차단을 추가했다.
 Recovery/quarantine read-only API는 운영 민감 정보 보호를 위해 기본 비활성화하고, 내부/admin 환경에서만 opt-in으로 노출한다.
-상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/45-*` 문서에서 관리한다.
+PH5에서는 stale PROCESSING detector와 count-only reconciliation job을 추가하고, 불일치 후보를 recovery case로 연결하는 기반을 구현했다.
+상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/47-*` 문서에서 관리한다.
 
 ## 5. Final Verification Summary
 
@@ -122,6 +123,8 @@ make ph3-incident-analyze-validate
 make ph4-recovery-case-from-latest
 make ph4-recovery-cases
 make ph4-quarantines
+make ph5-reconciliation-run
+make ph5-reconciliation-validate
 make ph1-write-suspend-status
 make ph1-write-suspend-resume
 ```
@@ -152,6 +155,7 @@ make ph1-write-suspend-resume
 | [docs/44-ph2-incident-artifact-sanitized-report.md](docs/44-ph2-incident-artifact-sanitized-report.md) | PH2 out-of-band incident artifact와 sanitized report |
 | [docs/45-ph3-incident-analyzer-mvp.md](docs/45-ph3-incident-analyzer-mvp.md) | PH3 deterministic incident analyzer MVP |
 | [docs/46-ph4-recovery-case-quarantine-manual-approval.md](docs/46-ph4-recovery-case-quarantine-manual-approval.md) | PH4 recovery case, quarantine, manual approval 구현 |
+| [docs/47-ph5-stale-processing-reconciliation.md](docs/47-ph5-stale-processing-reconciliation.md) | PH5 stale PROCESSING detector와 reconciliation 구현 |
 
 ## 10. Blog Series
 
@@ -180,6 +184,7 @@ make ph1-write-suspend-resume
 - Capacity Planning, Change Management, Ansible, PowerShell 문서는 supporting/optional docs로 관리한다.
 - Production Hardening PH1 write suspend는 단일 API 인스턴스 기준으로 구현했다.
 - PH4 recovery case/quarantine은 자동 보정 실행이 아니라 수동 승인 전 실행 차단과 evidence 연결까지 구현했다.
+- PH5 reconciliation은 탐지와 recovery case 연결까지만 수행하며 금전 상태를 자동 수정하지 않는다.
 - PostgreSQL HA/Queue 도입, latency attribution instrumentation과 k6 latency drill은 후속 구현 후보로 남겼다.
 
 ## 12. 최종 요약

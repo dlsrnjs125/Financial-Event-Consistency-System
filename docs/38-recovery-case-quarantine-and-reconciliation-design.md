@@ -7,7 +7,9 @@ Implementation note:
 
 - PH4 implements `recovery_cases` and `quarantine_records`, PH3 analyzer ingestion, account quarantine write guard, read-only APIs, and CLI approval/release commands.
 - PH4 intentionally does not execute compensation ledger creation, balance correction, automatic recovery, or write resume approval.
+- PH5 implements stale `PROCESSING` detection and count-only reconciliation, then links findings to recovery cases without executing financial recovery actions.
 - Detailed implementation notes are tracked in [46-ph4-recovery-case-quarantine-manual-approval.md](46-ph4-recovery-case-quarantine-manual-approval.md).
+PH5 implementation notes are tracked in [47-ph5-stale-processing-reconciliation.md](47-ph5-stale-processing-reconciliation.md).
 
 ## 1. 왜 차단 이후 recovery case가 필요한가
 

@@ -100,7 +100,7 @@ GET /api/v1/internal/quarantines/{quarantine_id}
 ```
 
 Approval, rejection, and quarantine release stay CLI-only in this phase.
-Execution state transition CLI commands are intentionally not exposed in PH4; execution guard is verified at service-test level, and real recovery action execution remains PH5+ scope.
+Execution state transition CLI commands are intentionally not exposed in PH4; execution guard is verified at service-test level. PH5 adds detector/reconciliation linkage only, and real recovery action execution remains future scope.
 
 ## Troubleshooting
 
