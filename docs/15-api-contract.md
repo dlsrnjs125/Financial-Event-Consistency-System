@@ -111,6 +111,9 @@ DEPOSIT/WITHDRAW 요청에서는 이 필드를 사용하지 않는다.
 
 ### Success Response
 
+현재 direct PostgreSQL transaction path에서 `COMPLETED`는 PostgreSQL commit evidence가 존재한다는 의미다.
+PostgreSQL write path가 불가능하면 `COMPLETED`를 반환하지 않고 `503 + Retry-After`로 재시도를 유도한다.
+
 ```json
 {
   "event_id": "evt-0001",
@@ -226,3 +229,6 @@ Phase 7에서는 `POST /api/v1/transaction-events`에서 HMAC 관련 Header와 `
 Partner rotation mode에서는 `X-Client-Id`, `X-Key-Id`, `X-Timestamp`, `X-Nonce`, `X-Signature`를 사용한다.
 Phase 7은 KRW 정수 원 단위를 기준으로 `amount`와 `balance_after`를 JSON number로 반환한다.
 거래 처리 중 도메인 실패가 발생하면 Idempotency 실패 응답 재사용을 위해 TransactionEventService가 표준 실패 body를 저장하고 해당 HTTP status로 반환한다.
+
+PH8 ADR 기준으로 queue-first architecture를 도입할 경우, 현재 `COMPLETED` 응답을 enqueue 성공에 재사용하면 안 된다.
+Queue-first 후보는 `ACCEPTED`와 `COMPLETED`를 분리하는 별도 API contract가 필요하며, 자세한 판단은 [40-postgres-ha-and-queue-tradeoff-adr.md](40-postgres-ha-and-queue-tradeoff-adr.md)를 따른다.

@@ -1,149 +1,228 @@
 # ADR: PostgreSQL HA and Durable Queue Trade-off
 
-## Status
+## 1. Status
 
-Proposed for Production Hardening Track.
+Accepted for PH8 decision evidence.
 
-이번 브랜치에서는 PostgreSQL HA 또는 durable queue를 구현하지 않는다.
-현재 PostgreSQL transaction 중심 설계를 유지하면서, 후속 구현 판단을 위한 trade-off를 문서화한다.
+PH8 does not implement PostgreSQL HA, Patroni, repmgr, Kafka, RabbitMQ, SQS, or cloud database resources. It documents the architectural trade-off and generates deterministic evidence for why the current project keeps direct PostgreSQL transaction processing with fail-closed/write suspend.
 
-## Context
+## 2. Context
 
-이 프로젝트는 PostgreSQL을 최종 Source of Truth로 둔다.
-Redis는 lock/cache/fallback을 위한 보조 계층이며, Redis 장애는 degraded mode로 처리할 수 있다.
+This project treats PostgreSQL as the final Source of Truth for `TransactionEvent`, `LedgerEntry`, `Account.balance`, and `IdempotencyRecord`.
 
-하지만 PostgreSQL 자체가 down되면 신규 금융 write를 확정 처리할 수 없다.
-이때 선택지는 크게 세 가지다.
+Redis improves duplicate-request mitigation and performance, but it is not the consistency authority. When the PostgreSQL write path is unavailable, the API must not return a successful financial completion response.
 
-1. Single PostgreSQL + fail-closed/write suspend
-2. PostgreSQL primary/standby HA
-3. API 앞 또는 뒤에 durable queue 도입
+The hard question is what should happen next:
 
-각 선택지는 API 응답 의미, commit durability, 운영 복잡도, reconciliation 책임을 바꾼다.
+- keep direct PostgreSQL transaction processing and fail closed
+- introduce PostgreSQL HA to reduce outage windows
+- use synchronous replication to reduce RPO
+- use managed DB HA to move cluster operations to a provider
+- move to durable queue-first ingestion
 
-## RPO/RTO target
+Each option changes API response semantics, recovery evidence, and operational responsibility.
 
-현재 로컬 프로젝트는 PostgreSQL HA를 구현하지 않았으므로 DB 장애 중 RPO 0을 기술적으로 보장한다고 주장하지 않는다.
-대신 PostgreSQL commit 이전 성공 응답 금지, 동일 idempotency key 재시도, 복구 후 consistency gate를 보장 대상으로 둔다.
+## 3. Current Decision
 
-| 항목 | 현재 목표 | Queue-first 도입 시 |
+Current PH8 decision:
+
+```text
+Maintain direct PostgreSQL transaction + fail-closed/write suspend now.
+Keep PostgreSQL HA as a production availability follow-up.
+Treat durable queue-first architecture as a separate V2/API-contract candidate.
+```
+
+Rationale:
+
+- A `COMPLETED` response should mean PostgreSQL commit evidence exists.
+- If PostgreSQL cannot accept writes, the safer response is `503 + Retry-After`.
+- Queue-first ingestion changes the API response from "ledger posting completed" to "event accepted for later processing".
+- HA does not remove the need for failover consistency gate and human write resume approval.
+
+## 4. Architecture Options
+
+| Option | Shape | Summary |
 | --- | --- | --- |
-| RPO | commit 전 성공 응답 금지, 복구 후 중복 반영 0 검증 | queue durability 기준으로 수신 RPO와 ledger posting RPO 분리 |
-| RTO | 로컬 drill에서 DB stop/start 후 1~3분 내 readiness 회복과 consistency check 완료 목표 | API accept RTO와 consumer posting RTO 분리 |
-| Write resume | consistency gate와 recovery case 검토 후 사람 승인 | DLQ/replay/reconciliation 검토 후 사람 승인 |
-| In-doubt event | recovery case로 격리 | queue offset, consumer idempotency, DB evidence를 함께 대조 |
+| A. Current direct PostgreSQL + fail-closed | `External System -> API -> PostgreSQL` | Simple consistency story. DB down returns `503 + Retry-After`. |
+| B. PostgreSQL primary/standby HA | `API -> PostgreSQL Primary -> Standby` | Reduces DB single point of failure, but failover still needs validation. |
+| C. Synchronous replication | `API -> Primary -> Sync standby/quorum` | Lowers RPO, increases commit latency and write-path coupling. |
+| D. Managed DB HA | `API -> Managed HA database endpoint` | Outsources DB HA operations, not application recovery responsibility. |
+| E. Durable queue-first | `External System -> API -> Durable Queue -> Consumer -> PostgreSQL` | Improves accept availability, but splits `ACCEPTED` from `COMPLETED`. |
 
-Local drill target:
+## 5. API Contract Impact
 
-| 항목 | 목표 |
-| --- | --- |
-| DB down 감지 | 10초 이내 |
-| write suspend 활성화 | 감지 후 5초 이내 |
-| DB stop/start 후 readiness 회복 | 1~3분 내 |
-| consistency gate 완료 | 복구 후 1분 내 |
-| 수동 복구 절차 RTO | 로컬 drill 기준 3~5분 내 |
+| Architecture | Response Meaning | Contract Risk |
+| --- | --- | --- |
+| Direct PostgreSQL transaction | `COMPLETED` only after PostgreSQL commit | DB outage reduces write availability |
+| Direct + fail-closed | `503 + Retry-After` means not completed | External systems must retry with same idempotency key/body |
+| Primary/standby HA | `COMPLETED` remains primary commit based | Failover window can create stale connection and in-doubt cases |
+| Synchronous replication | `COMPLETED` includes sync durability wait | Higher latency can increase timeout/retry pressure |
+| Managed DB HA | `COMPLETED` remains DB commit based | App still owns readiness/retry/consistency gate |
+| Durable queue-first | `ACCEPTED` means durable enqueue, `COMPLETED` means later ledger posting | Confusing accept with completion can cause financial incidents |
 
-이 값은 실제 운영 SLO가 아니라 로컬 drill과 포트폴리오 evidence를 위한 초기 목표다.
-운영 환경에서는 managed DB failover, network, data size, backup/restore 전략에 따라 별도 목표를 정의해야 한다.
+Queue-first must not reuse the current `COMPLETED` response for enqueue success. It needs a separate API contract and status lifecycle.
 
-## Decision
+## 6. Consistency Responsibility
 
-1차 Production Hardening에서는 다음을 선택한다.
+| Option | Consistency Authority | Additional Responsibility |
+| --- | --- | --- |
+| Direct PostgreSQL | PostgreSQL transaction and unique constraints | fail-closed, write suspend, recovery case |
+| PostgreSQL HA | Current primary after failover validation | primary identity, stale connection handling, consistency gate |
+| Synchronous replication | Primary commit plus sync acknowledgement | timeout policy, write suspend on quorum loss |
+| Managed DB HA | Managed primary endpoint plus app validation | readiness, retry, consistency gate, write resume approval |
+| Durable queue-first | Queue durability first, PostgreSQL ledger later | consumer idempotency, DLQ, replay approval, offset evidence, reconciliation |
 
-- PostgreSQL write 불가 시 신규 금융 write는 `503` + `Retry-After`로 fail-closed 한다.
-- write suspend, recovery mode, recovery case, reconciliation을 먼저 설계한다.
-- PostgreSQL HA와 durable queue는 ADR과 후속 구현 후보로 관리한다.
-- queue 도입 시 API 응답 의미를 `COMPLETED`가 아니라 `ACCEPTED`로 분리해야 한다.
+## 7. Failure Mode Comparison
 
-## Option A. Single PostgreSQL + fail-closed
-
-- 선택한 정책: DB write 불가 시 신규 거래를 성공 처리하지 않는다.
-- 대안: Redis/memory/file에 임시 저장 후 나중에 반영한다.
-- 선택 이유: 처리 여부를 증명할 수 없는 성공 응답을 만들지 않는다.
-- 포기한 것: DB 장애 중 수신 성공률.
-- 보완 전략: `Retry-After`, idempotency key 유지, recovery case, 복구 후 consistency gate.
-- 면접 답변용 한 문장: PostgreSQL이 Source of Truth인 구조에서는 DB 장애 중 성공 응답을 주지 않고, 재시도 가능한 실패로 반환하는 것이 정합성에 더 안전합니다.
-
-## Option B. PostgreSQL primary/standby HA
-
-구조:
-
-```text
-API
- -> PostgreSQL Primary
- -> PostgreSQL Standby
-```
-
-- 선택한 기술 후보: PostgreSQL streaming replication, managed DB HA.
-- 대안: single PostgreSQL + backup/restore.
-- 선택 이유: DB 자체가 단일 장애점이 되는 것을 줄인다.
-- 포기한 것: 운영 복잡도 증가, failover 검증 필요.
-- 보완 전략: read/write split 금지 또는 제한, primary write만 허용, failover 후 consistency gate 강제.
-- 면접 답변용 한 문장: PostgreSQL HA는 availability를 높이지만, failover 후 어떤 primary가 최종 기준인지 확인하기 전에는 write resume을 허용하면 안 됩니다.
-
-주의:
-
-- standby는 read-only query를 받을 수 있지만 replication lag가 있을 수 있다.
-- failover 직후 stale connection이 남을 수 있다.
-- application은 failover 중 `503`과 retry를 안전하게 처리해야 한다.
-
-## Option C. Synchronous replication
-
-- 선택한 기술 후보: synchronous standby 또는 quorum-based synchronous replication.
-- 대안: asynchronous streaming replication.
-- 선택 이유: 금융 원장성 write의 RPO를 낮출 수 있다.
-- 포기한 것: commit latency 증가, standby 장애 시 commit 대기 가능성.
-- 보완 전략: timeout 정책, write suspend, critical ledger path에만 강한 durability 적용 검토.
-- 면접 답변용 한 문장: synchronous replication은 내구성을 높이지만 commit latency와 가용성 trade-off가 있어 원장 write path 중심으로 제한 적용을 검토해야 합니다.
-
-## Option D. Managed DB HA
-
-- 선택한 기술 후보: AWS RDS Multi-AZ, Cloud SQL HA 등.
-- 대안: Docker Compose로 Patroni/repmgr 직접 구성.
-- 선택 이유: 실제 운영에서는 DB HA 자체를 managed service에 위임하는 경우가 많다.
-- 포기한 것: DB cluster 내부 구현 경험.
-- 보완 전략: application readiness, retry, stale connection 처리, failover 후 consistency gate를 검증한다.
-- 면접 답변용 한 문장: DB HA를 managed service에 맡기더라도 애플리케이션은 failover 중 connection error와 복구 후 정합성 검증을 직접 책임져야 합니다.
-
-## Option E. Durable queue-first architecture
-
-구조:
-
-```text
-External System
- -> API
- -> Durable Queue
- -> Consumer
- -> PostgreSQL
-```
-
-- 선택한 기술 후보: Kafka, SQS, RabbitMQ 등 durable queue.
-- 대안: API가 직접 PostgreSQL transaction을 수행한다.
-- 선택 이유: PostgreSQL이 잠시 down되어도 이벤트 수신 자체는 보존할 수 있다.
-- 포기한 것: API 응답 시점에 원장 반영 완료를 보장하기 어렵다.
-- 보완 전략: 응답 의미를 `ACCEPTED`와 `COMPLETED`로 분리, consumer idempotency, DLQ, replay, reconciliation 필요.
-- 면접 답변용 한 문장: Queue를 앞에 두면 수신 가용성은 높아지지만, API 계약을 처리 완료가 아니라 수신 완료로 바꿔야 합니다.
-
-## API contract impact
-
-| Architecture | API 응답 의미 | 장점 | 위험 |
+| Failure Mode | Direct Fail-Closed | PostgreSQL HA | Durable Queue-First |
 | --- | --- | --- | --- |
-| Direct PostgreSQL transaction | commit 결과 기준 `COMPLETED/FAILED` | 단순하고 정합성 증명 쉬움 | DB down 중 수신 불가 |
-| Direct + fail-closed | `503` + retry | 처리 여부 불명확 성공 방지 | 장애 중 성공률 낮음 |
-| Queue-first | `202 Accepted` | DB down 중 수신 가능 | 처리 완료와 수신 완료 혼동 위험 |
-| HA primary write | primary commit 결과 | DB 장애 window 축소 | failover 검증 복잡 |
+| Primary DB down | `503 + Retry-After` | failover, then consistency gate | API can enqueue if queue is healthy |
+| Commit uncertainty | no success response before commit | in-doubt window during failover | enqueue success and ledger posting are separate |
+| Duplicate request | idempotency record + DB constraints | same, after primary identity confirmed | consumer idempotency plus DB constraints |
+| Replay/retry | external retry with same key/body | same plus stale connection handling | queue replay/DLQ redrive approval |
+| Recovery approval | write resume approval | failover promote and write resume approval | DLQ/replay and posting resume approval |
 
-## Consequences
+## 8. RPO / RTO Boundary
 
-- 현재 후속 보완의 우선순위는 DB HA cluster 구축보다 application fail-closed와 recovery workflow다.
-- queue-first는 좋은 고도화 후보지만 API contract와 consumer/reconciliation 설계가 함께 바뀐다.
-- PostgreSQL HA를 쓰더라도 write resume 전 consistency gate는 필요하다.
-- failover in-doubt 이벤트는 recovery case로 격리해야 한다.
+The current local project does not claim production RPO/RTO guarantees.
 
-## Follow-up implementation candidates
+Current local drill target:
 
-- DB down drill: `503` + `Retry-After`, no successful idempotency record.
-- failover-like stale connection drill.
-- recovery mode and write resume approval gate.
-- optional managed DB HA runbook.
-- optional queue-first ADR update with API contract split.
+| Boundary | Local Evidence Goal |
+| --- | --- |
+| RPO | no successful response before PostgreSQL commit |
+| RTO | DB stop/start drill recovers readiness and consistency checks in minutes |
+| Write resume | human approval after consistency gate |
+| In-doubt event | recovery case or out-of-band artifact |
+
+Queue-first would split RPO/RTO:
+
+- API accept RPO/RTO: whether the queue durably accepted the event
+- Ledger posting RPO/RTO: whether the consumer committed the ledger update to PostgreSQL
+
+Those two meanings must be visible in the API contract and evidence.
+
+## 9. Operational Complexity
+
+| Option | Complexity Source |
+| --- | --- |
+| Direct fail-closed | lower availability during DB outage |
+| Primary/standby HA | failover runbook, stale connection recycling, split-brain prevention |
+| Synchronous replication | commit latency, standby/quorum health, write stalls |
+| Managed DB HA | cloud cost, provider behavior, app-level retry/readiness |
+| Queue-first | consumer idempotency, DLQ, replay, offset checkpoint, reconciliation |
+
+## 10. Cost and Local Portfolio Boundary
+
+This repository stays local and reproducible. It does not provision cloud HA databases or queue infrastructure in PH8.
+
+The goal is to show decision quality, not to attach every possible production dependency.
+
+Managed HA and durable queues are valid production candidates, but adding them without changing API semantics and recovery evidence would make the consistency story weaker, not stronger.
+
+## 11. Decision Matrix
+
+PH8 adds a deterministic generator:
+
+```bash
+python3 scripts/ph8_ha_queue_decision_matrix.py demo
+python3 scripts/ph8_ha_queue_decision_matrix.py validate --input reports/architecture/ph8-ha-queue-tradeoff/sample-ha-queue-decision-report.json
+```
+
+Scores are 1~5 project-fit signals, not production benchmarks.
+
+| Criterion | Meaning |
+| --- | --- |
+| Availability | How much the option improves write/accept availability |
+| Consistency explainability | How easy it is to explain and verify final correctness |
+| Operational complexity | Higher score means easier to operate in this project scope |
+| Cost | Higher score means lower cost for local portfolio scope |
+| Local portfolio fit | How well the option fits deterministic local evidence |
+
+## 12. Evidence Report
+
+Generated sample:
+
+```text
+reports/architecture/ph8-ha-queue-tradeoff/sample-ha-queue-decision-report.json
+reports/architecture/ph8-ha-queue-tradeoff/sample-ha-queue-decision-report.md
+```
+
+Makefile:
+
+```bash
+make ph8-ha-queue-decision-demo
+make ph8-ha-queue-decision-validate
+make ph8-architecture-check
+```
+
+The validator checks:
+
+- required top-level fields
+- required architecture options
+- 1~5 score range
+- queue-first `ACCEPTED`/`COMPLETED` split
+- HA consistency gate and write resume approval
+- no sensitive raw identifiers or secrets
+- no claims that queue enqueue equals ledger completion
+- no claims that HA removes consistency gate
+
+## 13. Troubleshooting Notes
+
+### Queue-First Cannot Return Completed
+
+- 문제: queue-first 구조는 DB down 중 수신 가능성을 높이지만 현재 API의 `COMPLETED` 응답을 그대로 줄 수 없다.
+- 원인: durable enqueue는 원장 반영 완료가 아니라 나중에 처리할 입력 보존이다.
+- 해결: queue-first는 `ACCEPTED`와 `COMPLETED`를 분리하는 V2 contract 후보로 둔다.
+- 검증: PH8 validator가 queue-first option에 `ACCEPTED`와 `COMPLETED` 의미 분리가 없으면 실패한다.
+- README에 넣지 않은 이유: README에는 결론과 링크만 두고 API 의미 변화는 ADR에서 관리한다.
+
+### HA Does Not Remove Consistency Gate
+
+- 문제: HA를 붙이면 DB 장애가 사라진다고 오해할 수 있다.
+- 원인: failover 중 stale connection, replication lag, primary identity 불확실성이 남는다.
+- 해결: HA option에도 failover consistency gate와 write resume approval을 필수 control로 둔다.
+- 검증: PH8 validator가 HA option에 consistency gate와 write resume approval이 없으면 실패한다.
+- README에 넣지 않은 이유: HA 운영 세부 책임은 ADR의 범위다.
+
+### Synchronous Replication Is Not Always Better
+
+- 문제: RPO를 낮추는 선택을 항상 정답처럼 표현할 수 있다.
+- 원인: synchronous replication은 commit latency와 standby/quorum 장애 시 write stall을 만든다.
+- 해결: ledger-critical path에 제한 적용할지 후속 후보로 분리한다.
+- 검증: decision matrix에 availability, explainability, complexity, cost를 별도 score로 둔다.
+- README에 넣지 않은 이유: replication trade-off 표는 README 요약성을 해친다.
+
+### Managed HA Still Leaves App Work
+
+- 문제: managed DB HA를 쓰면 애플리케이션 복구 로직이 필요 없다고 오해할 수 있다.
+- 원인: provider가 failover를 도와도 app은 retry/readiness/stale connection/write resume을 책임진다.
+- 해결: managed HA option에도 readiness, consistency gate, write resume approval을 control로 둔다.
+- 검증: report validator와 ADR option table에서 같은 requirement를 확인한다.
+- README에 넣지 않은 이유: cloud provider 세부 운영은 문서 링크로 충분하다.
+
+### Scores Are Not Benchmarks
+
+- 문제: decision matrix score를 실제 성능 수치처럼 읽을 수 있다.
+- 원인: 1~5 score는 프로젝트 범위 판단인데 숫자라 절대 지표처럼 보인다.
+- 해결: report와 ADR에 deterministic project-fit signal이라고 명시한다.
+- 검증: Markdown report와 JSON decision matrix note에 benchmark가 아니라고 남긴다.
+- README에 넣지 않은 이유: score 설명 전체는 PH8 evidence 문서에서 관리한다.
+
+## 14. Final Decision
+
+Final PH8 decision:
+
+- Keep direct PostgreSQL transaction processing.
+- Keep fail-closed/write suspend for PostgreSQL write-path failure.
+- Use `503 + Retry-After` instead of ambiguous success during DB outage.
+- Treat PostgreSQL HA as a production availability follow-up.
+- Treat durable queue-first ingestion as a separate V2/API-contract follow-up.
+
+## 15. Follow-up Candidates
+
+- managed DB HA runbook and failover drill
+- stale connection readiness drill
+- queue-first API V2 ADR
+- consumer idempotency and DLQ replay design
+- RPO/RTO split for API accept and ledger posting

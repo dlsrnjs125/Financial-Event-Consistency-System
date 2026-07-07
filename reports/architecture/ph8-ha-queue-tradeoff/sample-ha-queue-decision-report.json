@@ -1,0 +1,169 @@
+{
+  "current_decision": "Maintain direct PostgreSQL transaction + fail-closed/write suspend now; treat PostgreSQL HA and durable queue-first architecture as follow-up availability and V2 contract candidates.",
+  "decision_matrix": [
+    {
+      "decision": "recommended_now",
+      "note": "Scores are deterministic project-fit signals, not production benchmarks.",
+      "option_id": "direct_postgres_fail_closed",
+      "total_context_score": 22
+    },
+    {
+      "decision": "follow_up_candidate",
+      "note": "Scores are deterministic project-fit signals, not production benchmarks.",
+      "option_id": "postgres_primary_standby_ha",
+      "total_context_score": 17
+    },
+    {
+      "decision": "follow_up_candidate",
+      "note": "Scores are deterministic project-fit signals, not production benchmarks.",
+      "option_id": "synchronous_replication",
+      "total_context_score": 14
+    },
+    {
+      "decision": "recommended_later",
+      "note": "Scores are deterministic project-fit signals, not production benchmarks.",
+      "option_id": "managed_db_ha",
+      "total_context_score": 16
+    },
+    {
+      "decision": "v2_candidate",
+      "note": "Scores are deterministic project-fit signals, not production benchmarks.",
+      "option_id": "durable_queue_first",
+      "total_context_score": 12
+    }
+  ],
+  "follow_up_candidates": [
+    "managed DB HA runbook and failover drill",
+    "stale connection readiness drill",
+    "queue-first API V2 ADR",
+    "consumer idempotency and DLQ replay design",
+    "RPO/RTO split for API accept and ledger posting"
+  ],
+  "generated_at": "2026-07-07T00:00:00+00:00",
+  "manual_approval_required": [
+    "PostgreSQL failover promote",
+    "write resume after failover or restore",
+    "ledger correction or compensation",
+    "customer or partner impact confirmation",
+    "queue replay and DLQ redrive"
+  ],
+  "non_scope": [
+    "Patroni or repmgr cluster implementation",
+    "Kafka, RabbitMQ, SQS, or cloud resource provisioning",
+    "automatic failover promote",
+    "automatic write resume",
+    "queue-first API contract implementation"
+  ],
+  "options": [
+    {
+      "api_response_semantics": "COMPLETED only after PostgreSQL commit; 503 + Retry-After when write path is unavailable.",
+      "availability_score": 2,
+      "consistency_explainability_score": 5,
+      "cost_score": 5,
+      "decision": "recommended_now",
+      "local_portfolio_fit_score": 5,
+      "name": "Current: Direct PostgreSQL Transaction + Fail-Closed",
+      "operational_complexity_score": 5,
+      "option_id": "direct_postgres_fail_closed",
+      "required_new_controls": [
+        "write suspend",
+        "Retry-After contract",
+        "recovery case",
+        "consistency gate before write resume"
+      ],
+      "risk_summary": "Lower write availability during DB outage, but no ambiguous success response.",
+      "write_durability_model": "PostgreSQL commit is the durability boundary."
+    },
+    {
+      "api_response_semantics": "COMPLETED remains primary commit based; failover windows return 503 until consistency gate and write resume approval complete.",
+      "availability_score": 4,
+      "consistency_explainability_score": 4,
+      "cost_score": 3,
+      "decision": "follow_up_candidate",
+      "local_portfolio_fit_score": 3,
+      "name": "PostgreSQL Primary/Standby HA",
+      "operational_complexity_score": 3,
+      "option_id": "postgres_primary_standby_ha",
+      "required_new_controls": [
+        "failover consistency gate",
+        "write resume approval",
+        "primary identity verification",
+        "connection pool recycle"
+      ],
+      "risk_summary": "Stale connections, split brain risk, and replication lag during failover.",
+      "write_durability_model": "Primary write with standby replication."
+    },
+    {
+      "api_response_semantics": "COMPLETED still means commit, but commit latency and standby availability become part of the write path.",
+      "availability_score": 3,
+      "consistency_explainability_score": 4,
+      "cost_score": 3,
+      "decision": "follow_up_candidate",
+      "local_portfolio_fit_score": 2,
+      "name": "Synchronous Replication",
+      "operational_complexity_score": 2,
+      "option_id": "synchronous_replication",
+      "required_new_controls": [
+        "commit timeout policy",
+        "ledger-critical path classification",
+        "write suspend on standby quorum loss"
+      ],
+      "risk_summary": "Lower RPO, higher commit latency, and possible write stalls.",
+      "write_durability_model": "Commit waits for synchronous standby or quorum acknowledgement."
+    },
+    {
+      "api_response_semantics": "COMPLETED remains database commit based; application still handles connection retry, readiness, consistency gate, and write resume approval.",
+      "availability_score": 4,
+      "consistency_explainability_score": 4,
+      "cost_score": 2,
+      "decision": "recommended_later",
+      "local_portfolio_fit_score": 2,
+      "name": "Managed DB HA",
+      "operational_complexity_score": 4,
+      "option_id": "managed_db_ha",
+      "required_new_controls": [
+        "managed failover runbook",
+        "readiness and stale connection drill",
+        "consistency gate",
+        "write resume approval"
+      ],
+      "risk_summary": "Cloud dependency, cost, and application-level failover handling remain.",
+      "write_durability_model": "Managed primary/standby or multi-AZ durability boundary."
+    },
+    {
+      "api_response_semantics": "API returns ACCEPTED for durable enqueue; COMPLETED is emitted only after consumer idempotency, PostgreSQL commit, and reconciliation evidence.",
+      "availability_score": 5,
+      "consistency_explainability_score": 3,
+      "cost_score": 2,
+      "decision": "v2_candidate",
+      "local_portfolio_fit_score": 1,
+      "name": "Durable Queue-First Architecture",
+      "operational_complexity_score": 1,
+      "option_id": "durable_queue_first",
+      "required_new_controls": [
+        "ACCEPTED vs COMPLETED API contract split",
+        "consumer idempotency",
+        "DLQ and replay approval",
+        "offset checkpoint evidence",
+        "reconciliation"
+      ],
+      "risk_summary": "Accept/posting split, DLQ, replay, offset, and reconciliation complexity.",
+      "write_durability_model": "Queue durability first, PostgreSQL ledger posting later."
+    }
+  ],
+  "phase": "PH8 PostgreSQL HA / Durable Queue Trade-off ADR",
+  "recommendation": {
+    "recommended_later": [
+      "Managed DB HA for production availability after failover drills",
+      "Queue-first V2 only after ACCEPTED/COMPLETED API contract split",
+      "Consumer idempotency, DLQ, replay, offset evidence, and reconciliation"
+    ],
+    "recommended_now": [
+      "Direct PostgreSQL transaction",
+      "Fail-closed 503 + Retry-After when PostgreSQL write path is unavailable",
+      "Write suspend, recovery case, and consistency gate before write resume"
+    ]
+  },
+  "run_id": "ph8-ha-queue-tradeoff-sample",
+  "sensitive_data_included": false
+}

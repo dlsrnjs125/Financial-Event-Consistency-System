@@ -64,6 +64,7 @@ help: ## Show this help message
 	@echo "  make ph5-reconciliation-run # Run PH5 stale detector and reconciliation"
 	@echo "  make ph6-ai-context-demo # Generate and validate PH6 AI-safe context"
 	@echo "  make ph7-hmac-rotation-demo # Generate PH7 sanitized HMAC rotation evidence"
+	@echo "  make ph8-ha-queue-decision-demo # Generate PH8 HA/Queue decision evidence"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -264,6 +265,7 @@ scripts-check: ## Check shell script syntax
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph5_reconciliation.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph6_ai_context.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph7_hmac_rotation_drill.py
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph8_ha_queue_decision_matrix.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -290,6 +292,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ph5_reconciliation.py
 	test -x scripts/ph6_ai_context.py
 	test -x scripts/ph7_hmac_rotation_drill.py
+	test -x scripts/ph8_ha_queue_decision_matrix.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -595,6 +598,20 @@ ph7-security-check: ph7-hmac-rotation-validate security-log-check ## Run PH7 rep
 
 .PHONY: ops15-hmac-rotation
 ops15-hmac-rotation: ph7-hmac-rotation-demo ## Alias for PH7 HMAC rotation evidence
+
+.PHONY: ph8-ha-queue-decision-demo
+ph8-ha-queue-decision-demo: ## Generate PH8 PostgreSQL HA / queue decision evidence
+	@python3 scripts/ph8_ha_queue_decision_matrix.py demo
+
+.PHONY: ph8-ha-queue-decision-validate
+ph8-ha-queue-decision-validate: ## Validate PH8 decision report fields, score ranges, and safety policy
+	@python3 scripts/ph8_ha_queue_decision_matrix.py validate --input reports/architecture/ph8-ha-queue-tradeoff/sample-ha-queue-decision-report.json
+
+.PHONY: ph8-architecture-check
+ph8-architecture-check: ph8-ha-queue-decision-validate security-log-check scripts-check ## Run PH8 architecture evidence validation and safety checks
+
+.PHONY: ops16-ha-queue-decision
+ops16-ha-queue-decision: ph8-ha-queue-decision-demo ## Alias for PH8 HA/Queue decision evidence
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status
