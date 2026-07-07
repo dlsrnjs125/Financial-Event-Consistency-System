@@ -48,6 +48,19 @@ OPTION_FIELDS = {
     "required_new_controls",
     "decision",
 }
+DECISION_MATRIX_FIELDS = {
+    "option_id",
+    "total_context_score",
+    "decision",
+    "note",
+}
+SCORE_FIELDS = (
+    "availability_score",
+    "consistency_explainability_score",
+    "operational_complexity_score",
+    "cost_score",
+    "local_portfolio_fit_score",
+)
 SENSITIVE_KEY_PATTERNS = re.compile(
     r"(account_no|raw_account_no|idempotency_key|raw_idempotency_key|"
     r"authorization|signature|client_secret|access_token|refresh_token|"
@@ -228,6 +241,7 @@ def validate_report_payload(payload: dict[str, Any]) -> list[str]:
         _validate_scores(option, errors)
         _validate_option_policy(option, errors)
 
+    _validate_decision_matrix(payload, errors)
     _validate_sensitive_content(payload, errors)
     rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     for claim in FORBIDDEN_CLAIMS:
@@ -244,6 +258,15 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         f"- Generated at: `{report['generated_at']}`",
         f"- Phase: `{report['phase']}`",
         f"- Current decision: {report['current_decision']}",
+        "",
+        "## Contract Boundary",
+        "",
+        "- Direct PostgreSQL path: `COMPLETED` means PostgreSQL commit evidence exists.",
+        "- Queue-first path: `ACCEPTED` means durable enqueue; `COMPLETED` means later ledger posting commit.",
+        "",
+        "## Score Note",
+        "",
+        "Scores are deterministic project-fit signals, not production benchmarks.",
         "",
         "## Decision Matrix",
         "",
@@ -267,12 +290,15 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             "",
             "## Recommendation",
             "",
-            "Recommended now:",
+            "Recommended now (`recommended_now`):",
         ]
     )
     lines.extend(f"- {item}" for item in report["recommendation"]["recommended_now"])
     lines.append("")
-    lines.append("Follow-up candidates:")
+    lines.append("Recommended later (`recommended_later`):")
+    lines.extend(f"- {item}" for item in report["recommendation"]["recommended_later"])
+    lines.append("")
+    lines.append("Follow-up candidates (`follow_up_candidates`):")
     lines.extend(f"- {item}" for item in report["follow_up_candidates"])
     return "\n".join(lines) + "\n"
 
@@ -398,13 +424,7 @@ def _decision_matrix(options: list[dict[str, Any]]) -> list[dict[str, Any]]:
         rows.append(
             {
                 "option_id": option["option_id"],
-                "total_context_score": (
-                    option["availability_score"]
-                    + option["consistency_explainability_score"]
-                    + option["operational_complexity_score"]
-                    + option["cost_score"]
-                    + option["local_portfolio_fit_score"]
-                ),
+                "total_context_score": sum(option[field] for field in SCORE_FIELDS),
                 "decision": option["decision"],
                 "note": "Scores are deterministic project-fit signals, not production benchmarks.",
             }
@@ -413,16 +433,56 @@ def _decision_matrix(options: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _validate_scores(option: dict[str, Any], errors: list[str]) -> None:
-    for field in (
-        "availability_score",
-        "consistency_explainability_score",
-        "operational_complexity_score",
-        "cost_score",
-        "local_portfolio_fit_score",
-    ):
+    for field in SCORE_FIELDS:
         value = option.get(field)
         if not isinstance(value, int) or value < 1 or value > 5:
             errors.append(f"{option.get('option_id', 'unknown')} {field} must be 1..5")
+
+
+def _validate_decision_matrix(payload: dict[str, Any], errors: list[str]) -> None:
+    options = payload.get("options")
+    if not isinstance(options, list):
+        return
+
+    options_by_id = {
+        option["option_id"]: option
+        for option in options
+        if isinstance(option, dict) and isinstance(option.get("option_id"), str)
+    }
+    rows = payload.get("decision_matrix")
+    if not isinstance(rows, list):
+        errors.append("decision_matrix must be a list")
+        return
+
+    row_ids = {row.get("option_id") for row in rows if isinstance(row, dict)}
+    missing_rows = sorted(REQUIRED_OPTIONS - row_ids)
+    if missing_rows:
+        errors.append(f"decision_matrix missing rows: {', '.join(missing_rows)}")
+
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            errors.append(f"decision_matrix[{index}] must be an object")
+            continue
+        extra_keys = sorted(set(row) - DECISION_MATRIX_FIELDS)
+        row_label = row.get("option_id", index)
+        if extra_keys:
+            errors.append(
+                f"decision_matrix row {row_label} has unexpected keys: "
+                f"{', '.join(extra_keys)}"
+            )
+
+        option = options_by_id.get(row.get("option_id"))
+        if option is None:
+            errors.append(f"decision_matrix row has unknown option_id: {row_label}")
+            continue
+        if not all(isinstance(option.get(field), int) for field in SCORE_FIELDS):
+            continue
+
+        expected_total = sum(option[field] for field in SCORE_FIELDS)
+        if row.get("total_context_score") != expected_total:
+            errors.append(f"{row['option_id']} total_context_score mismatch")
+        if row.get("decision") != option.get("decision"):
+            errors.append(f"{row['option_id']} decision mismatch")
 
 
 def _validate_option_policy(option: dict[str, Any], errors: list[str]) -> None:

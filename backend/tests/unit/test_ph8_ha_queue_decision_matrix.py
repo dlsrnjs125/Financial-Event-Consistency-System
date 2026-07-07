@@ -91,6 +91,16 @@ def test_missing_top_level_field_fails_validation():
     assert any("missing top-level fields" in error for error in errors)
 
 
+def test_decision_matrix_total_must_match_option_scores():
+    report = ph8_ha_queue_decision_matrix.build_report()
+    tampered = copy.deepcopy(report)
+    tampered["decision_matrix"][0]["total_context_score"] = 999
+
+    errors = ph8_ha_queue_decision_matrix.validate_report_payload(tampered)
+
+    assert any("total_context_score mismatch" in error for error in errors)
+
+
 def test_markdown_report_contains_decision_and_follow_up_candidates():
     report = ph8_ha_queue_decision_matrix.build_report()
     markdown = ph8_ha_queue_decision_matrix.render_markdown_report(report)
@@ -98,6 +108,34 @@ def test_markdown_report_contains_decision_and_follow_up_candidates():
     assert "Current decision" in markdown
     assert "Follow-up candidates" in markdown
     assert "Direct PostgreSQL transaction" in markdown
+
+
+def test_markdown_report_contains_contract_boundary():
+    report = ph8_ha_queue_decision_matrix.build_report()
+    markdown = ph8_ha_queue_decision_matrix.render_markdown_report(report)
+    table_header = (
+        "| Option | Availability | Explainability | Complexity | "
+        "Cost | Local Fit | Decision |"
+    )
+
+    assert table_header in markdown
+    assert "ACCEPTED" in markdown
+    assert "COMPLETED" in markdown
+    assert "not production benchmarks" in markdown
+    assert "recommended_now" in markdown
+    assert "Follow-up candidates" in markdown
+
+
+def test_forbidden_queue_completion_claim_fails_validation():
+    report = ph8_ha_queue_decision_matrix.build_report()
+    tampered = copy.deepcopy(report)
+    tampered["recommendation"]["recommended_later"].append(
+        "queue 도입 시 바로 원장 반영 완료를 보장한다"
+    )
+
+    errors = ph8_ha_queue_decision_matrix.validate_report_payload(tampered)
+
+    assert any("forbidden claim" in error for error in errors)
 
 
 def _option(report, option_id):

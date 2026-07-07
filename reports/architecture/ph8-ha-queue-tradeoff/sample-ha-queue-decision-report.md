@@ -5,6 +5,15 @@
 - Phase: `PH8 PostgreSQL HA / Durable Queue Trade-off ADR`
 - Current decision: Maintain direct PostgreSQL transaction + fail-closed/write suspend now; treat PostgreSQL HA and durable queue-first architecture as follow-up availability and V2 contract candidates.
 
+## Contract Boundary
+
+- Direct PostgreSQL path: `COMPLETED` means PostgreSQL commit evidence exists.
+- Queue-first path: `ACCEPTED` means durable enqueue; `COMPLETED` means later ledger posting commit.
+
+## Score Note
+
+Scores are deterministic project-fit signals, not production benchmarks.
+
 ## Decision Matrix
 
 | Option | Availability | Explainability | Complexity | Cost | Local Fit | Decision |
@@ -17,12 +26,17 @@
 
 ## Recommendation
 
-Recommended now:
+Recommended now (`recommended_now`):
 - Direct PostgreSQL transaction
 - Fail-closed 503 + Retry-After when PostgreSQL write path is unavailable
 - Write suspend, recovery case, and consistency gate before write resume
 
-Follow-up candidates:
+Recommended later (`recommended_later`):
+- Managed DB HA for production availability after failover drills
+- Queue-first V2 only after ACCEPTED/COMPLETED API contract split
+- Consumer idempotency, DLQ, replay, offset evidence, and reconciliation
+
+Follow-up candidates (`follow_up_candidates`):
 - managed DB HA runbook and failover drill
 - stale connection readiness drill
 - queue-first API V2 ADR
