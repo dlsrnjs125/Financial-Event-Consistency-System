@@ -66,6 +66,7 @@ reports/production-hardening/
 reports/incidents/inc-*/
 reports/recovery-cases/rc-*/
 reports/reconciliation/run-*/
+reports/ai-context/run-*/
 reports/**/raw/
 reports/**/tmp/
 *.har
@@ -91,6 +92,9 @@ backups/postgres/*.log
 !reports/reconciliation/README.md
 !reports/reconciliation/sample-reconciliation-summary.json
 !reports/reconciliation/sample-ph5-report.md
+!reports/ai-context/README.md
+!reports/ai-context/sample-ai-context.json
+!reports/ai-context/sample-ai-context.md
 
 # Docker
 docker-compose.override.yml
