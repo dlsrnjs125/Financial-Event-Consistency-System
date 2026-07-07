@@ -10,6 +10,9 @@
 
 이 문서는 금융 이벤트 처리 시스템의 SLI, SLO, error budget 정책을 정의한다.
 
+현재 수치는 실제 운영 SLO가 아니라 로컬 drill과 portfolio evidence를 위한 기준선이다.
+PH8 HA/Queue ADR에서는 PostgreSQL HA와 durable queue-first 구조를 비교하지만, cloud HA resource나 queue middleware를 실제 운영 SLO로 선언하지 않는다.
+
 ## 2. SLI/SLO
 
 | SLI | 목표 SLO | 장애 판단 |
@@ -72,3 +75,18 @@
 
 정합성 관련 signal은 availability error budget과 분리한다.
 `financial_reconciliation_failures_total` 또는 invalid state transition이 1건이라도 발생하면 SEV1로 분류하고, [26-incident-runbook-index.md](26-incident-runbook-index.md)의 Consistency Violation 시나리오를 따른다.
+
+## 7. PH8 HA / Queue Boundary
+
+Direct PostgreSQL transaction path에서는 `COMPLETED`가 PostgreSQL commit evidence를 의미한다.
+PostgreSQL write path가 불가능하면 성공률을 높이기 위해 completion을 가장하지 않고 `503 + Retry-After`로 fail-closed 한다.
+
+Queue-first architecture를 도입하면 SLO/RTO를 둘로 나누어야 한다.
+
+| Boundary | Meaning |
+| --- | --- |
+| API accept RPO/RTO | durable queue가 이벤트를 보존했는지 |
+| Ledger posting RPO/RTO | consumer가 PostgreSQL ledger/account update를 commit했는지 |
+
+따라서 queue-first 후보에서는 `ACCEPTED`와 `COMPLETED` 응답 의미를 분리해야 하며, DLQ/replay/reconciliation evidence를 별도 SLO/SLI로 정의해야 한다.
+자세한 판단 근거는 [40-postgres-ha-and-queue-tradeoff-adr.md](40-postgres-ha-and-queue-tradeoff-adr.md)와 [50-ph8-postgres-ha-queue-decision-evidence.md](50-ph8-postgres-ha-queue-decision-evidence.md)를 기준으로 한다.
