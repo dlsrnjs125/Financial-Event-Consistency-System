@@ -42,6 +42,20 @@ REQUIRED_FILES = {
     "consistency-counts.json",
     "ph5-report.md",
 }
+ALLOWED_SENSITIVE_SHAPED_KEYS = {
+    "idempotency_key_hash",
+}
+FORBIDDEN_KEYS = {
+    "authorization",
+    "idempotency_key",
+    "raw_idempotency_key",
+    "account_no",
+    "account_number",
+    "request_body",
+    "response_body",
+    "signature",
+    "x_signature",
+}
 
 
 def main() -> int:
@@ -268,6 +282,7 @@ def validate_artifact(run_dir: Path) -> list[str]:
         except json.JSONDecodeError as exc:
             errors.append(f"{json_file} invalid JSON: {exc}")
             continue
+        _validate_json_keys(payload, json_file, errors)
         if (
             json_file != "consistency-counts.json"
             and payload.get("sensitive_data_included") is not False
@@ -280,6 +295,22 @@ def validate_artifact(run_dir: Path) -> list[str]:
         if ph2_incident_artifact.SENSITIVE_TEXT_RE.search(text):
             errors.append(f"sensitive value pattern found: {path.name}")
     return errors
+
+
+def _validate_json_keys(payload: Any, label: str, errors: list[str]) -> None:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            key_text = str(key)
+            normalized = key_text.lower().replace("-", "_")
+            if normalized not in ALLOWED_SENSITIVE_SHAPED_KEYS and (
+                normalized in FORBIDDEN_KEYS
+                or ph2_incident_artifact.SENSITIVE_KEY_RE.search(key_text)
+            ):
+                errors.append(f"sensitive key found in {label}: {key_text}")
+            _validate_json_keys(value, label, errors)
+    elif isinstance(payload, list):
+        for item in payload:
+            _validate_json_keys(item, label, errors)
 
 
 def latest_run_dir(output_root: Path) -> Path:

@@ -98,7 +98,9 @@ def _event(
     account: Account,
     idempotency_key: str,
     status: str = TransactionStatus.COMPLETED.value,
+    updated_at: datetime | None = None,
 ) -> TransactionEvent:
+    timestamp = updated_at or datetime(2026, 7, 7, 1, 0, tzinfo=UTC)
     event = TransactionEvent(
         external_event_id=f"ext-{idempotency_key}",
         idempotency_key=idempotency_key,
@@ -107,7 +109,9 @@ def _event(
         amount=1000,
         currency="KRW",
         status=status,
-        occurred_at=datetime(2026, 7, 7, 1, 0, tzinfo=UTC),
+        occurred_at=timestamp,
+        created_at=timestamp,
+        updated_at=timestamp,
     )
     session.add(event)
     session.flush()
@@ -211,7 +215,12 @@ def test_reconcile_creates_cases_for_count_only_issues(
     now = datetime.now(UTC)
     _record(session, "idem-orphan", IdempotencyStatus.COMPLETED, None, now)
     mismatched_account = _account(session, balance=5000)
-    _event(session, mismatched_account, "idem-event-without-ledger")
+    _event(
+        session,
+        mismatched_account,
+        "idem-event-without-ledger",
+        updated_at=now,
+    )
 
     counts, links = service.reconcile(threshold_minutes=5)
 
@@ -222,6 +231,48 @@ def test_reconcile_creates_cases_for_count_only_issues(
     assert RecoveryCaseType.ORPHAN_IDEMPOTENCY.value in case_types
     assert RecoveryCaseType.FAILOVER_IN_DOUBT.value in case_types
     assert RecoveryCaseType.BALANCE_MISMATCH.value in case_types
+
+
+def test_reconcile_does_not_count_fresh_processing_event_without_ledger(
+    session: Session,
+    service: ReconciliationService,
+) -> None:
+    account = _account(session)
+    _event(
+        session,
+        account,
+        "idem-fresh-processing-event",
+        status=TransactionStatus.PROCESSING.value,
+        updated_at=datetime.now(UTC),
+    )
+
+    counts, links = service.reconcile(threshold_minutes=5)
+
+    assert counts.transaction_event_without_ledger_count == 0
+    assert all(
+        link.case_type != RecoveryCaseType.FAILOVER_IN_DOUBT.value for link in links
+    )
+
+
+def test_reconcile_counts_stale_processing_event_without_ledger(
+    session: Session,
+    service: ReconciliationService,
+) -> None:
+    account = _account(session)
+    _event(
+        session,
+        account,
+        "idem-stale-processing-event",
+        status=TransactionStatus.PROCESSING.value,
+        updated_at=datetime.now(UTC) - timedelta(minutes=10),
+    )
+
+    counts, links = service.reconcile(threshold_minutes=5)
+
+    assert counts.transaction_event_without_ledger_count == 1
+    assert RecoveryCaseType.FAILOVER_IN_DOUBT.value in {
+        link.case_type for link in links
+    }
 
 
 def test_ph5_report_artifact_validates_without_sensitive_values(tmp_path: Path) -> None:
@@ -245,3 +296,71 @@ def test_ph5_report_artifact_validates_without_sensitive_values(tmp_path: Path) 
 
     assert summary["sensitive_data_included"] is False
     assert ph5_reconciliation.validate_artifact(run_dir) == []
+
+
+def test_ph5_report_artifact_with_stale_candidate_validates(
+    tmp_path: Path,
+    session: Session,
+    service: ReconciliationService,
+) -> None:
+    now = datetime.now(UTC)
+    _record(
+        session,
+        "idem-stale",
+        IdempotencyStatus.PROCESSING,
+        now - timedelta(minutes=1),
+        now,
+    )
+    candidates = service.detect_stale_processing(threshold_minutes=5)
+    run_dir = tmp_path / "run-20260707-020000"
+    run_dir.mkdir()
+
+    ph5_reconciliation._write_artifact(
+        run_dir,
+        5,
+        candidates,
+        ReconciliationCounts(
+            duplicate_ledger_count=0,
+            duplicate_external_event_count=0,
+            completed_idempotency_without_transaction_event_count=0,
+            transaction_event_without_ledger_count=0,
+            ledger_without_transaction_event_count=0,
+            account_balance_mismatch_count=0,
+            stale_processing_count=len(candidates),
+        ),
+        [],
+    )
+
+    assert ph5_reconciliation.validate_artifact(run_dir) == []
+    assert "idem-stale" not in (run_dir / "stale-processing-summary.json").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_ph5_report_rejects_raw_idempotency_key(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run-20260707-030000"
+    run_dir.mkdir()
+    ph5_reconciliation._write_artifact(
+        run_dir,
+        5,
+        [],
+        ReconciliationCounts(
+            duplicate_ledger_count=0,
+            duplicate_external_event_count=0,
+            completed_idempotency_without_transaction_event_count=0,
+            transaction_event_without_ledger_count=0,
+            ledger_without_transaction_event_count=0,
+            account_balance_mismatch_count=0,
+            stale_processing_count=0,
+        ),
+        [],
+    )
+    (run_dir / "stale-processing-summary.json").write_text(
+        '{"idempotency_key": "raw-key", "sensitive_data_included": false}',
+        encoding="utf-8",
+    )
+
+    errors = ph5_reconciliation.validate_artifact(run_dir)
+
+    assert errors
+    assert any("idempotency_key" in error for error in errors)

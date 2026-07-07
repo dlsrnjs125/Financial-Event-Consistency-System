@@ -6,7 +6,7 @@ import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.domain.idempotency_status import IdempotencyStatus
@@ -202,7 +202,7 @@ class ReconciliationService:
                 self._completed_idempotency_without_transaction_event_count()
             ),
             transaction_event_without_ledger_count=(
-                self._transaction_event_without_ledger_count()
+                self._transaction_event_without_ledger_count(threshold_minutes)
             ),
             ledger_without_transaction_event_count=(
                 self._ledger_without_transaction_event_count()
@@ -396,14 +396,33 @@ class ReconciliationService:
             or 0
         )
 
-    def _transaction_event_without_ledger_count(self) -> int:
+    def _transaction_event_without_ledger_count(self, threshold_minutes: int) -> int:
+        threshold_at = datetime.now(UTC) - timedelta(minutes=threshold_minutes)
+        terminal_without_ledger_statuses = [
+            TransactionStatus.COMPLETED.value,
+            TransactionStatus.CANCELLED.value,
+            TransactionStatus.SETTLED.value,
+        ]
+        in_progress_statuses = [
+            TransactionStatus.RECEIVED.value,
+            TransactionStatus.VALIDATED.value,
+            TransactionStatus.PROCESSING.value,
+        ]
         return int(
             self.session.query(func.count(TransactionEvent.id))
             .outerjoin(
                 LedgerEntry, LedgerEntry.transaction_event_id == TransactionEvent.id
             )
-            .filter(TransactionEvent.status != TransactionStatus.FAILED.value)
             .filter(LedgerEntry.id.is_(None))
+            .filter(
+                or_(
+                    TransactionEvent.status.in_(terminal_without_ledger_statuses),
+                    and_(
+                        TransactionEvent.status.in_(in_progress_statuses),
+                        TransactionEvent.updated_at < threshold_at,
+                    ),
+                )
+            )
             .scalar()
             or 0
         )

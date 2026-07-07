@@ -72,7 +72,13 @@ PH5 count-only checks:
 - account balance mismatch count
 - stale PROCESSING count
 
+`transaction_event_without_ledger_count` is intentionally conservative.
+`COMPLETED`, `CANCELLED`, or `SETTLED` events without a ledger are counted immediately.
+`RECEIVED`, `VALIDATED`, and `PROCESSING` events without a ledger are counted only after the stale threshold.
+`FAILED` events without a ledger are excluded because they can be normal failed attempts.
+
 PH5 does not read raw request bodies and does not output raw account numbers or raw idempotency keys.
+`idempotency_key_hash` is allowed in PH5 artifacts, but raw `idempotency_key`, account numbers, signatures, authorization headers, and request/response bodies are rejected by artifact validation.
 
 ## 6. Recovery Case Linking
 
