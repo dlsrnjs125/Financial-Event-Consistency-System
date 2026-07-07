@@ -11,6 +11,7 @@ from app.domain.exceptions import (
     RecoveryApprovalMissingActor,
     RecoveryApprovalRequired,
     UnsafeAnalyzerResult,
+    UnsupportedAnalyzerClassification,
 )
 from app.domain.recovery import (
     QuarantineTargetType,
@@ -167,3 +168,32 @@ def test_sensitive_analyzer_result_is_refused(
 
     with pytest.raises(UnsafeAnalyzerResult):
         service.create_from_analyzer_result(incident_dir)
+
+
+def test_unsupported_analyzer_classification_is_refused(
+    tmp_path: Path,
+    service: RecoveryCaseService,
+) -> None:
+    incident_dir = tmp_path / "inc-insufficient"
+    incident_dir.mkdir()
+    (incident_dir / "analyzer-result.json").write_text(
+        json.dumps(
+            {
+                "incident_id": incident_dir.name,
+                "analyzer_version": "ph3-mvp-v1",
+                "classification": "INSUFFICIENT_EVIDENCE",
+                "severity_candidate": "SEV2",
+                "confidence_candidate": 0.4,
+                "sensitive_data_included": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(UnsupportedAnalyzerClassification):
+        service.create_from_analyzer_result(incident_dir)
+
+    assert service.list_cases() == []
+    quarantine_service = service.quarantine_service
+    assert quarantine_service is not None
+    assert quarantine_service.list_quarantines() == []

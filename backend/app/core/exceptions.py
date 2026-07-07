@@ -25,6 +25,7 @@ from app.domain.exceptions import (
     TransactionAlreadyCancelled,
     TransactionAlreadySettled,
     UnsafeAnalyzerResult,
+    UnsupportedAnalyzerClassification,
 )
 from app.observability.metrics import record_write_suspended
 from app.schemas.common import ErrorDetail, ErrorResponse
@@ -140,6 +141,7 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
             RecoveryApprovalMissingActor,
             RecoveryApprovalRequired,
             UnsafeAnalyzerResult,
+            UnsupportedAnalyzerClassification,
         ),
     ):
         status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -230,6 +232,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         TransactionAlreadyCancelled,
         TransactionAlreadySettled,
         UnsafeAnalyzerResult,
+        UnsupportedAnalyzerClassification,
     ):
         app.add_exception_handler(exception_type, domain_exception_handler)
     for exception_type in (

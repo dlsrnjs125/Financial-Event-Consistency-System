@@ -28,6 +28,11 @@ PH4 adds:
 
 Sensitive raw values are not stored. Raw account numbers, raw `Idempotency-Key` values, request bodies, HMAC signatures, authorization headers, and secrets remain prohibited.
 
+Active quarantine duplication is guarded twice:
+
+- service-level lookup returns an existing active quarantine for the same target
+- PostgreSQL migration creates a partial unique index on active `target_type` + `target_id`
+
 ## Lifecycle
 
 Recovery case statuses:
@@ -61,6 +66,7 @@ Current limitation:
 - PH1 global write suspend remains the first guard for system-wide PostgreSQL risk
 
 When an account is actively quarantined, the write path returns a domain failure with `TargetQuarantined` and does not include raw account identifiers in the response.
+PH4 account quarantine blocks financial write requests only. Read-only account status or balance queries are not blocked in PH4.
 
 ## CLI
 
@@ -82,16 +88,19 @@ make ph4-quarantines
 
 ## API
 
-PH4 exposes read-only endpoints:
+PH4 keeps recovery/quarantine API disabled by default because recovery case metadata is operationally sensitive.
+Set `RECOVERY_ADMIN_API_ENABLED=true` only for an internal/admin environment.
+When enabled, PH4 exposes read-only endpoints under the internal prefix:
 
 ```text
-GET /api/v1/recovery-cases
-GET /api/v1/recovery-cases/{case_id}
-GET /api/v1/quarantines
-GET /api/v1/quarantines/{quarantine_id}
+GET /api/v1/internal/recovery-cases
+GET /api/v1/internal/recovery-cases/{case_id}
+GET /api/v1/internal/quarantines
+GET /api/v1/internal/quarantines/{quarantine_id}
 ```
 
 Approval, rejection, and quarantine release stay CLI-only in this phase.
+Execution state transition CLI commands are intentionally not exposed in PH4; execution guard is verified at service-test level, and real recovery action execution remains PH5+ scope.
 
 ## Troubleshooting
 
@@ -99,9 +108,16 @@ Approval, rejection, and quarantine release stay CLI-only in this phase.
 
 If `sensitive_data_included` is not `false`, PH4 refuses to create a recovery case. Regenerate the PH2/PH3 artifact after removing unsafe evidence.
 
+If `classification` is not one of the PH4-supported recovery case types, PH4 also refuses ingestion instead of converting it to a consistency issue. `INSUFFICIENT_EVIDENCE`, `ARTIFACT_SANITIZATION_RISK`, and `UNKNOWN_INCIDENT` should stay artifact/analyzer review work, not recovery cases.
+
 ### Duplicate Create Returns Existing Case
 
 Repeated `create-from-analysis` calls for the same source key return the existing case. This is expected and protects against duplicate recovery work.
+
+### Active Quarantine Duplicate Blocked By DB
+
+PostgreSQL enforces one active quarantine per target through `uq_quarantine_records_active_target`.
+If concurrent operators race to create the same active quarantine, one insert is rejected by the database instead of creating ambiguous active quarantine records.
 
 ### Quarantine Blocks Writes
 

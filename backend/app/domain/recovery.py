@@ -2,6 +2,8 @@
 
 from enum import Enum
 
+from app.domain.exceptions import UnsupportedAnalyzerClassification
+
 
 class RecoveryCaseStatus(str, Enum):
     OPEN = "OPEN"
@@ -83,8 +85,8 @@ ALLOWED_RECOVERY_TRANSITIONS: dict[RecoveryCaseStatus, set[RecoveryCaseStatus]] 
 def case_type_from_classification(classification: str) -> RecoveryCaseType:
     try:
         return RecoveryCaseType(classification)
-    except ValueError:
-        return RecoveryCaseType.CONSISTENCY_ISSUE_CANDIDATE
+    except ValueError as exc:
+        raise UnsupportedAnalyzerClassification(classification) from exc
 
 
 def proposed_action_for_case_type(

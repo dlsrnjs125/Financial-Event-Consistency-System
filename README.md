@@ -54,6 +54,7 @@ PH1에서는 PostgreSQL write path가 불가능할 때 신규 금융 write를 `5
 PH2에서는 PostgreSQL 장애 중 DB에 의존하지 않는 incident artifact bundle과 sanitized report skeleton을 추가했다.
 PH3에서는 PH2 incident artifact를 기반으로 deterministic rule-based incident analyzer MVP를 추가했다.
 PH4에서는 PH3 analyzer 결과를 recovery case로 등록하고 account quarantine write guard와 수동 승인 전 실행 차단을 추가했다.
+Recovery/quarantine read-only API는 운영 민감 정보 보호를 위해 기본 비활성화하고, 내부/admin 환경에서만 opt-in으로 노출한다.
 상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/45-*` 문서에서 관리한다.
 
 ## 5. Final Verification Summary

@@ -108,6 +108,15 @@ class UnsafeAnalyzerResult(Exception):
         super().__init__("Analyzer result contains sensitive data metadata")
 
 
+class UnsupportedAnalyzerClassification(Exception):
+    def __init__(self, classification: str) -> None:
+        self.classification = classification
+        super().__init__(
+            "Analyzer classification is not supported for PH4 recovery case "
+            f"creation: {classification}"
+        )
+
+
 class QuarantineRecordNotFound(Exception):
     def __init__(self) -> None:
         super().__init__("Quarantine record not found")

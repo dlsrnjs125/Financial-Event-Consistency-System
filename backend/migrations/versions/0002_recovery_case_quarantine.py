@@ -112,6 +112,13 @@ def upgrade() -> None:
         ["active", "target_type", "target_id"],
     )
     op.create_index(
+        "uq_quarantine_records_active_target",
+        "quarantine_records",
+        ["target_type", "target_id"],
+        unique=True,
+        postgresql_where=sa.text("active = true"),
+    )
+    op.create_index(
         "ix_quarantine_records_quarantine_id",
         "quarantine_records",
         ["quarantine_id"],
@@ -125,6 +132,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index(
+        "uq_quarantine_records_active_target",
+        table_name="quarantine_records",
+    )
     op.drop_index(
         "ix_quarantine_records_source_recovery_case_id",
         table_name="quarantine_records",

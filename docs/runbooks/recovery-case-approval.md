@@ -34,6 +34,7 @@ python3 scripts/ph4_recovery_case.py release-quarantine --quarantine-id qr-... -
 ```
 
 PH4는 승인 상태와 quarantine lifecycle을 기록하지만 compensation ledger 생성이나 balance correction은 실행하지 않는다.
+Recovery/quarantine read-only API는 기본 비활성화되어 있으며, 내부/admin 환경에서 `RECOVERY_ADMIN_API_ENABLED=true`로 명시적으로 켤 때만 `/api/v1/internal/*` 경로에 노출한다.
 
 ## 2. 예상 원인
 
