@@ -63,6 +63,7 @@ help: ## Show this help message
 	@echo "  make ph4-recovery-case-from-latest # Create PH4 recovery case from latest PH3 analysis"
 	@echo "  make ph5-reconciliation-run # Run PH5 stale detector and reconciliation"
 	@echo "  make ph6-ai-context-demo # Generate and validate PH6 AI-safe context"
+	@echo "  make ph7-hmac-rotation-demo # Generate PH7 sanitized HMAC rotation evidence"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -262,6 +263,7 @@ scripts-check: ## Check shell script syntax
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph4_recovery_case.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph5_reconciliation.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph6_ai_context.py
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph7_hmac_rotation_drill.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -287,6 +289,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ph4_recovery_case.py
 	test -x scripts/ph5_reconciliation.py
 	test -x scripts/ph6_ai_context.py
+	test -x scripts/ph7_hmac_rotation_drill.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -574,6 +577,24 @@ ph6-ai-context-recovery: ph6-ai-context-sanitize-latest-recovery-case ## Alias f
 
 .PHONY: ops14-ai-context
 ops14-ai-context: ph6-ai-context-demo ## Alias for PH6 AI-safe context demo
+
+.PHONY: ph7-hmac-rotation-demo
+ph7-hmac-rotation-demo: ## Generate PH7 sanitized partner HMAC rotation evidence
+	@python3 scripts/ph7_hmac_rotation_drill.py demo
+
+.PHONY: ph7-hmac-rotation-validate
+ph7-hmac-rotation-validate: ## Validate PH7 HMAC rotation report for required cases and redaction
+	@python3 scripts/ph7_hmac_rotation_drill.py validate --input reports/security/ph7-hmac-rotation/sample-hmac-rotation-report.json
+
+.PHONY: ph7-hmac-rotation-smoke
+ph7-hmac-rotation-smoke: ## Smoke test PH7 current/previous/revoked/disabled/skew/nonce/signature cases
+	@python3 scripts/ph7_hmac_rotation_drill.py smoke
+
+.PHONY: ph7-security-check
+ph7-security-check: ph7-hmac-rotation-validate security-log-check ## Run PH7 report validation plus security log scan
+
+.PHONY: ops15-hmac-rotation
+ops15-hmac-rotation: ph7-hmac-rotation-demo ## Alias for PH7 HMAC rotation evidence
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status

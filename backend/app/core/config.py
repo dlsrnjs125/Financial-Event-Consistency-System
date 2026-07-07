@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     hmac_enabled: bool = True
     hmac_allowed_skew_seconds: int = 300
     external_client_secrets: str = ""
+    enable_partner_hmac_auth: bool = False
+    partner_hmac_timestamp_skew_seconds: int = 300
+    partner_hmac_allow_next_dry_run: bool = False
+    partner_hmac_secrets: str = ""
     log_level: str = "INFO"
     metrics_enabled: bool = True
     write_suspend_state_file: str = "reports/runtime/write-suspend-state.json"
@@ -48,6 +52,8 @@ class Settings(BaseSettings):
         "redis_lock_enabled",
         "idempotency_cache_enabled",
         "hmac_enabled",
+        "enable_partner_hmac_auth",
+        "partner_hmac_allow_next_dry_run",
         "recovery_admin_api_enabled",
         mode="before",
     )
