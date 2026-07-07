@@ -65,6 +65,7 @@ reports/runtime/
 reports/production-hardening/
 reports/incidents/inc-*/
 reports/recovery-cases/rc-*/
+reports/reconciliation/run-*/
 reports/**/raw/
 reports/**/tmp/
 *.har
@@ -87,6 +88,9 @@ backups/postgres/*.log
 !reports/recovery-cases/README.md
 !reports/recovery-cases/sample-recovery-case.json
 !reports/recovery-cases/sample-quarantine-record.json
+!reports/reconciliation/README.md
+!reports/reconciliation/sample-reconciliation-summary.json
+!reports/reconciliation/sample-ph5-report.md
 
 # Docker
 docker-compose.override.yml

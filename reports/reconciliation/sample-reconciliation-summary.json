@@ -1,0 +1,17 @@
+{
+  "consistency_counts": {
+    "account_balance_mismatch_count": 0,
+    "completed_idempotency_without_transaction_event_count": 0,
+    "duplicate_external_event_count": 0,
+    "duplicate_ledger_count": 0,
+    "ledger_without_transaction_event_count": 0,
+    "stale_processing_count": 0,
+    "transaction_event_without_ledger_count": 0
+  },
+  "generated_at": "2026-07-07T00:00:00+00:00",
+  "recovery_case_link_count": 0,
+  "run_id": "sample-run",
+  "sensitive_data_included": false,
+  "stale_processing_count": 0,
+  "threshold_minutes": 5
+}

@@ -12,8 +12,8 @@ Severity: 단일 event는 SEV2, 다수 event 또는 failover window는 SEV1
 - event/ledger/account/idempotency 대조
 - 자동 완료, 자동 재처리, recovery case 생성 중 하나로 분기
 
-PH4 기준에서는 recovery case/quarantine 기반과 manual approval guard만 구현되어 있다.
-stale PROCESSING detector와 reconciliation job은 PH5 범위다.
+PH5 기준에서는 stale PROCESSING detector와 count-only reconciliation job이 구현되어 있다.
+탐지 결과는 recovery case로 연결되지만, 자동 완료/실패 처리나 금전 보정은 실행하지 않는다.
 
 수동 승인 필요 여부: 일부 반영 흔적 또는 in-doubt 상태에서는 필요
 
@@ -22,7 +22,16 @@ stale PROCESSING detector와 reconciliation job은 PH5 범위다.
 Evidence 경로:
 
 ```text
-reports/incidents/{incident_id}/pending-recovery-cases.json
+reports/reconciliation/{run_id}/
+```
+
+PH5 운영 명령:
+
+```bash
+make ph5-detect-stale-processing
+make ph5-reconcile
+make ph5-reconciliation-run
+make ph5-reconciliation-validate
 ```
 
 ## 2. 예상 원인
@@ -86,8 +95,8 @@ reports/incidents/{incident_id}/pending-recovery-cases.json
 
 - locked_until 기준 조정
 - timeout/retry policy 문서화
-- stale detector와 recovery case 자동 생성 구현
-- PH5에서 stale PROCESSING detector와 reconciliation job 구현
+- stale detector threshold 운영값 조정
+- recovery case 처리 후 reconciliation 재실행 기준 문서화
 
 ## 11. README/블로그 기록 문장
 
