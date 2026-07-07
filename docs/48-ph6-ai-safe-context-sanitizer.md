@@ -43,7 +43,7 @@ Excluded:
 | Level | Examples | PH6 Policy |
 | --- | --- | --- |
 | Level 0 | raw account number, raw idempotency key, raw request body, Authorization, HMAC signature, client secret | prohibited |
-| Level 1 | masked account number, masked idempotency key, masked client id | conditionally allowed only for operator traceability |
+| Level 1 | masked account number, masked idempotency key, masked client id, masked_target_id | conditionally allowed only for operator traceability |
 | Level 2 | account_token, event_token, idempotency_key_hash, request_hash | allowed when needed |
 | Level 3 | consistency counts, metric summaries, severity/classification/status | preferred |
 
@@ -130,6 +130,7 @@ make ph6-ai-context-demo
 make ph6-ai-context-validate
 make ph6-ai-context-sanitize-latest
 make ph6-ai-context-sanitize-latest-recovery-case
+make ph6-ai-context-recovery
 ```
 
 ## 8. Report Artifact Structure

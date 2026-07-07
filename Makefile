@@ -569,6 +569,9 @@ ph6-ai-context-sanitize-latest: ## Sanitize latest PH2 incident artifact into PH
 ph6-ai-context-sanitize-latest-recovery-case: ## Sanitize latest PH4 recovery case evidence into PH6 AI-safe context
 	@python3 scripts/ph6_ai_context.py sanitize-latest --source recovery-cases
 
+.PHONY: ph6-ai-context-recovery
+ph6-ai-context-recovery: ph6-ai-context-sanitize-latest-recovery-case ## Alias for PH6 recovery case AI-safe context
+
 .PHONY: ops14-ai-context
 ops14-ai-context: ph6-ai-context-demo ## Alias for PH6 AI-safe context demo
 

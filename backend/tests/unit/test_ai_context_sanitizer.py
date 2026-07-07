@@ -1,4 +1,6 @@
+import importlib.util
 import json
+from pathlib import Path
 
 import pytest
 
@@ -6,6 +8,14 @@ from app.security.ai_context_sanitizer import (
     sanitize_context,
     validate_sanitized_context,
 )
+
+ROOT_DIR = Path(__file__).resolve().parents[3]
+PH6_SPEC = importlib.util.spec_from_file_location(
+    "ph6_ai_context", ROOT_DIR / "scripts/ph6_ai_context.py"
+)
+ph6_ai_context = importlib.util.module_from_spec(PH6_SPEC)
+assert PH6_SPEC and PH6_SPEC.loader
+PH6_SPEC.loader.exec_module(ph6_ai_context)
 
 
 def test_allowlisted_fields_are_kept() -> None:
@@ -156,3 +166,65 @@ def test_list_root_is_supported() -> None:
 def test_malformed_json_is_handled_by_caller() -> None:
     with pytest.raises(json.JSONDecodeError):
         json.loads('{"incident_id": ')
+
+
+def test_latest_source_dir_supports_recovery_cases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recovery_root = tmp_path / "reports" / "recovery-cases"
+    old_case = recovery_root / "rc-20260707-010000"
+    old_case.mkdir(parents=True)
+    (old_case / "recovery-case.json").write_text(
+        '{"case_type": "STALE_PROCESSING"}',
+        encoding="utf-8",
+    )
+    sample_case = recovery_root / "sample-recovery-case.json"
+    sample_case.write_text(
+        '{"case_type": "STALE_PROCESSING", "masked_target_id": "acct-****-001"}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(ph6_ai_context, "ROOT_DIR", tmp_path)
+
+    assert ph6_ai_context._latest_source_dir("recovery-cases") == sample_case
+
+
+def test_sanitize_latest_recovery_case_writes_valid_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recovery_root = tmp_path / "reports" / "recovery-cases"
+    recovery_root.mkdir(parents=True)
+    (recovery_root / "sample-recovery-case.json").write_text(
+        json.dumps(
+            {
+                "case_type": "STALE_PROCESSING",
+                "classification": "STALE_PROCESSING_DETECTED",
+                "masked_target_id": "acct-****-001",
+                "account_no": "ACC-001",
+                "idempotency_key": "raw-idem-key",
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_root = tmp_path / "reports" / "ai-context"
+
+    monkeypatch.setattr(ph6_ai_context, "ROOT_DIR", tmp_path)
+    args = type(
+        "Args",
+        (),
+        {
+            "command": "sanitize-latest",
+            "source": "recovery-cases",
+            "output_dir": output_root,
+        },
+    )()
+
+    result = ph6_ai_context._handle(args)
+
+    payload = json.loads(Path(result["output"]).read_text(encoding="utf-8"))
+    assert result["validation_errors"] == []
+    assert payload["sanitized_context"]["masked_target_id"] == "acct-****-001"
+    assert "account_no" not in payload["sanitized_context"]
+    assert "idempotency_key" not in payload["sanitized_context"]

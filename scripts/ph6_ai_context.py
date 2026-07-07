@@ -147,9 +147,10 @@ def _latest_source_dir(source: str) -> Path:
         candidates = sorted(path for path in root.glob("inc-*") if path.is_dir())
     elif source == "recovery-cases":
         root = ROOT_DIR / "reports/recovery-cases"
-        candidates = sorted(path for path in root.glob("rc-*") if path.is_dir())
-        candidates.extend(
-            sorted(path for path in root.glob("*.json") if path.is_file())
+        candidates = sorted(
+            [path for path in root.glob("rc-*") if path.is_dir()]
+            + [path for path in root.glob("*.json") if path.is_file()],
+            key=lambda path: path.name,
         )
     else:
         root = ROOT_DIR / "reports/reconciliation"
