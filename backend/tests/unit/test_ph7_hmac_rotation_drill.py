@@ -1,8 +1,14 @@
 """Unit tests for PH7 HMAC rotation drill validation."""
 
 import copy
+import sys
+from pathlib import Path
 
-from scripts import ph7_hmac_rotation_drill
+ROOT_DIR = Path(__file__).resolve().parents[3]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from scripts import ph7_hmac_rotation_drill  # noqa: E402
 
 
 def test_validate_report_payload_rejects_unexpected_case_keys():
