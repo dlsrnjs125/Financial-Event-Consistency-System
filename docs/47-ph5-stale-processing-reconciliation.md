@@ -156,4 +156,5 @@ This is expected and keeps recovery review idempotent.
 ## 11. Limits And Next Steps
 
 PH5 is detection and evidence only.
-Execution of recovery actions, compensation ledger creation, automatic stale resolution, and AI-safe context generation are future scopes.
+Execution of recovery actions, compensation ledger creation, and automatic stale resolution are future scopes.
+AI-safe context generation is implemented in PH6 and documented in [48-ph6-ai-safe-context-sanitizer.md](48-ph6-ai-safe-context-sanitizer.md).

@@ -62,6 +62,7 @@ help: ## Show this help message
 	@echo "  make ph3-incident-analyze # Analyze latest PH2 incident artifact"
 	@echo "  make ph4-recovery-case-from-latest # Create PH4 recovery case from latest PH3 analysis"
 	@echo "  make ph5-reconciliation-run # Run PH5 stale detector and reconciliation"
+	@echo "  make ph6-ai-context-demo # Generate and validate PH6 AI-safe context"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -260,6 +261,7 @@ scripts-check: ## Check shell script syntax
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph3_incident_analyzer.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph4_recovery_case.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph5_reconciliation.py
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph6_ai_context.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -284,6 +286,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ph3_incident_analyzer.py
 	test -x scripts/ph4_recovery_case.py
 	test -x scripts/ph5_reconciliation.py
+	test -x scripts/ph6_ai_context.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -548,6 +551,22 @@ ph5-reconciliation-validate: ## Validate latest PH5 reconciliation artifact
 
 .PHONY: ops13-reconciliation
 ops13-reconciliation: ph5-reconciliation-run ## Alias for PH5 reconciliation run
+
+# Production Hardening Phase 6 AI-safe Context
+.PHONY: ph6-ai-context-demo
+ph6-ai-context-demo: ## Generate and validate PH6 AI-safe context demo artifact
+	@python3 scripts/ph6_ai_context.py demo
+
+.PHONY: ph6-ai-context-validate
+ph6-ai-context-validate: ## Validate curated PH6 AI-safe context sample
+	@python3 scripts/ph6_ai_context.py validate --input reports/ai-context/sample-ai-context.json
+
+.PHONY: ph6-ai-context-sanitize-latest
+ph6-ai-context-sanitize-latest: ## Sanitize latest PH2 incident artifact into PH6 AI-safe context
+	@python3 scripts/ph6_ai_context.py sanitize-latest --source incidents
+
+.PHONY: ops14-ai-context
+ops14-ai-context: ph6-ai-context-demo ## Alias for PH6 AI-safe context demo
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status

@@ -1,0 +1,30 @@
+{
+  "redaction_summary": {
+    "removed_field_count": 2,
+    "removed_fields": [
+      {
+        "path": "$.raw_request_body",
+        "reason": "sensitive_field_name"
+      },
+      {
+        "path": "$.authorization",
+        "reason": "sensitive_field_name"
+      }
+    ]
+  },
+  "sanitized_context": {
+    "account_token": "acctok_sample_001",
+    "classification": "STALE_PROCESSING_DETECTED",
+    "consistency_counts": {
+      "duplicate_external_event_count": 0,
+      "duplicate_ledger_count": 0,
+      "stale_processing_count": 1
+    },
+    "idempotency_key_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "incident_id": "inc-sample",
+    "run_id": "ph6-sample",
+    "severity": "SEV2",
+    "status": "WAITING_APPROVAL"
+  },
+  "sensitive_data_included": false
+}
