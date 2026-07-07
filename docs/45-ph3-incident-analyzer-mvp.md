@@ -16,6 +16,7 @@ PH3 output is advisory only:
 - recommended runbooks
 
 PH3 does not resolve incidents, approve write resume, execute DB failover, call AI APIs, or create recovery cases.
+PH4 consumes PH3 output through `scripts/ph4_recovery_case.py` and stores recovery cases under manual approval guard.
 
 ## 2. PH1/PH2 Connection
 

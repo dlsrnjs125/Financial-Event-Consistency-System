@@ -85,6 +85,14 @@ def test_metrics_returns_prometheus_format():
     assert "app_info" in response.text
 
 
+def test_recovery_admin_api_is_disabled_by_default():
+    client = TestClient(app)
+
+    response = client.get("/api/v1/recovery-cases")
+
+    assert response.status_code == 404
+
+
 def test_common_http_error_response_contains_error_shape():
     @app.get("/__test_http_error")
     def raise_http_error():

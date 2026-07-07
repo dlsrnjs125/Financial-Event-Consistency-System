@@ -64,6 +64,7 @@ logs/
 reports/runtime/
 reports/production-hardening/
 reports/incidents/inc-*/
+reports/recovery-cases/rc-*/
 reports/**/raw/
 reports/**/tmp/
 *.har
@@ -83,6 +84,9 @@ backups/postgres/*.log
 !reports/incidents/sample-sanitized-report.md
 !reports/incidents/sample-analyzer-result.json
 !reports/incidents/sample-incident-analysis.md
+!reports/recovery-cases/README.md
+!reports/recovery-cases/sample-recovery-case.json
+!reports/recovery-cases/sample-quarantine-record.json
 
 # Docker
 docker-compose.override.yml

@@ -60,6 +60,7 @@ help: ## Show this help message
 	@echo "  make ph1-db-down-drill # Run PH1 PostgreSQL-down write-suspend drill"
 	@echo "  make ph2-incident-artifact # Create PH2 sanitized incident artifact"
 	@echo "  make ph3-incident-analyze # Analyze latest PH2 incident artifact"
+	@echo "  make ph4-recovery-case-from-latest # Create PH4 recovery case from latest PH3 analysis"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -256,6 +257,7 @@ scripts-check: ## Check shell script syntax
 	bash -n scripts/ph1_db_down_drill.sh
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph2_incident_artifact.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph3_incident_analyzer.py
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph4_recovery_case.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -278,6 +280,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ph1_db_down_drill.sh
 	test -x scripts/ph2_incident_artifact.py
 	test -x scripts/ph3_incident_analyzer.py
+	test -x scripts/ph4_recovery_case.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -506,6 +509,22 @@ ph3-db-down-incident-analysis: docker-check ## Run PH2 DB-down artifact flow, th
 
 .PHONY: ops11-incident-analyze
 ops11-incident-analyze: ph3-incident-analyze ## Alias for PH3 rule-based incident analyzer MVP
+
+# Production Hardening Phase 4 Recovery Case / Quarantine
+.PHONY: ph4-recovery-case-from-latest
+ph4-recovery-case-from-latest: ## Create a PH4 recovery case from the latest PH3 analysis
+	@python3 scripts/ph4_recovery_case.py create-from-analysis --latest
+
+.PHONY: ph4-recovery-cases
+ph4-recovery-cases: ## List PH4 recovery cases
+	@python3 scripts/ph4_recovery_case.py list-cases
+
+.PHONY: ph4-quarantines
+ph4-quarantines: ## List PH4 quarantine records
+	@python3 scripts/ph4_recovery_case.py list-quarantines
+
+.PHONY: ops12-recovery-case
+ops12-recovery-case: ph4-recovery-case-from-latest ## Alias for PH4 recovery case creation
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status

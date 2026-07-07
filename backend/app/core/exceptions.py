@@ -12,12 +12,20 @@ from app.domain.exceptions import (
     InsufficientBalance,
     InvalidIdempotencyKey,
     InvalidIdempotencyState,
+    InvalidRecoveryCaseTransition,
     InvalidStateTransition,
     InvalidTransactionEvent,
     MissingIdempotencyKey,
     OriginalTransactionNotFound,
+    QuarantineRecordNotFound,
+    RecoveryApprovalMissingActor,
+    RecoveryApprovalRequired,
+    RecoveryCaseNotFound,
+    TargetQuarantined,
     TransactionAlreadyCancelled,
     TransactionAlreadySettled,
+    UnsafeAnalyzerResult,
+    UnsupportedAnalyzerClassification,
 )
 from app.observability.metrics import record_write_suspended
 from app.schemas.common import ErrorDetail, ErrorResponse
@@ -110,10 +118,13 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
         code = "INVALID_IDEMPOTENCY_KEY"
     elif isinstance(exc, (AccountNotFound, OriginalTransactionNotFound)):
         status_code = status.HTTP_404_NOT_FOUND
+    elif isinstance(exc, (RecoveryCaseNotFound, QuarantineRecordNotFound)):
+        status_code = status.HTTP_404_NOT_FOUND
     elif isinstance(
         exc,
         (
             IdempotencyConflict,
+            TargetQuarantined,
             TransactionAlreadyCancelled,
             TransactionAlreadySettled,
         ),
@@ -124,8 +135,13 @@ async def domain_exception_handler(request: Request, exc: Exception) -> JSONResp
         (
             InsufficientBalance,
             InvalidIdempotencyState,
+            InvalidRecoveryCaseTransition,
             InvalidStateTransition,
             InvalidTransactionEvent,
+            RecoveryApprovalMissingActor,
+            RecoveryApprovalRequired,
+            UnsafeAnalyzerResult,
+            UnsupportedAnalyzerClassification,
         ),
     ):
         status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -200,6 +216,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     for exception_type in (
         AccountNotFound,
         IdempotencyConflict,
+        InvalidRecoveryCaseTransition,
         InsufficientBalance,
         InvalidIdempotencyKey,
         InvalidIdempotencyState,
@@ -207,8 +224,15 @@ def register_exception_handlers(app: FastAPI) -> None:
         InvalidTransactionEvent,
         MissingIdempotencyKey,
         OriginalTransactionNotFound,
+        QuarantineRecordNotFound,
+        RecoveryApprovalMissingActor,
+        RecoveryApprovalRequired,
+        RecoveryCaseNotFound,
+        TargetQuarantined,
         TransactionAlreadyCancelled,
         TransactionAlreadySettled,
+        UnsafeAnalyzerResult,
+        UnsupportedAnalyzerClassification,
     ):
         app.add_exception_handler(exception_type, domain_exception_handler)
     for exception_type in (

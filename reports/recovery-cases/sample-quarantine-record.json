@@ -1,0 +1,9 @@
+{
+  "active": true,
+  "quarantine_id": "qr-sample",
+  "reason": "PH3 analyzer detected consistency issue candidate",
+  "sensitive_data_included": false,
+  "source_incident_id": "sample-incident",
+  "target_id": "sample-incident",
+  "target_type": "GLOBAL_WRITE"
+}

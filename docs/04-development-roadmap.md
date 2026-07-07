@@ -2,9 +2,9 @@
 
 ## 현재 진행 상태
 
-- 현재 위치: **Production Hardening PH3 구현 및 검증**
+- 현재 위치: **Production Hardening PH4 구현 및 검증**
 - GitHub 초기 Push: **완료**
-- 다음 단계: **PH-Impl 4 Recovery Case / Quarantine / Manual Approval 범위 검토**
+- 다음 단계: **PH-Impl 5 Stale PROCESSING Detector & Reconciliation Job 범위 검토**
 
 Development Phase 8에서는 Prometheus custom metrics, trace_id/request_id context middleware, 구조화 로그, Grafana dashboard 초안, alert rule 초안, 로컬 Prometheus/Grafana provisioning을 구현했다.
 현재 추적은 `X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적이다.
@@ -24,6 +24,7 @@ Production Hardening Track에서는 PostgreSQL 자체 장애, write suspend/resu
 PH1에서는 PostgreSQL write path가 불가능할 때 신규 금융 write를 성공으로 응답하지 않도록 runtime write suspend, `503` + `Retry-After`, local artifact, operator resume CLI, DB-down drill script를 구현한다.
 PH2에서는 PostgreSQL down 중 DB-backed incident table에 즉시 기록할 수 없는 문제를 피하기 위해 `reports/incidents/{incident_id}/` out-of-band artifact bundle과 sanitized report skeleton을 구현한다.
 PH3에서는 PH2 artifact를 입력으로 deterministic rule-based Incident Analyzer MVP를 실행해 classification, severity/confidence candidate, primary signals, manual action 후보를 생성한다.
+PH4에서는 PH3 analyzer result를 recovery case로 idempotent하게 등록하고, account quarantine guard와 수동 승인 전 recovery action 실행 차단을 구현한다.
 현재 Prometheus scrape 대상은 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 12 이후 운영 관측 보강 항목이다.
 
 ## 개발 Phase
@@ -45,7 +46,7 @@ PH3에서는 PH2 artifact를 입력으로 deterministic rule-based Incident Anal
 | 완료 | 12. Blue-Green 배포와 Rollback 시뮬레이션 | 검증 후 전환/복구 | Blue/Green, Nginx snippet 전환, rollback script, deployment smoke | Green 검증 후 전환, 문제 시 Blue 복귀 |
 | 완료 | Ops Phase 5. Failure Recovery Runbook Drill | Redis/API/PostgreSQL 장애 복구 절차 자동화 | `scripts/ops5_failure_recovery_drill.sh`, Ops5 report, runbook doc, Makefile `ops5-*` | 장애 주입, 복구, health/ready/smoke/consistency, duration evidence 기록 |
 | 완료 | Ops Phase 6. Alerting & Incident Response Runbook | 장애 탐지 기준과 운영자 대응 절차 문서화 | alert rule, Ops6 report, runbook doc, blog, Makefile `ops6-*` | alert rule 문법 검증, inventory 문서화, CI Gate 포함 |
-| 진행 | Production Hardening Track | 운영 장애 판단, 데이터 보호, 복구 승인 절차 설계와 PH1~PH3 안전장치 구현 | docs/35~45, runbook, write suspend service/script, incident artifact/analyzer script | PH3 analyzer result와 incident analysis draft 생성 가능 |
+| 진행 | Production Hardening Track | 운영 장애 판단, 데이터 보호, 복구 승인 절차 설계와 PH1~PH4 안전장치 구현 | docs/35~46, runbook, write suspend service/script, incident artifact/analyzer/recovery case script | PH3 analyzer result 기반 recovery case 생성 및 quarantine 조회 가능 |
 | 진행 | Final. 문서와 블로그 정리 | 문제 정의, 장애 재현, 측정, 운영 검증 기록 정리 | README, docs, blog 12편 | Phase 12 완료 기준 문서 정합성 확보 |
 
 ## 개발 로드맵 관리 기준

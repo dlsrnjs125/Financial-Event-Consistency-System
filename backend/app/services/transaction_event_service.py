@@ -17,10 +17,12 @@ from app.domain.exceptions import (
     InsufficientBalance,
     InvalidTransactionEvent,
     OriginalTransactionNotFound,
+    TargetQuarantined,
     TransactionAlreadyCancelled,
     TransactionAlreadySettled,
 )
 from app.domain.idempotency import IdempotencyDecision
+from app.domain.recovery import QuarantineTargetType
 from app.domain.transaction_result import TransactionProcessingResult
 from app.domain.transaction_status import TransactionStatus
 from app.models.ledger_entry import LedgerEntry
@@ -39,6 +41,7 @@ from app.schemas.transaction_event import TransactionEventCreateRequest
 from app.security.masking import mask_account_no, mask_idempotency_key
 from app.services.idempotency_service import IdempotencyService
 from app.services.ledger_service import LedgerService
+from app.services.quarantine_service import QuarantineService
 from app.services.transaction_state_service import TransactionStateService
 
 logger = logging.getLogger(__name__)
@@ -54,6 +57,7 @@ class TransactionEventService:
         ledger_service: LedgerService,
         transaction_state_service: TransactionStateService,
         redis_lock: RedisLock | None = None,
+        quarantine_service: QuarantineService | None = None,
     ) -> None:
         self.session = session
         self.idempotency_service = idempotency_service
@@ -62,6 +66,7 @@ class TransactionEventService:
         self.ledger_service = ledger_service
         self.transaction_state_service = transaction_state_service
         self.redis_lock = redis_lock
+        self.quarantine_service = quarantine_service
         self._active_event: TransactionEvent | None = None
 
     def process(
@@ -249,6 +254,11 @@ class TransactionEventService:
         )
         if account is None:
             raise AccountNotFound()
+        if self.quarantine_service is not None:
+            self.quarantine_service.assert_not_quarantined(
+                QuarantineTargetType.ACCOUNT,
+                str(account.id),
+            )
 
         existing_event = self.transaction_event_repository.get_by_external_event_id(
             request.external_event_id
@@ -417,6 +427,8 @@ class TransactionEventService:
             ),
         ):
             return 409
+        if isinstance(exc, TargetQuarantined):
+            return 409
         if isinstance(exc, (InsufficientBalance, InvalidTransactionEvent)):
             return 422
         return 500
@@ -445,6 +457,7 @@ class TransactionEventService:
                 InsufficientBalance,
                 InvalidTransactionEvent,
                 OriginalTransactionNotFound,
+                TargetQuarantined,
                 TransactionAlreadyCancelled,
                 TransactionAlreadySettled,
             ),

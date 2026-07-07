@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     metrics_enabled: bool = True
     write_suspend_state_file: str = "reports/runtime/write-suspend-state.json"
     write_suspend_retry_after_seconds: int = 30
+    recovery_admin_api_enabled: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -47,6 +48,7 @@ class Settings(BaseSettings):
         "redis_lock_enabled",
         "idempotency_cache_enabled",
         "hmac_enabled",
+        "recovery_admin_api_enabled",
         mode="before",
     )
     @classmethod

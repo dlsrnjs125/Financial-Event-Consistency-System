@@ -19,8 +19,22 @@ Severity: recovery case type에 따라 SEV1 또는 SEV2
 Evidence 경로:
 
 ```text
-reports/incidents/{incident_id}/pending-recovery-cases.json
+reports/incidents/{incident_id}/analyzer-result.json
+reports/recovery-cases/
 ```
+
+PH4 구현 명령:
+
+```bash
+make ph4-recovery-case-from-latest
+make ph4-recovery-cases
+make ph4-quarantines
+python3 scripts/ph4_recovery_case.py approve --case-id rc-... --approved-by operator-a --reason "reviewed"
+python3 scripts/ph4_recovery_case.py release-quarantine --quarantine-id qr-... --released-by operator-a --reason "review complete"
+```
+
+PH4는 승인 상태와 quarantine lifecycle을 기록하지만 compensation ledger 생성이나 balance correction은 실행하지 않는다.
+Recovery/quarantine read-only API는 기본 비활성화되어 있으며, 내부/admin 환경에서 `RECOVERY_ADMIN_API_ENABLED=true`로 명시적으로 켤 때만 `/api/v1/internal/*` 경로에 노출한다.
 
 ## 2. 예상 원인
 
