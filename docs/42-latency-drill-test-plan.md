@@ -448,6 +448,9 @@ make latency-report
 
 ## 16. 후속 구현 후보
 
+PH9 production hardening drill report는 아래 latency drill 항목을 follow-up candidate로만 연결한다.
+PH9에서 `make k6-latency-*` 계열 명령이나 latency analyzer가 구현 완료된 것은 아니다.
+
 - FastAPI middleware 기반 request phase timer
 - SQLAlchemy DB query/pool wait timer
 - Redis operation timer

@@ -65,6 +65,7 @@ help: ## Show this help message
 	@echo "  make ph6-ai-context-demo # Generate and validate PH6 AI-safe context"
 	@echo "  make ph7-hmac-rotation-demo # Generate PH7 sanitized HMAC rotation evidence"
 	@echo "  make ph8-ha-queue-decision-demo # Generate PH8 HA/Queue decision evidence"
+	@echo "  make ph9-hardening-drill-demo # Generate PH9 hardening drill catalog"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -266,6 +267,7 @@ scripts-check: ## Check shell script syntax
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph6_ai_context.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph7_hmac_rotation_drill.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph8_ha_queue_decision_matrix.py
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph9_production_hardening_drill.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -293,6 +295,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ph6_ai_context.py
 	test -x scripts/ph7_hmac_rotation_drill.py
 	test -x scripts/ph8_ha_queue_decision_matrix.py
+	test -x scripts/ph9_production_hardening_drill.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -612,6 +615,24 @@ ph8-architecture-check: ph8-ha-queue-decision-validate security-log-check script
 
 .PHONY: ops16-ha-queue-decision
 ops16-ha-queue-decision: ph8-ha-queue-decision-demo ## Alias for PH8 HA/Queue decision evidence
+
+.PHONY: ph9-hardening-drill-demo
+ph9-hardening-drill-demo: ## Generate PH9 production hardening drill catalog and sample report
+	@python3 scripts/ph9_production_hardening_drill.py demo
+
+.PHONY: ph9-hardening-drill-validate
+ph9-hardening-drill-validate: ## Validate PH9 drill report safety boundaries and evidence coverage
+	@python3 scripts/ph9_production_hardening_drill.py validate --input reports/production-hardening/ph9-drill-plan/sample-production-hardening-drill-plan.json
+
+.PHONY: ph9-hardening-drill-list
+ph9-hardening-drill-list: ## List PH9 production hardening drill catalog summary
+	@python3 scripts/ph9_production_hardening_drill.py list
+
+.PHONY: ph9-hardening-check
+ph9-hardening-check: ph9-hardening-drill-validate security-log-check scripts-check ## Run PH9 drill report validation and safety checks
+
+.PHONY: ops17-hardening-drill-plan
+ops17-hardening-drill-plan: ph9-hardening-drill-demo ## Alias for PH9 hardening drill catalog evidence
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status
