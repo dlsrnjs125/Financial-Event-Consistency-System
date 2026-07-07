@@ -127,6 +127,10 @@ AI context sanitizer는 raw field를 제거하는 denylist 방식이 아니라, 
 PH6에서는 이 기준을 `backend/app/security/ai_context_sanitizer.py`와 `scripts/ph6_ai_context.py`로 구현했다.
 구현 기록과 실행 방법은 [48-ph6-ai-safe-context-sanitizer.md](48-ph6-ai-safe-context-sanitizer.md)를 기준으로 관리한다.
 
+PH7에서는 partner HMAC secret rotation evidence에도 같은 원칙을 적용한다.
+rotation drill report는 `client_token`, `key_id`, `secret_status`, `decision_reason`, `body_hash`, `canonical_request_hash`만 남기고 raw secret, raw signature, Authorization header, raw request body를 남기지 않는다.
+구현 기록과 실행 방법은 [49-ph7-partner-secret-rotation-hmac-hardening.md](49-ph7-partner-secret-rotation-hmac-hardening.md)를 기준으로 관리한다.
+
 수동 승인 필요:
 
 - secret rotation 최종 실행

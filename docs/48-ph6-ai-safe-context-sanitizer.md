@@ -7,6 +7,7 @@ PH6 creates AI-safe operational context from PH2 incident artifacts, PH3 analyze
 The sanitizer uses an allowlist-first policy. Unknown fields are removed by default, and denylist checks remain only as a backup safety net.
 
 PH6 does not call external AI APIs, execute recovery actions, update account balances, create compensation ledger entries, approve write resume, or run secret rotation.
+PH7 rotation evidence can be sanitized by the same principles only if raw secret, raw signature, Authorization header, and raw request body remain excluded at the source report.
 
 ## 2. PH2~PH5 Connection
 
@@ -48,6 +49,7 @@ Excluded:
 | Level 3 | consistency counts, metric summaries, severity/classification/status | preferred |
 
 PH6 context should mostly contain Level 2~3 data.
+PH7 HMAC rotation evidence should stay at Level 2~3 by using `client_token`, `key_id`, `secret_status`, `decision_reason`, `body_hash`, and `canonical_request_hash` instead of raw signing material.
 
 ## 5. Allowlist Sanitizing Policy
 
