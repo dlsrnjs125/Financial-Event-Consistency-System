@@ -32,7 +32,13 @@ def get_client_secret_provider(raw_secrets: str) -> ClientSecretProvider:
 
 @lru_cache
 def get_partner_secret_registry(raw_secrets: str) -> PartnerSecretRegistry:
-    return PartnerSecretRegistry.from_config(raw_secrets)
+    registry = PartnerSecretRegistry.from_config(raw_secrets)
+    if registry.is_empty():
+        raise RuntimeError(
+            "PARTNER_HMAC_SECRETS must include at least one valid secret when "
+            "partner HMAC auth is enabled"
+        )
+    return registry
 
 
 async def verify_external_request_signature(request: Request) -> None:
@@ -85,6 +91,10 @@ async def verify_external_request_signature(request: Request) -> None:
 
 
 async def _verify_partner_request_signature(request: Request) -> None:
+    if request.url.query:
+        record_hmac_auth_failure("invalid_signature")
+        raise InvalidSignature()
+
     client_id = _required_header(request, "X-Client-Id")
     key_id = _required_header(request, "X-Key-Id")
     timestamp = _required_header(request, "X-Timestamp")
@@ -103,7 +113,7 @@ async def _verify_partner_request_signature(request: Request) -> None:
         key_id=key_id,
         signature=signature,
         allowed_skew_seconds=settings.partner_hmac_timestamp_skew_seconds,
-        allow_next_for_dry_run=settings.partner_hmac_allow_next_dry_run,
+        allow_next_for_dry_run=False,
     )
     if result.accepted:
         record_hmac_auth_success()

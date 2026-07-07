@@ -60,10 +60,12 @@ X-Signature
 ```
 
 The existing single-secret HMAC path remains available for compatibility when partner rotation auth is disabled.
+When partner auth is enabled, `PARTNER_HMAC_SECRETS` must contain at least one valid entry; otherwise the dependency fails fast with a configuration error.
 
 ## 5. Canonical Request and Signature
 
-PH7 uses the path without query string.
+PH7 signs the path without query string and rejects partner HMAC write requests that contain a query string.
+Financial event writes are body-contract based in this project, so query parameters are not accepted on this authenticated write path.
 
 ```text
 {method}
@@ -87,7 +89,7 @@ The canonical request itself can reveal request metadata, so reports store only 
 
 | Status | Meaning | Default Verification |
 | --- | --- | --- |
-| `next` | staged secret before rollout | rejected unless dry-run is explicitly allowed |
+| `next` | staged secret before rollout | rejected on write API; accepted only by verifier/drill dry-run |
 | `current` | active signing secret | accepted |
 | `previous` | old secret during rotation grace window | accepted only inside window |
 | `revoked` | immediately blocked secret | rejected |
@@ -99,7 +101,9 @@ The canonical request itself can reveal request metadata, so reports store only 
 
 After the window expires, the request is rejected with `previous_expired`. This keeps rotation bounded and prevents permanent dual-secret operation.
 
-`next` is accepted only when `allow_next_for_dry_run=true`, which is intended for deployment verification before the key becomes active.
+`next` is accepted only when `allow_next_for_dry_run=true` in verifier-level drill/demo code.
+The actual financial event write API always passes `allow_next_for_dry_run=false`, even if the environment has a dry-run flag.
+An API-level dry-run must be a separate no-write endpoint before `next` can be exposed through HTTP.
 
 ## 8. Replay Defense Boundary
 
@@ -125,7 +129,9 @@ PH7 does not fail open on missing nonce. Missing nonce is rejected because it le
 | previous secret + inside rotation window | ACCEPT | grace window |
 | previous secret + expired window | REJECT | previous expired |
 | next secret without dry-run | REJECT | staged key not active |
-| next secret with dry-run | ACCEPT | staged verification only |
+| next secret with verifier/drill dry-run | ACCEPT | staged verification only |
+| next secret on write API | REJECT | staged key must not write |
+| query string on partner write API | REJECT | unsigned request component not allowed |
 | revoked secret | REJECT | revoked key |
 | disabled client | REJECT | disabled client |
 | unknown client | REJECT | unknown client |
@@ -197,6 +203,8 @@ Forbidden evidence:
 - cookie / set-cookie
 - database URL
 
+`client_token` is an internal evidence token, not public anonymization. Low-entropy client IDs can still be dictionary-tested, so public sharing should use an additional report salt or HMAC tokenization step.
+
 ## 12. Test and Verification Criteria
 
 Unit tests cover:
@@ -244,10 +252,10 @@ make ph7-security-check
 
 ### Next Secret Becomes Active Too Early
 
-- 문제: `next` secret을 기본 검증에 허용하면 아직 배포 승인 전인 key가 실서비스에서 활성화된다.
-- 원인: staged verification과 active verification을 구분하지 않으면 rollout 전 secret이 사용 가능해진다.
-- 해결: `allow_next_for_dry_run=true`일 때만 `next_dry_run`으로 허용한다.
-- 검증: `test_next_secret_requires_dry_run_flag`와 `next_secret_dry_run_success` case로 확인한다.
+- 문제: `next` secret을 실제 write API에서 허용하면 아직 배포 승인 전인 key가 실서비스에서 활성화된다.
+- 원인: staged verification과 active write verification을 구분하지 않으면 rollout 전 secret이 상태 변경 요청에 사용 가능해진다.
+- 해결: write API dependency는 항상 `allow_next_for_dry_run=false`로 verifier를 호출하고, `next` 성공은 drill/demo에서만 검증한다.
+- 검증: `test_partner_dependency_never_accepts_next_key_on_write_api`, `test_next_secret_requires_dry_run_flag`, `next_secret_dry_run_success` case로 확인한다.
 - README에 넣지 않은 이유: dry-run 경계는 운영 상세 정책이므로 docs에 둔다.
 
 ### Timestamp Without Nonce

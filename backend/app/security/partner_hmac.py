@@ -126,6 +126,9 @@ class PartnerSecretRegistry:
     def has_client(self, client_id: str) -> bool:
         return any(secret.client_id == client_id for secret in self._secrets.values())
 
+    def is_empty(self) -> bool:
+        return not self._secrets
+
 
 def build_partner_canonical_request(
     method: str,
@@ -230,6 +233,7 @@ def verify_partner_hmac_request(
             secret,
             "disabled_client",
             timestamp_skew_seconds=timestamp_skew_seconds,
+            now=current_time,
         )
     if secret.status == SecretStatus.REVOKED:
         return _reject_with_secret(
@@ -237,6 +241,7 @@ def verify_partner_hmac_request(
             secret,
             "revoked_key",
             timestamp_skew_seconds=timestamp_skew_seconds,
+            now=current_time,
         )
     if secret.status == SecretStatus.NEXT and not allow_next_for_dry_run:
         return _reject_with_secret(
@@ -244,6 +249,7 @@ def verify_partner_hmac_request(
             secret,
             "next_not_allowed",
             timestamp_skew_seconds=timestamp_skew_seconds,
+            now=current_time,
         )
     if secret.status == SecretStatus.PREVIOUS and not _previous_window_is_active(
         secret, current_time
@@ -254,6 +260,7 @@ def verify_partner_hmac_request(
             "previous_expired",
             timestamp_skew_seconds=timestamp_skew_seconds,
             rotation_window_status="expired",
+            now=current_time,
         )
 
     expected_signature = generate_partner_hmac_signature(
@@ -265,6 +272,7 @@ def verify_partner_hmac_request(
             secret,
             "invalid_signature",
             timestamp_skew_seconds=timestamp_skew_seconds,
+            now=current_time,
         )
 
     reason = _accept_reason(secret.status)
@@ -344,6 +352,7 @@ def _reject_with_secret(
     *,
     timestamp_skew_seconds: int | None = None,
     rotation_window_status: str | None = None,
+    now: datetime,
 ) -> PartnerHmacResult:
     return _result(
         common,
@@ -352,7 +361,7 @@ def _reject_with_secret(
         timestamp_skew_seconds=timestamp_skew_seconds,
         secret=secret,
         rotation_window_status=rotation_window_status
-        or _rotation_window_status(secret, datetime.now(timezone.utc)),
+        or _rotation_window_status(secret, now),
     )
 
 

@@ -73,8 +73,12 @@ Partner rotation mode canonical request는 아래 다섯 줄을 사용한다.
 {SHA256_RAW_REQUEST_BODY}
 ```
 
+Partner rotation mode는 query string이 포함된 write 요청을 거부한다.
+현재 거래 이벤트 write API는 body 기반 계약이므로, 서명 대상에서 제외된 query parameter를 허용하지 않는다.
+
 Partner rotation mode는 `current` secret을 허용하고, `previous` secret은 rotation window 안에서만 허용한다.
-`next` secret은 dry-run 옵션에서만 허용하고, `revoked` secret과 disabled client는 거부한다.
+`next` secret은 verifier/drill dry-run에서만 허용하고 실제 write API에서는 항상 거부한다.
+`revoked` secret과 disabled client도 거부한다.
 raw secret, raw signature, Authorization header, raw request body는 로그나 report에 남기지 않는다.
 
 ### Request Body

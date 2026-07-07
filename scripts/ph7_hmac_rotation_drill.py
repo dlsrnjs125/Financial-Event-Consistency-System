@@ -72,6 +72,28 @@ ALLOWED_SECURITY_FLAG_KEYS = {
     "signature_algorithm",
     "secret_status",
 }
+ALLOWED_CASE_KEYS = {
+    "client_token",
+    "client_status",
+    "key_id",
+    "key_version",
+    "secret_status",
+    "request_case",
+    "expected_result",
+    "actual_result",
+    "decision",
+    "decision_reason",
+    "timestamp_skew_seconds",
+    "nonce_present",
+    "canonical_request_hash",
+    "body_hash",
+    "signature_present",
+    "signature_algorithm",
+    "rotation_window_status",
+    "raw_secret_included",
+    "raw_signature_included",
+    "raw_body_included",
+}
 
 
 def main() -> int:
@@ -285,6 +307,12 @@ def validate_report_payload(payload: dict[str, Any]) -> list[str]:
         if not isinstance(case, dict):
             errors.append(f"case[{index}] must be an object")
             continue
+        extra_keys = sorted(set(case) - ALLOWED_CASE_KEYS)
+        if extra_keys:
+            errors.append(
+                f"{case.get('request_case', index)} has unexpected keys: "
+                f"{', '.join(extra_keys)}"
+            )
         for flag in (
             "raw_secret_included",
             "raw_signature_included",

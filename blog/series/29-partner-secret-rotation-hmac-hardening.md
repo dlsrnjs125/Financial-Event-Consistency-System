@@ -41,7 +41,7 @@ PH7 verifier는 secret version 상태를 다음처럼 나눈다.
 | --- | --- | --- |
 | current | 현재 활성 secret | 허용 |
 | previous | 직전 secret | rotation window 안에서만 허용 |
-| next | 배포 전 staged secret | dry-run에서만 허용 |
+| next | 배포 전 staged secret | verifier/drill dry-run에서만 허용, write API에서는 거부 |
 | revoked | 폐기된 secret | 거부 |
 | disabled | 비활성 client/key | 거부 |
 
@@ -103,8 +103,8 @@ reports/security/ph7-hmac-rotation/sample-hmac-rotation-report.md
 
 - 문제: staged secret이 승인 전에 활성화될 수 있다.
 - 원인: rollout 준비용 secret과 실서비스 current secret을 구분하지 않으면 조기 활성화된다.
-- 해결: `allow_next_for_dry_run=true`일 때만 `next_dry_run`으로 허용했다.
-- 검증: dry-run flag가 없으면 거부하고, 있을 때만 성공하는 테스트를 추가했다.
+- 해결: 실제 write API는 항상 `next`를 거부하고, `allow_next_for_dry_run=true`는 drill/demo verifier 경로에서만 사용했다.
+- 검증: dependency 테스트로 write API의 `next` 거부를 확인하고, verifier 테스트로 dry-run 성공만 별도로 확인했다.
 
 ## 남긴 한계
 
