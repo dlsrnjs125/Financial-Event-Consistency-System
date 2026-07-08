@@ -76,7 +76,7 @@ Each drill records:
 - `actual_ph10_classification`
 - `ph10_input_scenario`
 
-Validation fails if expected and actual classifications differ.
+Validation regenerates PH10 input from `ph10_input_scenario`, reruns the PH10 analyzer, and fails if the stored `actual_ph10_classification` does not match the recomputed analyzer output. Validation also fails if expected and actual classifications differ.
 
 ## 7. Evidence Structure
 

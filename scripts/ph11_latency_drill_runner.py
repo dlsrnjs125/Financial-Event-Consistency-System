@@ -70,6 +70,8 @@ REQUIRED_DRILL_FIELDS = {
     "linked_docs",
     "status",
 }
+ALLOWED_TOP_LEVEL_FIELDS = REQUIRED_TOP_LEVEL_FIELDS
+ALLOWED_DRILL_FIELDS = REQUIRED_DRILL_FIELDS | {"label_candidates"}
 SCENARIOS = {
     "baseline",
     "db_pool_pressure",
@@ -326,8 +328,9 @@ def build_report() -> dict[str, Any]:
             "script": "scripts/ph10_latency_attribution.py",
             "input_contract": "reports/latency/ph11-drill-evidence/sample-ph10-input-evidence.json",
             "expected_actual_policy": (
-                "Each drill records expected_ph10_classification and validates it "
-                "against actual_ph10_classification from the PH10 analyzer."
+                "Each drill records expected_ph10_classification, recomputes the "
+                "PH10 analyzer output from ph10_input_scenario, and validates it "
+                "against stored actual_ph10_classification."
             ),
         },
         "consistency_policy": {
@@ -389,6 +392,9 @@ def validate_report_payload(payload: dict[str, Any]) -> list[str]:
     missing_fields = sorted(REQUIRED_TOP_LEVEL_FIELDS - set(payload))
     if missing_fields:
         errors.append(f"missing top-level fields: {', '.join(missing_fields)}")
+    extra_fields = sorted(set(payload) - ALLOWED_TOP_LEVEL_FIELDS)
+    if extra_fields:
+        errors.append(f"unexpected top-level fields: {', '.join(extra_fields)}")
 
     drills = payload.get("drills")
     if not isinstance(drills, list):
@@ -676,6 +682,9 @@ def _validate_drill(
     missing_fields = sorted(REQUIRED_DRILL_FIELDS - set(drill))
     if missing_fields:
         errors.append(f"{label} missing fields: {', '.join(missing_fields)}")
+    extra_fields = sorted(set(drill) - ALLOWED_DRILL_FIELDS)
+    if extra_fields:
+        errors.append(f"{label} unexpected drill fields: {', '.join(extra_fields)}")
 
     expected = drill.get("expected_ph10_classification")
     actual = drill.get("actual_ph10_classification")
@@ -687,6 +696,7 @@ def _validate_drill(
         errors.append(
             f"{label} PH10 classification mismatch: expected {expected}, actual {actual}"
         )
+    _validate_actual_matches_ph10_analyzer(label, drill, errors)
 
     commands = drill.get("commands", [])
     if not isinstance(commands, list):
@@ -743,6 +753,26 @@ def _validate_drill(
             errors.append(f"{label} {field} must not be empty")
 
     _validate_k6_root_cause_language(label, drill, errors)
+
+
+def _validate_actual_matches_ph10_analyzer(
+    label: str,
+    drill: dict[str, Any],
+    errors: list[str],
+) -> None:
+    scenario = drill.get("ph10_input_scenario")
+    if scenario not in SCENARIOS:
+        errors.append(f"{label} ph10_input_scenario is invalid: {scenario}")
+        return
+
+    ph10_report = ph10_latency_attribution.analyze_evidence(
+        generate_ph10_input(str(scenario))
+    )
+    actual_from_analyzer = ph10_report["classification"]
+    if drill.get("actual_ph10_classification") != actual_from_analyzer:
+        errors.append(
+            f"{label} actual PH10 classification does not match analyzer output"
+        )
 
 
 def _validate_default_command(

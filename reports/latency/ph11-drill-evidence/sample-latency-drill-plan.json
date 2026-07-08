@@ -358,7 +358,7 @@
     ]
   },
   "ph10_analyzer_link": {
-    "expected_actual_policy": "Each drill records expected_ph10_classification and validates it against actual_ph10_classification from the PH10 analyzer.",
+    "expected_actual_policy": "Each drill records expected_ph10_classification, recomputes the PH10 analyzer output from ph10_input_scenario, and validates it against stored actual_ph10_classification.",
     "input_contract": "reports/latency/ph11-drill-evidence/sample-ph10-input-evidence.json",
     "script": "scripts/ph10_latency_attribution.py"
   },

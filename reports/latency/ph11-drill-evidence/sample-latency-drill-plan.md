@@ -29,7 +29,7 @@
 
 - Script: `scripts/ph10_latency_attribution.py`
 - Input contract: `reports/latency/ph11-drill-evidence/sample-ph10-input-evidence.json`
-- Policy: Each drill records expected_ph10_classification and validates it against actual_ph10_classification from the PH10 analyzer.
+- Policy: Each drill records expected_ph10_classification, recomputes the PH10 analyzer output from ph10_input_scenario, and validates it against stored actual_ph10_classification.
 
 ## Safe Demo / Manual Boundary
 

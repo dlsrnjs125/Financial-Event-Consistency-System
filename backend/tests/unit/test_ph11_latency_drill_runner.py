@@ -62,6 +62,38 @@ def test_expected_actual_classification_mismatch_fails_validation():
     assert any("PH10 classification mismatch" in error for error in errors)
 
 
+def test_actual_classification_must_match_recomputed_ph10_analyzer():
+    report = ph11_latency_drill_runner.build_report()
+    tampered = copy.deepcopy(report)
+    drill = _drill(tampered, "LAT-002")
+    drill["expected_ph10_classification"] = "baseline_normal_latency"
+    drill["actual_ph10_classification"] = "baseline_normal_latency"
+
+    errors = ph11_latency_drill_runner.validate_report_payload(tampered)
+
+    assert any("does not match analyzer output" in error for error in errors)
+
+
+def test_unexpected_top_level_field_fails_validation():
+    report = ph11_latency_drill_runner.build_report()
+    tampered = copy.deepcopy(report)
+    tampered["raw_url"] = "https://example.com/internal"
+
+    errors = ph11_latency_drill_runner.validate_report_payload(tampered)
+
+    assert any("unexpected top-level fields" in error for error in errors)
+
+
+def test_unexpected_drill_field_fails_validation():
+    report = ph11_latency_drill_runner.build_report()
+    tampered = copy.deepcopy(report)
+    _drill(tampered, "LAT-002")["raw_endpoint"] = "https://example.com/internal"
+
+    errors = ph11_latency_drill_runner.validate_report_payload(tampered)
+
+    assert any("unexpected drill fields" in error for error in errors)
+
+
 def test_safe_auto_run_cannot_include_destructive_command():
     report = ph11_latency_drill_runner.build_report()
     tampered = copy.deepcopy(report)
