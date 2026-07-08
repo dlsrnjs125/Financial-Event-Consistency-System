@@ -150,27 +150,17 @@ make ph11-latency-drill-demo
 
 ## 11. Blog Series
 
-이 프로젝트는 구현 과정과 운영 검증 과정을 Velog 시리즈 형태로 정리했다.
+프로젝트 구현 과정과 운영 검증 과정은 Velog 시리즈 형태로 정리했다.
+README에는 대표 글만 남기고, 전체 공개/비공개 기준은 [blog/README.md](blog/README.md)에서 관리한다.
 
 | 주제 | 글 |
 | --- | --- |
-| 문제 정의 | [01. 왜 금융 이벤트 정합성인가](blog/01-why-financial-event-consistency.md) |
-| Idempotency | [03. Idempotency Key 설계](blog/03-idempotency-key-design.md) |
-| DB 정합성 | [04. PostgreSQL Transaction과 Unique Constraint](blog/04-postgresql-transaction-unique-constraint.md) |
-| Redis Fallback | [05. Redis Lock/Cache/Fallback](blog/05-redis-lock-cache-fallback.md) |
-| 성능 테스트 | [07. k6 Duplicate Storm 성능 테스트](blog/07-k6-duplicate-storm-performance-test.md) |
-| 배포 안정성 | [11. Blue-Green Rollback Simulation](blog/11-blue-green-rollback-simulation.md) |
-| DR Drill | [15. PostgreSQL Backup/Restore DR Drill](blog/15-postgresql-backup-restore-drill.md) |
-| Incident Runbook | [19. Incident Runbook & On-call Simulation](blog/19-incident-runbook-oncall-simulation.md) |
-| Postmortem | [22. Incident Timeline & Postmortem Drill](blog/22-incident-timeline-postmortem-drill.md) |
-| Production Hardening | [24. Incident Artifact](blog/series/24-production-hardening-incident-artifact.md) |
-| Production Hardening | [28. AI-safe Context Sanitizer](blog/series/28-ai-safe-incident-context-sanitizer.md) |
-| Production Hardening | [30. PostgreSQL HA와 Queue Trade-off ADR](blog/series/30-postgres-ha-queue-tradeoff-adr.md) |
-| Production Hardening | [31. Production Hardening Drill Plan](blog/series/31-production-hardening-drill-plan.md) |
-| Production Hardening | [32. Latency Attribution과 External Dependency Diagnosis](blog/series/32-latency-attribution-external-dependency-diagnosis.md) |
-| Production Hardening | [33. Latency Drill Evidence Runner](blog/series/33-latency-drill-evidence-runner.md) |
-
-Production Hardening 전체 blog 24~33편은 [blog/series](blog/series)를 기준으로 관리한다.
+| 문제 정의 | [금융 이벤트 시스템에서 가장 무서운 장애는 500이 아니라 중복 반영이었다](blog/01-why-financial-event-consistency.md) |
+| 정합성 설계 | [Redis Lock을 믿지 않고 PostgreSQL Unique Constraint를 마지막 방어선으로 둔 이유](blog/04-postgresql-transaction-unique-constraint.md) |
+| 성능 검증 | [p99가 느려져도 원장이 두 번 반영되면 안 된다](blog/07-k6-duplicate-storm-performance-test.md) |
+| 배포 안정성 | [배포 실패 시 DB를 되돌리지 않고 트래픽만 Blue로 되돌린 이유](blog/11-blue-green-rollback-simulation.md) |
+| 장애 대응 | [장애를 복구했다는 말만으로는 부족했다](blog/19-incident-runbook-oncall-simulation.md) |
+| Production Hardening | [PostgreSQL이 죽었을 때 성공 응답도, 장애 기록 유실도 막고 싶었다](blog/23-postgresql-down-write-suspend-drill.md) |
 
 ## 12. 한계와 향후 고도화
 
