@@ -34,6 +34,14 @@ Redis degraded incident drill에서는 timeline을 단계별로 나눴다.
 
 이렇게 나누면 "언제 알았는가"와 "언제 복구됐는가"를 분리해서 볼 수 있다.
 
+## Alert severity는 정합성 기준으로 나눴다
+
+Redis down은 성능과 가용성 저하를 만들 수 있다. 하지만 PostgreSQL 기준 정합성이 유지된다면 warning으로 시작한다.
+
+반대로 PostgreSQL down, reconciliation failure, duplicate ledger는 Source of Truth 또는 금융 정합성 문제이므로 critical로 본다.
+
+Alert는 단순 threshold가 아니라 운영자가 어떤 순서로 움직일지 알려주는 action signal이어야 한다.
+
 ## latency를 네 가지로 나눈 이유
 
 postmortem에는 시간을 하나만 남기지 않았다.
@@ -85,6 +93,12 @@ make ops7-incident-timeline-check
 DB down, write resume, recovery approval, failover, queue replay, partner key retirement는 위험도가 다르다. 그래서 safe report generation과 validation은 자동화하고, write resume, recovery execution, partner key retirement, failover promotion, queue replay는 manual approval boundary로 남겼다.
 
 운영 자동화의 목표는 사람을 완전히 빼는 것이 아니라, 자동으로 실행해도 되는 검증과 사람이 승인해야 하는 조치를 분리하는 것이다.
+
+## 정합성 위반에는 error budget을 두지 않았다
+
+latency와 5xx에는 error budget을 둘 수 있다. 하지만 duplicate ledger, account balance mismatch, invalid terminal transition은 1건이라도 consistency incident candidate다.
+
+금융 이벤트 시스템에서 "조금의 중복 반영은 허용"이라는 기준은 두지 않았다.
 
 ## 트러블슈팅: 복구와 검증은 다르다
 

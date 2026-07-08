@@ -17,6 +17,24 @@ DB write unavailable
 -> Retry-After returned
 ```
 
+## DB 장애도 모두 같은 장애가 아니다
+
+이 글의 drill은 DB down에 집중한다. 하지만 실제 운영에서는 DB 장애를 더 잘게 나눠 봐야 한다.
+
+- DB down: write transaction 자체를 시작할 수 없으므로 신규 금융 write를 `503`으로 막는다.
+- DB pressure: connection pool, lock wait, slow query로 지연되는 상태이므로 traffic 감속이나 batch 중지를 먼저 검토한다.
+- DB uncertainty: failover 직후 commit 여부가 불명확한 window이므로 recovery mode와 in-doubt case로 분리한다.
+
+"DB가 느리다"와 "DB에 쓸 수 없다"를 같은 방식으로 처리하면 안 된다.
+
+## 외부 시스템도 같은 retry contract를 이해해야 한다
+
+이 정책은 서버 내부 결정만으로 끝나지 않는다.
+
+외부 시스템도 같은 `external_event_id`, 같은 `Idempotency-Key`, 같은 body로 재시도해야 한다. `503 + Retry-After`는 "나중에 같은 요청으로 다시 시도하라"는 의미다.
+
+반대로 `409 Conflict`는 같은 key로 다른 body를 보냈다는 뜻이므로, 같은 key 재시도 대상으로 볼 수 없다.
+
 ## 왜 임시 큐에 저장하지 않았나
 
 DB down 중 파일, Redis, memory queue에 요청을 쌓아두는 선택지도 있다. 하지만 그렇게 하면 API 응답 의미가 달라진다.

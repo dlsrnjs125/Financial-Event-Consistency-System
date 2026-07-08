@@ -84,6 +84,8 @@ duplicate ledger > 0
 
 성능 장애와 정합성 장애는 함께 관찰하지만, 대응 우선순위는 다르다.
 
+latency와 5xx에는 error budget을 둘 수 있지만, duplicate ledger나 account balance mismatch는 error budget을 두지 않는다. 1건이라도 발생하면 성능 경고가 아니라 정합성 incident 후보로 올린다.
+
 ## trace_id는 metric label이 아니라 log correlation key다
 
 `trace_id`, `request_id`, `event_id`, retry key는 단일 요청을 추적할 때 필요하다.

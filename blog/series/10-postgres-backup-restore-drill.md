@@ -52,6 +52,14 @@ pg_dump -Fc
 
 checksum은 "파일이 만들어졌다"가 아니라 "검증 시점의 파일이 같은 파일이다"를 확인하기 위해 남긴다.
 
+## restore-only와 DR Drill은 checksum 기준이 달랐다
+
+기존 dump를 수동으로 복원하는 restore-only 경로에서는 checksum이 없으면 `SKIPPED`로 기록하고 진행할 수 있다.
+
+하지만 DR Drill은 "복구 가능성을 증명하는 절차"다. 그래서 `make ops4-drill`과 `make ops4-demo`처럼 evidence를 남기는 흐름에서는 checksum 파일을 필수로 요구했다.
+
+복원 명령이 성공하는 것과 DR evidence로 인정하는 기준은 다르게 둔 것이다.
+
 ## 복원 후 단순 row count만 보지 않은 이유
 
 복원 성공은 테이블이 생겼다는 뜻일 뿐이다. 금융 이벤트 시스템에서는 다음 위반 count가 모두 0이어야 한다.
