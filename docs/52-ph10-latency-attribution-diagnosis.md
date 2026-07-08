@@ -149,6 +149,9 @@ The validator checks for sensitive text patterns and forbidden metric labels.
 
 PH11 remains the place for actual latency drills and fault injection. PH10 can consume PH11 evidence later, but this phase does not claim that latency drills have been executed.
 
+PH11 now reuses the PH10 analyzer through `scripts/ph11_latency_drill_runner.py`.
+PH10 remains the candidate-classification layer, while PH11 generates drill evidence, compares expected and actual PH10 classifications, and keeps destructive fault injection outside the default demo.
+
 Follow-up candidates include:
 
 - k6 latency baseline and regression scenarios

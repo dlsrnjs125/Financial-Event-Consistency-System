@@ -67,6 +67,7 @@ help: ## Show this help message
 	@echo "  make ph8-ha-queue-decision-demo # Generate PH8 HA/Queue decision evidence"
 	@echo "  make ph9-hardening-drill-demo # Generate PH9 hardening drill catalog"
 	@echo "  make ph10-latency-attribution-demo # Generate PH10 latency attribution evidence"
+	@echo "  make ph11-latency-drill-demo # Generate PH11 latency drill evidence"
 	@echo "  make k6-smoke          # Run Phase 9 k6 smoke test"
 	@echo "  make phase9-check      # Run quick Phase 9 consistency gate"
 	@echo "  make security-log-check # Scan logger calls for sensitive raw fields"
@@ -270,6 +271,7 @@ scripts-check: ## Check shell script syntax
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph8_ha_queue_decision_matrix.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph9_production_hardening_drill.py
 	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph10_latency_attribution.py
+	PYTHONPYCACHEPREFIX=/tmp/financial-event-pycache python3 -m py_compile scripts/ph11_latency_drill_runner.py
 	bash -n scripts/monitoring/check-prometheus-targets.sh
 	bash -n scripts/monitoring/check-required-metrics.sh
 	bash -n scripts/monitoring/check-grafana-dashboards.sh
@@ -299,6 +301,7 @@ scripts-check: ## Check shell script syntax
 	test -x scripts/ph8_ha_queue_decision_matrix.py
 	test -x scripts/ph9_production_hardening_drill.py
 	test -x scripts/ph10_latency_attribution.py
+	test -x scripts/ph11_latency_drill_runner.py
 	test -x scripts/write_suspend_state.py
 
 .PHONY: security-log-check
@@ -655,6 +658,29 @@ ph10-latency-check: ph10-latency-attribution-validate security-log-check scripts
 
 .PHONY: ops18-latency-attribution
 ops18-latency-attribution: ph10-latency-attribution-demo ## Alias for PH10 latency attribution evidence
+
+# Production Hardening Phase 11 Latency Drill Evidence Runner
+.PHONY: ph11-latency-drill-demo
+ph11-latency-drill-demo: ## Generate PH11 latency drill catalog and PH10 sample evidence
+	@python3 scripts/ph11_latency_drill_runner.py demo
+
+.PHONY: ph11-latency-drill-validate
+ph11-latency-drill-validate: ## Validate PH11 latency drill report safety boundaries
+	@python3 scripts/ph11_latency_drill_runner.py validate --input reports/latency/ph11-drill-evidence/sample-latency-drill-plan.json
+
+.PHONY: ph11-latency-drill-list
+ph11-latency-drill-list: ## List PH11 LAT-001~LAT-006 drill catalog summary
+	@python3 scripts/ph11_latency_drill_runner.py list
+
+.PHONY: ph11-latency-drill-generate-ph10-input
+ph11-latency-drill-generate-ph10-input: ## Generate PH10 input evidence for a PH11 sample scenario
+	@python3 scripts/ph11_latency_drill_runner.py generate-ph10-input --scenario db_lock_contention --output reports/latency/ph11-drill-evidence/sample-ph10-input-evidence.json
+
+.PHONY: ph11-latency-check
+ph11-latency-check: ph11-latency-drill-validate security-log-check scripts-check ## Run PH11 report validation and safety checks
+
+.PHONY: ops19-latency-drill-evidence
+ops19-latency-drill-evidence: ph11-latency-drill-demo ## Alias for PH11 latency drill evidence runner
 
 # Phase 12 Blue-Green deployment and rollback simulation
 .PHONY: deploy-status

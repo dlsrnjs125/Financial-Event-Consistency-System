@@ -2,9 +2,9 @@
 
 ## 현재 진행 상태
 
-- 현재 위치: **Production Hardening PH10 Latency Attribution 구현 및 검증**
+- 현재 위치: **Production Hardening PH11 Latency Drill Evidence Runner 구현 및 검증**
 - GitHub 초기 Push: **완료**
-- 다음 단계: **PH10 CI 검증 및 PR 리뷰**
+- 다음 단계: **PH11 CI 검증 및 PR 리뷰**
 
 Development Phase 8에서는 Prometheus custom metrics, trace_id/request_id context middleware, 구조화 로그, Grafana dashboard 초안, alert rule 초안, 로컬 Prometheus/Grafana provisioning을 구현했다.
 현재 추적은 `X-Trace-ID`/`X-Request-ID` 기반 구조화 로그 상관관계 추적이다.
@@ -31,6 +31,7 @@ PH7에서는 partner secret rotation 중 `current`/`previous`/`next`/`revoked`/`
 PH8에서는 PostgreSQL HA와 durable queue를 직접 붙이지 않고, API 응답 의미와 정합성 책임 변화에 대한 ADR과 decision evidence를 생성한다.
 PH9에서는 PH1~PH8 production hardening 산출물을 안전한 drill catalog와 evidence report로 묶고, 자동화 가능 범위와 수동 승인 경계를 검증한다.
 PH10에서는 k6 p95/p99 증상을 Nginx/FastAPI/Redis/PostgreSQL/outbound/blackbox/consistency evidence와 함께 비교하는 deterministic latency attribution analyzer와 sanitized report를 구현한다.
+PH11에서는 LAT-001~LAT-006 latency drill evidence runner를 구현하고, PH10 analyzer input 생성과 expected/actual classification 검증을 연결한다.
 현재 Prometheus scrape 대상은 FastAPI API 중심이며, `api-green`, Redis exporter, PostgreSQL exporter는 Phase 12 이후 운영 관측 보강 항목이다.
 
 ## 개발 Phase
@@ -52,7 +53,7 @@ PH10에서는 k6 p95/p99 증상을 Nginx/FastAPI/Redis/PostgreSQL/outbound/black
 | 완료 | 12. Blue-Green 배포와 Rollback 시뮬레이션 | 검증 후 전환/복구 | Blue/Green, Nginx snippet 전환, rollback script, deployment smoke | Green 검증 후 전환, 문제 시 Blue 복귀 |
 | 완료 | Ops Phase 5. Failure Recovery Runbook Drill | Redis/API/PostgreSQL 장애 복구 절차 자동화 | `scripts/ops5_failure_recovery_drill.sh`, Ops5 report, runbook doc, Makefile `ops5-*` | 장애 주입, 복구, health/ready/smoke/consistency, duration evidence 기록 |
 | 완료 | Ops Phase 6. Alerting & Incident Response Runbook | 장애 탐지 기준과 운영자 대응 절차 문서화 | alert rule, Ops6 report, runbook doc, blog, Makefile `ops6-*` | alert rule 문법 검증, inventory 문서화, CI Gate 포함 |
-| 진행 | Production Hardening Track | 운영 장애 판단, 데이터 보호, 복구 승인 절차 설계와 PH1~PH10 안전장치/evidence 구현 | docs/35~52, runbook, write suspend service/script, incident artifact/analyzer/recovery case/reconciliation/AI context/HMAC rotation/HA queue decision/drill catalog/latency attribution script | sanitized evidence, HMAC rotation contract, HA/Queue trade-off, PH9 drill catalog, PH10 latency attribution 검증 가능 |
+| 진행 | Production Hardening Track | 운영 장애 판단, 데이터 보호, 복구 승인 절차 설계와 PH1~PH11 안전장치/evidence 구현 | docs/35~53, runbook, write suspend service/script, incident artifact/analyzer/recovery case/reconciliation/AI context/HMAC rotation/HA queue decision/drill catalog/latency attribution/drill evidence script | sanitized evidence, HMAC rotation contract, HA/Queue trade-off, PH9 drill catalog, PH10 latency attribution, PH11 latency drill evidence 검증 가능 |
 | 진행 | Final. 문서와 블로그 정리 | 문제 정의, 장애 재현, 측정, 운영 검증 기록 정리 | README, docs, blog 12편 | Phase 12 완료 기준 문서 정합성 확보 |
 
 ## 개발 로드맵 관리 기준
@@ -1171,7 +1172,7 @@ Ops Extension Track이 Phase 8 Incident Runbook에서 종료된 뒤, PostgreSQL 
 - DB 장애 중 성공 응답을 반환하지 않고 `503 Service Unavailable`과 `Retry-After`로 재시도를 유도한다.
 - 자동화는 탐지, 차단, 증거 수집, 복구 후보 생성까지 담당한다.
 - 원장 보정, write resume, 고객 영향 판단, 보안 예외 승인은 사람이 승인한다.
-- README에는 요약과 링크만 두고, 상세 정책은 `docs/35-*` ~ `docs/52-*`에서 관리한다.
+- README에는 요약과 링크만 두고, 상세 정책은 `docs/35-*` ~ `docs/53-*`에서 관리한다.
 
 ### Production Hardening 구현 PR 순서
 
@@ -1189,7 +1190,7 @@ Ops Extension Track이 Phase 8 Incident Runbook에서 종료된 뒤, PostgreSQL 
 | PH-Impl 8 | 완료 | PostgreSQL HA / durable queue trade-off ADR, decision evidence | API 응답 의미와 정합성 책임 변화 설명 |
 | PH-Impl 9 | 완료 | PH1~PH8 hardening drill catalog, safe evidence runner, validator | 운영 drill 순서와 자동화/수동 승인 경계 검증 |
 | PH-Impl 10 | 완료 | deterministic latency attribution analyzer, sanitized sample evidence/report, validator | k6 증상과 server/dependency/consistency evidence를 묶어 원인 후보 분류 |
-| PH-Impl 11 | 선택 | k6 latency drill: baseline, DB pool/lock, Redis delay | 원인 귀속 테스트 |
+| PH-Impl 11 | 완료 | LAT-001~LAT-006 safe drill catalog, PH10 input generator, expected/actual validator | latency drill evidence와 PH10 analyzer 연동 |
 | PH-Impl 12 | 선택 | mock partner, outbound HTTP wrapper, blackbox probe | 외부 dependency 지연 검증 |
 | PH-Impl 13 | 선택 | HA/Queue PoC 여부 결정 | 범위가 커지므로 마지막에 별도 판단 |
 
@@ -1593,7 +1594,7 @@ PH1~PH8 hardening 산출물을 실제 운영 drill 관점에서 하나의 catalo
 - [x] PH9 validator와 unit test 추가
 - [x] Makefile `ph9-hardening-*` target 추가
 - [x] PH10 latency attribution analyzer
-- [ ] PH11 k6 latency drill execution
+- [x] PH11 latency drill evidence runner
 
 **연결 문서**
 
@@ -1605,7 +1606,7 @@ PH1~PH8 hardening 산출물을 실제 운영 drill 관점에서 하나의 catalo
 **후속 구현 후보**
 
 - PH10 latency attribution analyzer/report
-- PH11 latency drill execution/report generator
+- PH11 manual latency fault injection candidates
 - managed DB HA runbook
 - queue-first V2 API contract ADR
 
@@ -1669,24 +1670,29 @@ PH1~PH8 hardening 산출물을 실제 운영 drill 관점에서 하나의 catalo
 - Nginx timing log parser
 - blackbox exporter external endpoint probe
 
-### PH Phase 11. Latency Drill Test Plan 설계
+### PH Phase 11. Latency Drill Test Plan & Safe Evidence Runner 구현
 
 **목표**
 
-k6로 latency 증상을 재현하고, Nginx timing, FastAPI phase metric/log, Redis/PostgreSQL metric, external dependency metric, consistency SQL을 함께 비교해 원인 후보를 분류하는 테스트 계획을 정의한다.
+k6로 latency 증상을 재현하는 계획을 LAT-001~LAT-006 catalog로 정리하고, PH10 analyzer가 읽을 수 있는 safe evidence runner와 expected/actual classification 검증을 구현한다.
 
 **주요 작업**
 
 - k6만으로 가능한 것과 불가능한 것 분리
 - baseline, DB pool pressure, DB lock contention, Redis delay/down, external slow response, Nginx edge latency drill 정의
 - evidence 저장 구조와 latency analysis report 형식 정의
-- Makefile target 후보 정의
+- PH10 input evidence generator 구현
+- PH10 analyzer expected/actual classification 비교
+- Makefile `ph11-latency-*` target 추가
+- destructive/manual drill은 default demo에서 제외
 
 **검증 기준**
 
 - k6는 증상 재현 도구이고 원인 확정은 server metric/log 상관분석으로 수행한다는 점이 명확하다.
-- 구현되지 않은 fault injection, mock partner, phase metric은 후속 구현 후보로 남아 있다.
+- fault injection, mock partner, phase metric은 default demo가 아니라 manual/후속 후보로 남아 있다.
 - latency 증가 중에도 duplicate/reconciliation 정합성 검증을 포함한다.
+- expected PH10 classification과 actual PH10 classification이 일치해야 한다.
+- consistency violation은 latency warning으로 낮추지 않는다.
 
 **측정 지표**
 
@@ -1702,17 +1708,23 @@ k6로 latency 증상을 재현하고, Nginx timing, FastAPI phase metric/log, Re
 
 - [x] [42-latency-drill-test-plan.md](42-latency-drill-test-plan.md) 작성
 - [x] README 문서 링크 추가
-- [ ] `make k6-latency-baseline`
-- [ ] `make latency-drill-db-pool`
-- [ ] `make latency-drill-db-lock`
-- [ ] `make latency-drill-redis-delay`
-- [ ] `make latency-drill-external-slow`
-- [ ] `make latency-drill-nginx-edge`
-- [ ] `make latency-analyze`
+- [x] [53-ph11-latency-drill-evidence-runner.md](53-ph11-latency-drill-evidence-runner.md) 작성
+- [x] `scripts/ph11_latency_drill_runner.py` 구현
+- [x] sample drill plan JSON/Markdown report 생성
+- [x] sample PH10 input evidence와 PH10 attribution report 생성
+- [x] PH11 validator와 unit test 추가
+- [x] Makefile `ph11-latency-*` target 추가
+- [ ] manual `make k6-latency-baseline`
+- [ ] manual `make latency-drill-db-pool`
+- [ ] manual `make latency-drill-db-lock`
+- [ ] manual `make latency-drill-redis-delay`
+- [ ] manual `make latency-drill-external-slow`
+- [ ] manual `make latency-drill-nginx-edge`
 
 **연결 문서**
 
 - [42-latency-drill-test-plan.md](42-latency-drill-test-plan.md)
+- [53-ph11-latency-drill-evidence-runner.md](53-ph11-latency-drill-evidence-runner.md)
 - [41-latency-attribution-and-external-dependency-diagnosis.md](41-latency-attribution-and-external-dependency-diagnosis.md)
 - [16-performance-measurement-design.md](16-performance-measurement-design.md)
 - [33-observability-evidence-plan.md](33-observability-evidence-plan.md)

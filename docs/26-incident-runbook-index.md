@@ -49,6 +49,7 @@ Ops Phase 8은 Incident Runbook을 완성하고, 장애 대응 기준을 문서�
 | [34-measurement-result-template.md](34-measurement-result-template.md) | 장애 대응 결과와 측정값 기록 양식 |
 | [51-ph9-production-hardening-drill-plan.md](51-ph9-production-hardening-drill-plan.md) | PH1~PH8 production hardening drill catalog와 evidence runner 기준 |
 | [52-ph10-latency-attribution-diagnosis.md](52-ph10-latency-attribution-diagnosis.md) | p95/p99 latency 증상을 내부/외부 원인 후보로 분류하는 sanitized report 기준 |
+| [53-ph11-latency-drill-evidence-runner.md](53-ph11-latency-drill-evidence-runner.md) | LAT-001~LAT-006 latency drill safe evidence runner 기준 |
 | [27-threat-model.md](27-threat-model.md) | 보안성 장애 시나리오의 위협 근거 |
 | [32-security-checklist.md](32-security-checklist.md) | 운영 보안 점검 기준 |
 
@@ -83,7 +84,7 @@ reports/
 | Redis Down / Redis Degraded | Local command | `make ops5-demo`, `make ops7-demo` |
 | PostgreSQL connection exhausted | Manual checklist / planned verification | readiness failure, DB connection metric, recovery checklist |
 | Nginx 5xx spike | Manual checklist / planned verification | Nginx access log, HTTP 5xx metric, routed smoke |
-| High latency / p99 latency spike | Local report / manual checklist | k6 result, latency dashboard, p95/p99 metric, PH10 attribution report |
+| High latency / p99 latency spike | Local report / manual checklist | k6 result, latency dashboard, p95/p99 metric, PH10 attribution report, PH11 drill evidence report |
 | Failed deployment / rollback | Local command | `make ops2-demo`, `make deploy-rollback` |
 | Consistency violation | Local consistency check | duplicate ledger count, idempotency violation count, reconciliation failure metric |
 | Secret leak or security incident | Manual checklist | Threat Model, Secret Management Policy, Security Checklist |
@@ -111,6 +112,8 @@ make k6-duplicate
 make k6-verify
 make ph10-latency-attribution-demo
 make ph10-latency-attribution-validate
+make ph11-latency-drill-demo
+make ph11-latency-drill-validate
 make security-log-check
 ```
 
@@ -127,6 +130,7 @@ Planned automation:
 - DB connection exhaustion, Nginx 5xx spike, Secret leak drill은 현재 Runbook/manual checklist 기준으로 관리한다.
 - PH9의 [production hardening drill plan](51-ph9-production-hardening-drill-plan.md)은 PH1~PH8 hardening drill을 안전한 catalog/report로 묶고, 실제 장애 주입 또는 승인 작업은 manual boundary로 분리한다.
 - PH10의 [latency attribution diagnosis](52-ph10-latency-attribution-diagnosis.md)는 sanitized evidence analyzer이며, PH11 latency drill/fault injection 실행은 후속 후보로 남긴다.
+- PH11의 [latency drill evidence runner](53-ph11-latency-drill-evidence-runner.md)는 PH10 analyzer input evidence와 drill report를 생성하며, destructive latency fault injection은 manual/opt-in 후보로 분리한다.
 
 성공 기준:
 
@@ -166,7 +170,7 @@ Planned automation:
 | Redis Down / Redis Degraded | SEV2 | `redis_up`, Redis fallback, readiness degraded | [runbooks/redis-down.md](runbooks/redis-down.md) | Ops5/Ops7 reports, Grafana Redis/API panels |
 | PostgreSQL Connection Exhausted | SEV1 | readiness postgres fail, DB connection usage | [runbooks/postgres-connection-exhausted.md](runbooks/postgres-connection-exhausted.md) | DB connection panel, `/ready`, consistency SQL |
 | Nginx 5xx Spike | SEV2 | 5xx rate, upstream status | [runbooks/nginx-5xx-spike.md](runbooks/nginx-5xx-spike.md) | Nginx access log, `make deploy-smoke` |
-| High Latency / p95, p99 Latency Spike | SEV2 | p95/p99 latency, request duration histogram | [runbooks/high-latency-p99.md](runbooks/high-latency-p99.md) | k6 report, Grafana latency panel |
+| High Latency / p95, p99 Latency Spike | SEV2 | p95/p99 latency, request duration histogram | [runbooks/high-latency-p99.md](runbooks/high-latency-p99.md) | k6 report, Grafana latency panel, PH10/PH11 latency evidence |
 | Failed Deployment / Rollback | SEV2 | failed smoke, active upstream mismatch | [runbooks/failed-deployment.md](runbooks/failed-deployment.md) | `make deploy-status`, `make deploy-rollback`, `make deploy-verify` |
 | Consistency Violation | SEV1 | duplicate ledger, reconciliation failure, invalid transition | [runbooks/consistency-violation.md](runbooks/consistency-violation.md) | count-only SQL, Ops4/Ops5/Ops7 reports |
 | Secret Leak / Security Incident | SEV1 | secret scan, masked log failure, endpoint exposure | [runbooks/secret-leak.md](runbooks/secret-leak.md) | `make security-log-check`, security checklist |

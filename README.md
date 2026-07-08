@@ -61,7 +61,8 @@ PH7에서는 partner secret rotation 중 current/previous/next/revoked/disabled 
 PH8에서는 PostgreSQL HA와 durable queue 도입을 직접 구현하지 않고, 현재 API contract와 정합성 책임을 기준으로 trade-off ADR과 decision evidence를 남겼다.
 PH9에서는 PH1~PH8 production hardening 산출물을 안전한 drill catalog와 evidence report로 묶고, 자동화 가능한 검증과 사람이 승인해야 하는 작업의 경계를 정리했다.
 PH10에서는 k6 p95/p99 증상을 Nginx/FastAPI/Redis/PostgreSQL/outbound/blackbox/consistency evidence와 함께 비교하는 deterministic latency attribution analyzer와 sanitized report를 추가했다.
-상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/52-*` 문서에서 관리한다.
+PH11에서는 LAT-001~LAT-006 latency drill을 safe evidence runner로 묶고, PH10 analyzer와 연결해 p95/p99 증상과 서버 evidence, consistency check를 함께 검증할 수 있게 했다.
+상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/53-*` 문서에서 관리한다.
 
 ## 5. Final Verification Summary
 
@@ -138,6 +139,8 @@ make ph8-ha-queue-decision-demo
 make ph8-ha-queue-decision-validate
 make ph9-hardening-drill-demo
 make ph9-hardening-drill-validate
+make ph11-latency-drill-demo
+make ph11-latency-drill-validate
 make ph1-write-suspend-status
 make ph1-write-suspend-resume
 ```
@@ -174,6 +177,7 @@ make ph1-write-suspend-resume
 | [docs/50-ph8-postgres-ha-queue-decision-evidence.md](docs/50-ph8-postgres-ha-queue-decision-evidence.md) | PH8 PostgreSQL HA / queue trade-off decision evidence |
 | [docs/51-ph9-production-hardening-drill-plan.md](docs/51-ph9-production-hardening-drill-plan.md) | PH9 production hardening drill catalog와 evidence runner |
 | [docs/52-ph10-latency-attribution-diagnosis.md](docs/52-ph10-latency-attribution-diagnosis.md) | PH10 latency attribution analyzer와 sanitized report |
+| [docs/53-ph11-latency-drill-evidence-runner.md](docs/53-ph11-latency-drill-evidence-runner.md) | PH11 latency drill safe evidence runner |
 
 ## 10. Blog Series
 
@@ -194,6 +198,7 @@ make ph1-write-suspend-resume
 | Production Hardening | [30. PostgreSQL HA와 Queue Trade-off ADR](blog/series/30-postgres-ha-queue-tradeoff-adr.md) |
 | Production Hardening | [31. Production Hardening Drill Plan](blog/series/31-production-hardening-drill-plan.md) |
 | Production Hardening | [32. Latency Attribution과 External Dependency Diagnosis](blog/series/32-latency-attribution-external-dependency-diagnosis.md) |
+| Production Hardening | [33. Latency Drill Evidence Runner](blog/series/33-latency-drill-evidence-runner.md) |
 
 ## 11. 한계와 향후 고도화
 
@@ -211,7 +216,8 @@ make ph1-write-suspend-resume
 - PH7 partner HMAC rotation은 Vault/KMS 연동이나 실제 key retirement를 자동화하지 않고, rotation contract와 sanitized evidence 검증까지만 수행한다.
 - PH8 PostgreSQL HA/Queue decision evidence는 실제 HA cluster나 queue middleware를 구축하지 않고 API contract와 recovery responsibility 판단까지만 수행한다.
 - PH9 production hardening drill plan은 PH1~PH8 산출물을 안전한 catalog/report로 묶고, 실제 장애 주입과 승인 작업은 수동 경계로 남긴다.
-- PH10 latency attribution은 sanitized evidence analyzer/report까지만 수행하며, PH11 k6 latency drill과 fault injection은 후속 구현 후보로 남긴다.
+- PH10 latency attribution은 sanitized evidence analyzer/report까지만 수행한다.
+- PH11 latency drill evidence runner는 safe sample evidence와 PH10 analyzer 연동까지만 수행하며, Toxiproxy/netem/mock partner/production fault injection은 후속 구현 후보로 남긴다.
 - PostgreSQL HA/Queue PoC는 후속 구현 후보로 남겼다.
 
 ## 12. 최종 요약
