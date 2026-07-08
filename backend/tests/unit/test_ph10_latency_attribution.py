@@ -232,6 +232,56 @@ def test_forbidden_metric_label_fails_validation():
     assert any("forbidden metric label" in error for error in errors)
 
 
+def test_unexpected_sensitive_top_level_key_fails_validation():
+    report = ph10_latency_attribution.analyze_evidence(_evidence_with())
+    report["signature"] = "abc123"
+
+    errors = ph10_latency_attribution.validate_report_payload(report)
+
+    assert any("unexpected top-level fields" in error for error in errors)
+    assert any("sensitive key" in error for error in errors)
+
+
+def test_nested_sensitive_key_name_fails_validation():
+    report = ph10_latency_attribution.analyze_evidence(_evidence_with())
+    report["input_summary"]["raw_request_body_hash_source"] = "payload"
+
+    errors = ph10_latency_attribution.validate_report_payload(report)
+
+    assert any("sensitive key" in error for error in errors)
+
+
+def test_sensitive_policy_can_describe_prohibited_categories():
+    report = ph10_latency_attribution.analyze_evidence(_evidence_with())
+    report["sensitive_data_policy"]["raw_request_body"] = "prohibited"
+
+    errors = ph10_latency_attribution.validate_report_payload(report)
+
+    assert errors == []
+
+
+def test_route_specific_candidate_uses_scope_only_language():
+    evidence = _evidence_with(
+        observed={
+            "k6_p95_ms": 620,
+            "k6_p99_ms": 1400,
+            "nginx_request_p95_ms": 480,
+            "nginx_upstream_p95_ms": 220,
+            "fastapi_handler_p95_ms": 220,
+            "postgres_phase_p95_ms": 80,
+            "redis_phase_p95_ms": 20,
+            "outbound_http_p95_ms": 0,
+            "blackbox_probe_p95_ms": 0,
+            "error_rate": 0.01,
+        }
+    )
+
+    report = ph10_latency_attribution.analyze_evidence(evidence)
+
+    assert report["classification"] == "route_specific_latency_candidate"
+    assert "candidate scope only" in " ".join(report["evidence"])
+
+
 def test_markdown_report_contains_boundaries_and_next_checks():
     report = ph10_latency_attribution.analyze_evidence(_evidence_with())
     markdown = ph10_latency_attribution.render_markdown_report(report)
@@ -252,6 +302,7 @@ def test_list_rules_output_contains_only_safe_summary_fields():
     assert "Authorization:" not in rendered
     assert "account_no" not in rendered
     assert "Idempotency-Key" not in rendered
+    assert "internal_resource_saturation" not in rendered
 
 
 def _evidence_with(observed=None, consistency=None):

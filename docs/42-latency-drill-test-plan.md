@@ -373,7 +373,7 @@ internal_postgres_latency
 | FastAPI handler 중 Redis phase 증가 | Redis 지연/timeout | `redis_degraded_latency` |
 | FastAPI handler 중 outbound HTTP phase 증가 | 외부 dependency 지연 | `external_dependency_latency` |
 | 모든 route p95/p99 증가 | 내부 리소스 포화 | `internal_resource_saturation` |
-| 특정 route만 증가 | endpoint별 병목 | `route_specific_bottleneck` |
+| 특정 route만 증가 | endpoint별 latency scope narrowing 후보 | `route_specific_latency_candidate` |
 | 특정 client/partner만 증가 | partner별 payload/retry/network 문제 | `partner_specific_latency` |
 | blackbox probe도 증가 | 외부 endpoint 자체 지연 가능성 | `external_endpoint_slow` |
 | blackbox probe 정상 + app outbound만 증가 | app HTTP client/DNS/pool 문제 | `app_http_client_path_issue` |

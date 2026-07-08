@@ -107,11 +107,11 @@ The first PH10 rule set supports these candidate classifications:
 - `app_http_client_path_issue`
 - `edge_or_client_network_latency`
 - `partner_specific_latency`
-- `internal_resource_saturation`
-- `route_specific_bottleneck`
+- `route_specific_latency_candidate`
 - `insufficient_evidence`
 
 The rules intentionally require supporting signals. For example, a PostgreSQL classification requires FastAPI handler timing plus PostgreSQL phase timing. A k6 percentile spike by itself is treated as symptom evidence.
+The partner and route-specific classifications are LOW confidence scope-narrowing candidates, not final root-cause claims.
 
 ## 7. Consistency Boundary
 
@@ -155,6 +155,7 @@ Follow-up candidates include:
 - PostgreSQL pool pressure and lock contention drills
 - Redis delay/down drills
 - external endpoint slow response drills
+- internal resource saturation evidence with CPU, memory, worker, and queue depth signals
 - mock partner service
 - Toxiproxy or netem latency profiles
 - OpenTelemetry trace expansion

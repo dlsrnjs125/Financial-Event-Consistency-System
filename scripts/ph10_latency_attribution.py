@@ -29,8 +29,7 @@ CLASSIFICATIONS = {
     "app_http_client_path_issue",
     "edge_or_client_network_latency",
     "partner_specific_latency",
-    "internal_resource_saturation",
-    "route_specific_bottleneck",
+    "route_specific_latency_candidate",
     "insufficient_evidence",
 }
 CONFIDENCE_LEVELS = {"LOW", "MEDIUM", "HIGH"}
@@ -54,7 +53,26 @@ REQUIRED_REPORT_FIELDS = {
     "follow_up_candidates",
     "validation_summary",
 }
+ALLOWED_REPORT_FIELDS = REQUIRED_REPORT_FIELDS
 REQUIRED_EVIDENCE_FIELDS = {"run_id", "scenario", "baseline", "observed", "consistency"}
+FORBIDDEN_KEYS = {
+    "account_no",
+    "raw_account_no",
+    "idempotency_key",
+    "raw_idempotency_key",
+    "authorization",
+    "authorization_header",
+    "signature",
+    "x_signature",
+    "client_secret",
+    "access_token",
+    "refresh_token",
+    "password",
+    "secret",
+    "raw_request_body",
+    "database_url",
+    "raw_url",
+}
 FORBIDDEN_METRIC_LABELS = {
     "account_id",
     "event_id",
@@ -442,18 +460,24 @@ def analyze_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
             "LOW",
             "partner_specific",
             ["partner_network_or_payload"],
-            ["latency is associated with a bounded partner_alias evidence field"],
+            [
+                "latency is associated with a bounded partner_alias evidence field",
+                "candidate scope only, not final root cause",
+            ],
             ["compare with other partner_alias groups without using raw identifiers"],
         )
 
     if evidence.get("route_group") and k6_p95 > base_p95 * 2 and not handler_high:
         return _report(
             evidence,
-            "route_specific_bottleneck",
+            "route_specific_latency_candidate",
             "LOW",
             "route_group",
             ["route_specific"],
-            ["latency is tied to route_group but phase evidence is not yet dominant"],
+            [
+                "latency is tied to route_group but phase evidence is not yet dominant",
+                "candidate scope only, not final root cause",
+            ],
             ["collect per-phase timing for the route_group"],
         )
 
@@ -491,6 +515,9 @@ def validate_report_payload(payload: dict[str, Any]) -> list[str]:
     missing_fields = sorted(REQUIRED_REPORT_FIELDS - set(payload))
     if missing_fields:
         errors.append(f"missing top-level fields: {', '.join(missing_fields)}")
+    extra_fields = sorted(set(payload) - ALLOWED_REPORT_FIELDS)
+    if extra_fields:
+        errors.append(f"unexpected top-level fields: {', '.join(extra_fields)}")
 
     classification = payload.get("classification")
     if classification not in CLASSIFICATIONS:
@@ -719,7 +746,9 @@ def _validate_sensitive_content(value: Any, errors: list[str], path: str = "$") 
         return
     if isinstance(value, dict):
         for key, nested in value.items():
-            if str(key).lower() in {"raw_url", "database_url"}:
+            key_lower = str(key).lower()
+            forbidden_key = _matching_forbidden_key(key_lower)
+            if forbidden_key is not None:
                 errors.append(f"sensitive key found at {path}.{key}")
             _validate_sensitive_content(nested, errors, f"{path}.{key}")
         return
@@ -768,6 +797,13 @@ def _extract_label_names(value: Any) -> set[str]:
     return set()
 
 
+def _matching_forbidden_key(key: str) -> Optional[str]:
+    for forbidden in FORBIDDEN_KEYS:
+        if key == forbidden or forbidden in key:
+            return forbidden
+    return None
+
+
 def _rule_meaning(classification: str) -> str:
     meanings = {
         "baseline_normal_latency": "k6 and server timings are near baseline and consistency is clean",
@@ -782,8 +818,7 @@ def _rule_meaning(classification: str) -> str:
         "edge_or_client_network_latency": "Nginx request is high while upstream/app are normal",
         "partner_specific_latency": "bounded partner_alias evidence narrows candidate scope",
         "internal_application_latency": "handler is high without a dominant dependency phase",
-        "internal_resource_saturation": "broad resource saturation candidate",
-        "route_specific_bottleneck": "bounded route_group candidate without enough phase evidence",
+        "route_specific_latency_candidate": "bounded route_group candidate without enough phase evidence",
         "insufficient_evidence": "evidence is missing or contradictory",
     }
     return meanings[classification]
