@@ -257,3 +257,7 @@ Next steps:
 - PH11 latency drill execution and evidence report
 - managed DB HA runbook candidate
 - queue-first V2 API contract ADR
+
+Interview summary:
+
+PH9에서 새 복구 기능을 추가하지 않은 이유는 기능이 부족해서가 아니라, 이미 만든 hardening 산출물을 어떤 순서와 경계로 검증할지 정리하는 것이 더 중요했기 때문이다.

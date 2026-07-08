@@ -1,34 +1,22 @@
-# 30. PostgreSQL HA와 Queue를 바로 붙이지 않고 ADR로 먼저 분리한 이유
+# PostgreSQL HA와 Queue를 바로 붙이지 않은 이유
 
-PostgreSQL이 Source of Truth인 금융 이벤트 시스템에서 가장 유혹적인 개선은 두 가지다.
+PostgreSQL이 Source of Truth인 금융 이벤트 시스템에서 가장 먼저 떠오르는 개선은 HA와 durable queue다. 둘 다 좋은 선택지가 될 수 있다. 하지만 바로 붙이지 않은 이유는 구현 난이도 때문이 아니라, API 응답 의미와 정합성 책임이 같이 바뀌기 때문이다.
 
-첫째, PostgreSQL HA를 붙인다.
-둘째, Kafka나 RabbitMQ 같은 durable queue를 앞에 둔다.
+PH8의 질문은 이것이었다.
 
-둘 다 좋은 선택지가 될 수 있다.
-하지만 지금 프로젝트에서 바로 붙이지 않은 이유는 구현 난이도 때문이 아니라, API 응답 의미와 정합성 책임이 같이 바뀌기 때문이다.
+```text
+HA나 Queue를 붙이면 정말 문제가 해결되는가?
+```
 
-## 1. 문제
+## 장애 대응 기술을 붙이면 끝나는가?
 
-현재 API는 PostgreSQL commit이 성공한 뒤에 `COMPLETED` 응답을 줄 수 있다.
+현재 API는 PostgreSQL commit 이후에 `COMPLETED`를 설명할 수 있다. PostgreSQL write path가 죽으면 신규 금융 write는 `503 + Retry-After`로 fail-closed 한다.
 
-PostgreSQL write path가 죽으면 신규 금융 write는 `503 + Retry-After`로 fail-closed 한다.
 이 선택은 장애 중 성공률을 낮추지만, 처리 여부가 불명확한 성공 응답을 만들지 않는다.
 
-## 2. 처음에 의심한 방식
+## Direct PostgreSQL transaction을 유지한 이유
 
-처음에는 이런 질문이 생긴다.
-
-- Kafka를 앞에 두면 DB 장애 문제가 바로 해결되는가?
-- RDS Multi-AZ를 쓰면 애플리케이션 복구 로직이 필요 없어지는가?
-- synchronous replication은 금융 시스템에 항상 좋은가?
-
-답은 모두 "상황에 따라 다르다"에 가깝다.
-특히 queue-first는 수신 가능성을 높이지만, 원장 반영 완료를 보장하지 않는다.
-
-## 3. 비교한 선택지
-
-PH8에서는 다섯 가지를 비교했다.
+PH8에서는 다섯 가지 option을 비교했다.
 
 | 선택지 | 핵심 |
 | --- | --- |
@@ -38,57 +26,28 @@ PH8에서는 다섯 가지를 비교했다.
 | Managed DB HA | DB 운영 부담은 줄지만 app retry/readiness 책임은 남는다. |
 | Durable queue-first architecture | 수신 가용성은 높지만 `ACCEPTED`와 `COMPLETED`를 분리해야 한다. |
 
-## 4. 선택한 결론
+현재 프로젝트에서는 direct PostgreSQL transaction + fail-closed를 유지했다. API contract를 바꾸지 않고 가장 잘 설명할 수 있는 선택이기 때문이다.
 
-현재 프로젝트는 direct PostgreSQL transaction + fail-closed를 유지한다.
+## HA가 해결하는 것과 해결하지 못하는 것
 
-이유는 단순하다.
-현재 API의 `COMPLETED`는 PostgreSQL commit evidence가 있어야 설명 가능하다.
+HA는 장애 window를 줄일 수 있다. 하지만 HA가 있으면 consistency gate가 필요 없어진다는 뜻은 아니다.
 
-Queue-first를 도입한다면 API는 이렇게 바뀌어야 한다.
+Failover 후 stale connection, primary identity 확인, replication lag, write resume approval은 여전히 남는다. 그래서 PH8 decision evidence에는 HA option에도 consistency gate와 resume approval을 필수 control로 넣었다.
+
+## Queue-first 구조에서 ACCEPTED와 COMPLETED를 분리해야 하는 이유
+
+Queue-first는 DB down 중에도 요청을 받을 수 있게 해준다. 하지만 queue에 들어갔다는 사실은 ledger가 PostgreSQL에 반영됐다는 뜻이 아니다.
+
+따라서 queue-first를 도입한다면 응답 의미를 분리해야 한다.
 
 - `ACCEPTED`: queue가 이벤트를 받았다.
 - `COMPLETED`: consumer가 PostgreSQL에 원장 반영을 끝냈다.
 
-두 의미를 섞으면 금융 시스템에서는 위험하다.
+이 둘을 섞으면 금융 이벤트 처리 의미가 깨진다.
 
-HA도 마찬가지다.
-HA는 장애 window를 줄일 수 있지만, failover 후 stale connection, primary identity, consistency gate, write resume approval은 여전히 필요하다.
+## ADR로 먼저 남긴 판단
 
-## 5. 구현 중 트러블슈팅
-
-### Queue-first가 정합성 문제를 없애지 않는 문제
-
-- 문제: queue를 앞에 두면 DB 장애 중에도 요청을 받을 수 있지만 ledger posting은 나중에 일어난다.
-- 원인: queue durability와 PostgreSQL commit durability는 서로 다른 boundary다.
-- 해결: queue-first는 별도 V2 contract 후보로 분리했다.
-- 검증: validator가 `ACCEPTED`와 `COMPLETED` 분리가 없으면 실패한다.
-
-### HA가 consistency gate를 대체하지 못하는 문제
-
-- 문제: HA가 있으면 failover 후 바로 write resume을 해도 된다고 오해할 수 있다.
-- 원인: failover 중 stale connection과 replication lag가 남을 수 있다.
-- 해결: HA option에도 consistency gate와 write resume approval을 필수 control로 넣었다.
-- 검증: validator가 이 문구가 없으면 실패한다.
-
-### Decision score가 절대 지표처럼 보이는 문제
-
-- 문제: 1~5 score가 실제 성능 benchmark처럼 보일 수 있다.
-- 원인: 숫자는 설명용이어도 절대 수치처럼 읽히기 쉽다.
-- 해결: score를 deterministic project-fit signal이라고 명시했다.
-- 검증: JSON/Markdown report에 benchmark가 아니라는 note를 남겼다.
-
-### README에 상세 ADR을 넣으면 요약성이 떨어지는 문제
-
-- 문제: HA/Queue 비교표를 README에 넣으면 첫 화면이 무거워진다.
-- 원인: README와 ADR의 역할이 다르다.
-- 해결: README에는 한 문장과 링크만 두고, 상세 판단은 docs/40과 docs/50에 둔다.
-- 검증: README에는 score 표를 넣지 않았다.
-
-## 6. 검증
-
-PH8에서는 실제 HA cluster나 queue middleware를 실행하지 않는다.
-대신 decision matrix generator와 validator를 추가했다.
+PH8은 실제 HA cluster나 queue middleware를 구현하지 않았다. 대신 decision matrix와 validator를 만들었다.
 
 ```bash
 make ph8-ha-queue-decision-demo
@@ -96,18 +55,16 @@ make ph8-ha-queue-decision-validate
 make ph8-architecture-check
 ```
 
-report는 아래 위치에 생성된다.
+decision score는 benchmark가 아니라 project-fit signal이다. 숫자가 절대 성능 지표처럼 읽히지 않도록 report에 note를 남겼다.
 
-```text
-reports/architecture/ph8-ha-queue-tradeoff/sample-ha-queue-decision-report.json
-reports/architecture/ph8-ha-queue-tradeoff/sample-ha-queue-decision-report.md
-```
+## 구현 중 실제로 막은 오해
 
-## 7. 결론
+validator는 queue-first가 ledger completion을 보장한다고 쓰는 문장, HA가 consistency gate를 대체한다고 쓰는 문장, decision matrix total이 option score와 맞지 않는 경우를 실패 처리한다.
 
-이번 단계의 핵심은 기술을 많이 붙이는 것이 아니다.
+이 검증은 문서형 산출물에도 무결성이 필요하다는 판단에서 넣었다. PH8의 output은 코드 실행 결과보다 decision evidence에 가깝기 때문이다.
 
-PostgreSQL HA와 durable queue를 도입할 때 API contract, 정합성 책임, 복구 승인 경계가 어디서 바뀌는지 먼저 설명 가능하게 만드는 것이다.
+## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
 
-현재는 direct PostgreSQL transaction + fail-closed를 유지한다.
-HA는 production availability 후보로, queue-first는 별도 V2 contract 후보로 남긴다.
+말할 수 있는 것은 PH8이 PostgreSQL HA와 durable queue 도입 전 API contract, 정합성 책임, 운영 승인 경계를 ADR과 decision evidence로 정리했다는 점이다.
+
+말하면 안 되는 것은 PH8에서 HA cluster, queue middleware, queue-first V2 API를 구현했다는 주장이다. PH8은 도입이 아니라 판단 근거를 남긴 단계다.

@@ -42,29 +42,36 @@
 | Development Track | Phase 1~12 | Done | consistency, idempotency, Redis fallback, k6, CI/CD, Blue-Green |
 | Ops Extension Track | Phase 1~8 | Done | monitoring, DR drill, security, incident runbook |
 | Supporting Docs | docs/27~34 | Supporting | threat model, SLO/SLI, evidence template, capacity appendix |
-| Production Hardening Track | PH Phase 0~11 | In Progress | PH1 write suspend implementation, PostgreSQL failure policy, incident diagnosis, recovery case, AI-safe governance, latency attribution diagnosis |
+| Production Hardening Track | PH Phase 0~11 | Local Evidence Complete | PostgreSQL failure policy, incident diagnosis, recovery case, AI-safe governance, HMAC rotation, HA/Queue ADR, latency attribution/drill evidence |
 
 Ops Extension Track은 Phase 8 Incident Runbook에서 종료한다.
 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 증거를 보완하기 위한 supporting documents로 관리한다.
 
 Ops Phase 8에서는 장애 대응 Runbook을 최종 정리하고, Grafana p95/p99 지표와 rollback smoke/consistency gate 결과를 evidence로 남겼다.
 
-Production Hardening Track은 기존 구현 위에 PostgreSQL 자체 장애, failover 중 미확정 거래, stale PROCESSING, 자동 incident diagnosis, recovery case 승인 흐름, AI-safe 데이터 보호 기준, latency attribution drill을 보완하는 후속 트랙이다.
-PH1에서는 PostgreSQL write path가 불가능할 때 신규 금융 write를 `503` + `Retry-After`로 fail-closed 처리하는 runtime write suspend와 DB-down drill을 구현했다.
-PH2에서는 PostgreSQL 장애 중 DB에 의존하지 않는 incident artifact bundle과 sanitized report skeleton을 추가했다.
-PH3에서는 PH2 incident artifact를 기반으로 deterministic rule-based incident analyzer MVP를 추가했다.
-PH4에서는 PH3 analyzer 결과를 recovery case로 등록하고 account quarantine write guard와 수동 승인 전 실행 차단을 추가했다.
-Recovery/quarantine read-only API는 운영 민감 정보 보호를 위해 기본 비활성화하고, 내부/admin 환경에서만 opt-in으로 노출한다.
-PH5에서는 stale PROCESSING detector와 count-only reconciliation job을 추가하고, 불일치 후보를 recovery case로 연결하는 기반을 구현했다.
-PH6에서는 incident/recovery/reconciliation evidence를 AI나 외부 분석 도구에 전달하기 전 allowlist 기반 AI-safe context로 변환하는 sanitizer를 추가했다.
-PH7에서는 partner secret rotation 중 current/previous/next/revoked/disabled HMAC 검증과 sanitized rotation evidence를 추가했다.
-PH8에서는 PostgreSQL HA와 durable queue 도입을 직접 구현하지 않고, 현재 API contract와 정합성 책임을 기준으로 trade-off ADR과 decision evidence를 남겼다.
-PH9에서는 PH1~PH8 production hardening 산출물을 안전한 drill catalog와 evidence report로 묶고, 자동화 가능한 검증과 사람이 승인해야 하는 작업의 경계를 정리했다.
-PH10에서는 k6 p95/p99 증상을 Nginx/FastAPI/Redis/PostgreSQL/outbound/blackbox/consistency evidence와 함께 비교하는 deterministic latency attribution analyzer와 sanitized report를 추가했다.
-PH11에서는 LAT-001~LAT-006 latency drill을 safe evidence runner로 묶고, PH10 analyzer와 연결해 p95/p99 증상과 서버 evidence, consistency check를 함께 검증할 수 있게 했다.
+Production Hardening Track은 기존 정합성 구현 위에 PostgreSQL 장애, incident artifact, recovery case, stale reconciliation, AI-safe context, HMAC rotation, HA/Queue ADR, latency attribution, latency drill evidence runner를 추가한 후속 검증 트랙이다.
+
+이 트랙은 production-ready 완성 선언이 아니라, local Docker Compose와 sample evidence 기준으로 운영 장애를 어떻게 정의하고 검증했는지 보여주는 포트폴리오 evidence track이다.
 상세 설계와 구현 기록은 README가 아니라 `docs/35-*` ~ `docs/53-*` 문서에서 관리한다.
 
-## 5. Final Verification Summary
+## 5. 대표 트러블슈팅
+
+1. PostgreSQL 장애 중 성공 응답 금지
+   - DB write path가 불가능할 때 신규 금융 write를 `200 OK`로 처리하지 않고 `503 + Retry-After`로 fail-closed 처리했다.
+
+2. Stale PROCESSING 자동 보정 금지
+   - 처리 중 멈춘 이벤트를 자동 완료/실패 처리하지 않고 count-only reconciliation과 recovery case로 연결했다.
+
+3. AI-safe Incident Context
+   - incident/recovery/reconciliation evidence를 AI에 넘기기 전에 allowlist 기반 sanitizer로 민감 데이터를 제거했다.
+
+4. Partner HMAC Rotation
+   - current/previous/next/revoked/disabled secret 상태를 분리하고, 실제 write API에서는 next secret을 허용하지 않도록 했다.
+
+5. Latency Attribution
+   - k6 p95/p99만으로 DB 문제를 단정하지 않고 Nginx/FastAPI/Redis/PostgreSQL/outbound/blackbox evidence를 함께 분석했다.
+
+## 6. Final Verification Summary
 
 | 검증 항목 | 방법 | 결과 요약 | 근거 문서 |
 | --- | --- | --- | --- |
@@ -76,7 +83,7 @@ PH11에서는 LAT-001~LAT-006 latency drill을 safe evidence runner로 묶고, P
 | DR Drill | PostgreSQL dump restore + consistency SQL | restore 후 정합성 검증 | [PostgreSQL DR Drill](docs/22-postgres-backup-restore-drill.md), [DR Report](reports/dr/ops4-postgres-restore-drill.md), [Blog 15](blog/15-postgresql-backup-restore-drill.md) |
 | 장애 대응 | Incident Runbook + Grafana evidence + rollback verification | 장애별 탐지/대응/복구 기준 문서화 | [Incident Runbook](docs/26-incident-runbook-index.md), [SLO/SLI](docs/29-slo-sli-error-budget.md), [Blog 19](blog/19-incident-runbook-oncall-simulation.md), [Blog 22](blog/22-incident-timeline-postmortem-drill.md) |
 
-## 6. Architecture
+## 7. Architecture
 
 ```text
 External Financial Systems
@@ -96,7 +103,7 @@ PostgreSQL은 최종 Source of Truth다.
 Redis는 성능 최적화와 duplicate request 완화를 위한 보조 계층이며, Redis 장애가 발생해도 최종 정합성은 PostgreSQL transaction과 unique constraint로 검증한다.
 PostgreSQL write path가 불가능한 순간에는 신규 금융 거래를 성공으로 응답하지 않고, `503 Service Unavailable`과 `Retry-After`로 동일 Idempotency-Key 재시도를 유도한다.
 
-## 7. Quick Start
+## 8. Quick Start
 
 ```bash
 cp .env.example .env
@@ -109,7 +116,7 @@ make ready
 자세한 명령은 `make help`를 사용한다.
 운영 drill은 Docker Compose stack을 사용하므로 로컬 Docker daemon이 필요하다.
 
-## 8. Key Commands
+## 9. Key Commands
 
 ```bash
 make test
@@ -145,7 +152,7 @@ make ph1-write-suspend-status
 make ph1-write-suspend-resume
 ```
 
-## 9. 주요 문서
+## 10. 주요 문서
 
 | 문서 | 설명 |
 | --- | --- |
@@ -179,7 +186,7 @@ make ph1-write-suspend-resume
 | [docs/52-ph10-latency-attribution-diagnosis.md](docs/52-ph10-latency-attribution-diagnosis.md) | PH10 latency attribution analyzer와 sanitized report |
 | [docs/53-ph11-latency-drill-evidence-runner.md](docs/53-ph11-latency-drill-evidence-runner.md) | PH11 latency drill safe evidence runner |
 
-## 10. Blog Series
+## 11. Blog Series
 
 이 프로젝트는 구현 과정과 운영 검증 과정을 Velog 시리즈 형태로 정리했다.
 
@@ -194,13 +201,18 @@ make ph1-write-suspend-resume
 | DR Drill | [15. PostgreSQL Backup/Restore DR Drill](blog/15-postgresql-backup-restore-drill.md) |
 | Incident Runbook | [19. Incident Runbook & On-call Simulation](blog/19-incident-runbook-oncall-simulation.md) |
 | Postmortem | [22. Incident Timeline & Postmortem Drill](blog/22-incident-timeline-postmortem-drill.md) |
+| Production Hardening | [24. Incident Artifact](blog/series/24-production-hardening-incident-artifact.md) |
+| Production Hardening | [25. Incident Analyzer](blog/series/25-production-hardening-incident-analyzer.md) |
+| Production Hardening | [26. Recovery Case / Quarantine](blog/series/26-production-hardening-recovery-case-quarantine.md) |
+| Production Hardening | [27. Stale PROCESSING Reconciliation](blog/series/27-production-hardening-stale-processing-reconciliation.md) |
+| Production Hardening | [28. AI-safe Context Sanitizer](blog/series/28-ai-safe-incident-context-sanitizer.md) |
 | Production Hardening | [29. Partner Secret Rotation과 HMAC Hardening](blog/series/29-partner-secret-rotation-hmac-hardening.md) |
 | Production Hardening | [30. PostgreSQL HA와 Queue Trade-off ADR](blog/series/30-postgres-ha-queue-tradeoff-adr.md) |
 | Production Hardening | [31. Production Hardening Drill Plan](blog/series/31-production-hardening-drill-plan.md) |
 | Production Hardening | [32. Latency Attribution과 External Dependency Diagnosis](blog/series/32-latency-attribution-external-dependency-diagnosis.md) |
 | Production Hardening | [33. Latency Drill Evidence Runner](blog/series/33-latency-drill-evidence-runner.md) |
 
-## 11. 한계와 향후 고도화
+## 12. 한계와 향후 고도화
 
 이번 프로젝트의 고도화 후보는 구현 부족 목록이 아니라, 현재 프로젝트의 핵심 범위인 "정합성 보장과 운영 복구 가능성 검증" 밖에 있는 확장 항목으로 분리했다.
 
@@ -220,7 +232,7 @@ make ph1-write-suspend-resume
 - PH11 latency drill evidence runner는 safe sample evidence와 PH10 analyzer 연동까지만 수행하며, Toxiproxy/netem/mock partner/production fault injection은 후속 구현 후보로 남긴다.
 - PostgreSQL HA/Queue PoC는 후속 구현 후보로 남겼다.
 
-## 12. 최종 요약
+## 13. 최종 요약
 
 Development Track에서는 금융 이벤트 정합성 처리 시스템을 구현했고, Ops Extension Track에서는 모니터링, DR Drill, 보안 통제, 장애 대응 Runbook까지 정리했다.
 Ops Phase 8 Incident Runbook을 마지막으로 운영 확장 트랙을 종료했으며, 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 evidence를 보완하는 supporting documents로 관리한다.

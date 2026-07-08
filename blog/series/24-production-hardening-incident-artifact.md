@@ -1,28 +1,22 @@
-# PostgreSQL 장애 중에도 장애 증거를 남기려면 어디에 기록해야 할까
+# PostgreSQL 장애 중에도 증거를 남기려면 어디에 기록해야 할까
 
-## 1. 문제 상황
+PostgreSQL은 이 시스템의 최종 Source of Truth다. 그런데 PostgreSQL이 죽은 순간, incident evidence를 PostgreSQL에만 저장하려고 하면 이상한 모순이 생긴다.
 
-PostgreSQL은 이 시스템의 최종 Source of Truth다.
-하지만 PostgreSQL이 down된 순간에는 `incident_events`나 `recovery_cases` 같은 DB table에 장애 정보를 즉시 저장할 수 없다.
-
-PH1에서는 이 상황에서 신규 금융 write를 성공으로 응답하지 않도록 `503 Service Unavailable`과 `Retry-After`를 반환하는 write suspend 흐름을 구현했다.
-PH2의 질문은 그 다음이다.
+이 글의 질문은 단순하다.
 
 ```text
-DB가 죽었는데 장애 증거는 어디에 남길 것인가?
+DB가 down된 순간에도 장애 증거를 남겨야 한다면, 그 증거는 어디에 남겨야 하는가?
 ```
 
-## 2. DB가 죽었는데 DB에 incident를 저장할 수 있을까?
+## DB가 Source of Truth일 때 생기는 역설
 
-저장할 수 없다.
-정확히는, DB가 회복된 뒤 backfill할 수는 있지만 장애가 발생한 그 순간의 1차 evidence를 DB에만 의존하면 안 된다.
+금융 write path에서는 PostgreSQL commit이 처리 완료의 근거다. 그래서 PH1에서는 PostgreSQL write path가 불가능할 때 신규 금융 write를 성공으로 응답하지 않고 `503 + Retry-After`로 fail-closed 처리했다.
 
-금융 write와 마찬가지로 incident 기록도 "기록했다고 주장하지만 실제로는 DB에 쓰이지 않은" 상태가 생길 수 있다.
-따라서 PostgreSQL down window에서는 out-of-band artifact가 필요하다.
+하지만 incident evidence는 조금 다르다. DB가 죽었다는 사실을 DB에만 기록하려고 하면, 장애 순간의 1차 증거가 사라질 수 있다. DB가 회복된 뒤 backfill할 수는 있어도, 장애 중에 어떤 상태였는지 남기는 경로가 별도로 필요했다.
 
-## 3. 선택한 방식: Out-of-band Artifact
+## DB에 쓰지 못하는 순간에도 evidence는 필요하다
 
-PH2는 로컬 파일 시스템에 다음 구조를 만든다.
+PH2에서는 DB-backed incident model을 바로 만들지 않았다. 대신 out-of-band artifact를 먼저 만들었다.
 
 ```text
 reports/incidents/{incident_id}/
@@ -37,98 +31,40 @@ reports/incidents/{incident_id}/
     README.md
 ```
 
-`manifest.json`은 incident id, scenario, severity candidate, confidence candidate, run id, evidence file 목록을 담는다.
-`sanitized-report.md`는 운영자가 바로 읽을 수 있는 보고서 초안이다.
+핵심은 artifact를 "복구 실행 기록"이 아니라 "장애 중 수집 가능한 sanitized evidence bundle"로 제한한 점이다. PH2는 incident DB 모델이나 자동 복구를 완성했다고 주장하지 않는다.
 
-실제 incident analyzer나 recovery case DB 모델은 아직 만들지 않았다.
-PH2는 후속 PH3/PH4가 사용할 수 있는 증거 묶음과 안전한 report skeleton까지만 구현한다.
+## Sanitized report를 먼저 만든 이유
 
-## 4. Sanitized Report가 필요한 이유
+장애 증거는 AI 요약, postmortem, 운영 공유 문서로 이어질 수 있다. 그 경로에 원문 금융 식별자, retry 식별자, 인증/서명 자료, 요청 본문이 섞이면 incident artifact 자체가 유출 경로가 된다.
 
-장애 분석 자료는 AI 요약이나 외부 문서화로 이어질 수 있다.
-그 과정에 원문 계좌번호, raw idempotency key, HMAC signature, Authorization header, raw request body가 섞이면 안 된다.
+그래서 PH2는 sanitizer를 먼저 두었다. 허용된 key만 남기고, 민감 key나 민감 text pattern은 제거하거나 redaction한다. report에는 `sensitive_data_included=false`를 명시해 다음 단계의 analyzer가 안전하게 읽을 수 있는지 확인하게 했다.
 
-그래서 PH2 sanitizer는 denylist보다 보수적인 allowlist 방식을 사용한다.
-허용된 key만 artifact에 남기고, 민감 key는 제거한다.
-허용된 필드 안에 synthetic sensitive fixture와 같은 민감 값 패턴이 들어오면 `[REDACTED]`로 바꾼다.
+## PH1 DB-down drill과 연결한 부분
 
-## 5. 구현 구조
-
-핵심 스크립트는 다음 파일이다.
+PH2는 PH1과 연결된다. PH1이 DB down 중 신규 write를 막았다면, PH2는 같은 흐름에서 evidence를 남긴다.
 
 ```bash
-scripts/ph2_incident_artifact.py
-```
-
-CLI는 세 가지 동작을 제공한다.
-
-```bash
-python scripts/ph2_incident_artifact.py create --scenario POSTGRES_DOWN --source manual
-python scripts/ph2_incident_artifact.py sanitize --input /tmp/input.json --output /tmp/sanitized.json
-python scripts/ph2_incident_artifact.py validate --latest
-```
-
-Makefile target은 운영 흐름에 맞춰 추가했다.
-
-```bash
-make ph2-incident-artifact
-make ph2-incident-artifact-validate
 make ph2-db-down-incident-artifact
-make ops10-incident-artifact
 ```
 
-## 6. PH1 DB Down Drill과 연결
+이 target은 PH1 DB-down drill 결과와 PH2 artifact를 연결하되, raw request나 인증 자료를 복사하지 않는다. consistency summary도 count-only 형태로만 가져온다.
 
-`make ph2-db-down-incident-artifact`는 PH1 DB-down drill을 먼저 실행한다.
-그 뒤 PH1 `RUN_ID`를 PH2 manifest에 연결하고, PH1 report에서 count-only consistency summary만 읽어온다.
+## 개발 중 실제로 막힌 지점
 
-중요한 제한은 다음과 같다.
+가장 중요한 트러블슈팅은 손상된 `write-suspend-state.json`이었다. 장애 중 생성된 state file이 중단이나 수동 수정으로 깨질 수 있는데, 이때 artifact 생성 자체가 실패하면 PH2의 목적이 무너진다.
 
-- PH1 raw request body를 복사하지 않는다.
-- raw header를 복사하지 않는다.
-- raw idempotency key를 저장하지 않는다.
-- HMAC signature를 저장하지 않는다.
-- raw log 수집은 후속 기능으로 남긴다.
+수정 후에는 state file JSON parse가 실패해도 artifact 생성을 멈추지 않고 `invalid_state_json` summary를 남긴다. 장애 증거 수집은 장애 상황에서도 실패하지 않는 쪽이 맞다고 판단했다.
 
-## 7. 트러블슈팅
+또 하나는 incident id 충돌이었다. 같은 초에 같은 scenario로 artifact를 만들 수 있으므로 suffix를 붙여 충돌을 피하게 했다. 이것은 운영 빈도보다 반복 테스트 안정성 때문에 필요했다.
 
-개발 중 확인한 운영 주의사항:
+## 검증한 것
 
-- 실제 `reports/incidents/inc-*` artifact는 로컬 runtime evidence이므로 git에 commit하지 않는다.
-- Docker가 없거나 stack이 떠 있지 않으면 Docker Compose status는 `not_collected`로 남긴다.
-- `validate --latest`는 먼저 artifact가 생성되어 있어야 한다.
-- 검증에서 민감 key가 발견되면 report를 손으로 고치기보다 생성 source에서 raw field를 제거해야 한다.
+PH2 테스트는 sanitizer가 허용 필드를 유지하고 민감 key/text를 제거하는지, artifact 생성과 validation이 통과하는지, 손상된 write suspend state를 안전한 summary로 남기는지 확인한다.
 
-## 8. 검증 결과
+Docker Compose status가 수집되지 않아도 artifact 전체를 무효화하지 않는다. DB down 중에는 일부 evidence가 `not_collected`일 수 있고, 그것도 장애 증거의 일부다.
 
-이번 구현은 다음 테스트를 추가했다.
+## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
 
-- sanitizer가 허용 필드를 유지하는지
-- Authorization header, X-Signature, raw idempotency key, account number, DATABASE_URL 성격의 key를 제거하는지
-- artifact 생성 시 manifest와 sanitized report가 만들어지는지
-- `sensitive_data_included=false`가 기록되는지
-- validate가 정상 artifact를 통과시키는지
-- validate가 synthetic sensitive fixture가 들어간 artifact를 실패시키는지
-- latest 옵션이 가장 최근 incident directory를 선택하는지
+말할 수 있는 것은 DB down 중에도 DB에 의존하지 않는 sanitized incident evidence를 남기는 구조를 만들었다는 점이다.
 
-로컬 환경의 virtualenv Python 경로가 깨져 있으면 pytest 실행은 별도 환경 복구가 필요하다.
-스크립트 자체는 system Python compile과 CLI create/validate로 우선 확인할 수 있다.
-
-## 9. 남은 한계
-
-PH2는 incident analyzer가 아니다.
-severity와 confidence는 후보값이며 운영자 검토가 필요하다.
-
-또한 PH2는 다음을 하지 않는다.
-
-- DB-backed `incident_events` 생성
-- `recovery_cases` 생성
-- AI API 호출
-- 자동 write resume 승인
-- PostgreSQL HA 또는 durable queue 구성
-- raw 로그 수집
-
-## 10. 다음 단계
-
-다음 구현 후보는 PH-Impl 3 Incident Analyzer MVP다.
-PH2 artifact를 입력으로 받아 `/ready`, consistency summary, write suspend state 같은 신호를 deterministic rule로 묶고, 운영자가 검토할 incident classification draft를 만드는 단계다.
+말하면 안 되는 것은 PH2에서 incident DB 모델, 자동 복구, write resume 승인, raw log 수집까지 완성했다는 주장이다. PH2는 다음 단계가 믿고 읽을 수 있는 안전한 evidence bundle을 만드는 단계다.

@@ -1,73 +1,58 @@
-# 29. Partner Secret Rotation과 HMAC Hardening
+# Secret Rotation은 단순히 key를 바꾸는 일이 아니었다
 
-금융 이벤트 API에서 HMAC은 외부 partner 요청이 위조되지 않았다는 최소한의 계약이다.
-하지만 운영에서 더 어려운 지점은 "secret을 어떻게 바꿀 것인가"다.
+금융 이벤트 API에서 HMAC은 외부 partner 요청이 위조되지 않았다는 최소한의 계약이다. 그런데 운영에서 더 어려운 문제는 서명 검증 자체보다 secret을 바꾸는 과정이다.
 
-secret이 하나뿐이면 rotation 중 partner 배포 순서에 따라 정상 재시도 요청이 실패할 수 있다.
-반대로 old/new secret을 무기한 둘 다 허용하면 rotation이 아니라 permanent dual-secret 상태가 된다.
-
-PH7에서는 실제 Vault나 KMS를 붙이기 전에, version 기반 HMAC 검증 정책을 코드와 drill evidence로 먼저 고정했다.
-
-## 구현한 것
-
-요청 헤더는 partner rotation mode에서 다음 값을 요구한다.
+PH7의 질문은 이것이었다.
 
 ```text
-X-Client-Id
-X-Key-Id
-X-Timestamp
-X-Nonce
-X-Signature
+Secret rotation 중 어떤 key를 언제까지 허용할 것인가?
 ```
 
-canonical request는 아래 형식으로 만들었다.
+## 하나의 static secret으로 설명할 수 없는 상황
 
-```text
-{method}
-{path}
-{timestamp}
-{nonce}
-{body_sha256}
-```
+secret이 하나뿐이면 rotation 중 partner 배포 순서에 따라 정상 요청이 실패할 수 있다. 반대로 old/new secret을 무기한 둘 다 허용하면 rotation이 아니라 permanent dual-secret 상태가 된다.
 
-여기서 raw body는 report나 log에 남기지 않고, 검증에는 `body_sha256`만 사용한다.
-signature 비교는 `hmac.compare_digest`로 수행해 일반 문자열 비교보다 안전하게 처리했다.
+그래서 PH7에서는 Vault/KMS를 붙이기 전에 version 기반 HMAC 검증 계약을 먼저 고정했다.
 
-## Rotation 상태
+## current, previous, next, revoked, disabled를 나눈 이유
 
-PH7 verifier는 secret version 상태를 다음처럼 나눈다.
+PH7 verifier는 secret state를 다음처럼 나눈다.
 
 | 상태 | 의미 | 처리 |
 | --- | --- | --- |
 | current | 현재 활성 secret | 허용 |
 | previous | 직전 secret | rotation window 안에서만 허용 |
-| next | 배포 전 staged secret | verifier/drill dry-run에서만 허용, write API에서는 거부 |
+| next | 배포 전 staged secret | drill dry-run에서만 허용 |
 | revoked | 폐기된 secret | 거부 |
 | disabled | 비활성 client/key | 거부 |
 
-핵심은 `previous`를 영구 허용하지 않는 것이다.
-`previous_valid_until`이 지나면 `previous_expired`로 거부한다.
+핵심은 `previous`와 `next`를 다르게 보는 것이다. `previous`는 짧은 호환 window를 위한 것이고, `next`는 아직 실제 write API에서 활성화되면 안 되는 staged secret이다.
 
-## Evidence를 남길 때 더 조심한 것
+## next를 실제 write API에서 막은 이유
 
-보안 기능을 검증하려고 만든 report가 또 다른 유출 경로가 되면 의미가 없다.
+처음에는 next secret dry-run이 성공하면 실제 API에서도 허용해도 되는지 고민했다. 하지만 그것은 rollout 준비와 production 승인 경계를 섞는 일이다.
 
-그래서 PH7 report에는 다음만 남긴다.
+그래서 실제 write API에서는 `next`를 허용하지 않는다. `allow_next_for_dry_run=true`는 PH7 drill/demo verifier 경로에서만 사용한다.
 
-- `client_token`
-- `key_id`
-- `secret_status`
-- `decision_reason`
-- `body_hash`
-- `canonical_request_hash`
-- `signature_present`
-- `raw_secret_included=false`
-- `raw_signature_included=false`
-- `raw_body_included=false`
+## signature와 canonical request를 evidence에 남기지 않은 이유
 
-raw secret, raw signature, Authorization header, raw request body는 report에 남기지 않는다.
+보안 기능을 검증하려고 만든 evidence가 다시 유출 경로가 되면 안 된다. PH7 report에는 raw secret, raw signature, raw request body, Authorization header를 남기지 않는다.
 
-## Drill 명령
+대신 report에는 tokenized client, key id, secret status, decision reason, body hash, canonical request hash, signature presence 같은 안전한 evidence만 남긴다.
+
+## 구현 중 실제로 잡은 문제
+
+세 가지를 특히 조심했다.
+
+- provided signature를 report에 남기지 않기
+- previous secret을 무기한 허용하지 않기
+- next secret을 실제 write API에서 승인 전 허용하지 않기
+
+이 중 next secret 문제는 dry-run과 write API의 차이를 테스트로 고정했다. rotation 준비가 곧 production 활성화를 뜻하지 않게 만든 것이다.
+
+## 검증한 것
+
+PH7은 다음 명령과 test로 검증한다.
 
 ```bash
 make ph7-hmac-rotation-demo
@@ -76,46 +61,10 @@ make ph7-hmac-rotation-smoke
 make ph7-security-check
 ```
 
-sample report는 아래 위치에 생성된다.
+report validator는 raw secret/signature/body 후보를 검사하고, API dependency test는 next secret이 실제 write API에서 거부되는지 확인한다.
 
-```text
-reports/security/ph7-hmac-rotation/sample-hmac-rotation-report.json
-reports/security/ph7-hmac-rotation/sample-hmac-rotation-report.md
-```
+## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
 
-## 트러블슈팅 기록
+말할 수 있는 것은 PH7이 current/previous/next/revoked/disabled secret 상태를 분리하고, sanitized rotation evidence로 HMAC rotation contract를 검증했다는 점이다.
 
-### raw signature를 evidence에 넣으면 안 되는 문제
-
-- 문제: invalid signature를 설명하려다 provided signature를 report에 남길 수 있었다.
-- 원인: 보안 검증 evidence와 운영 디버깅 로그의 경계를 분리하지 않으면 raw 인증 자료가 섞인다.
-- 해결: report에는 `signature_present`와 hash evidence만 남겼다.
-- 검증: `ph7_hmac_rotation_drill.py validate`에서 raw secret/signature/body 후보를 검사한다.
-
-### previous secret을 무기한 허용하면 안 되는 문제
-
-- 문제: old secret이 계속 허용되면 rotation 완료 기준이 없다.
-- 원인: dual-secret window에 종료 시점을 두지 않으면 폐기 검증이 불가능하다.
-- 해결: `previous_valid_until` 이후 `previous_expired`로 거부한다.
-- 검증: unit test와 sample report에 expired previous case를 고정했다.
-
-### next secret을 기본 허용하면 안 되는 문제
-
-- 문제: staged secret이 승인 전에 활성화될 수 있다.
-- 원인: rollout 준비용 secret과 실서비스 current secret을 구분하지 않으면 조기 활성화된다.
-- 해결: 실제 write API는 항상 `next`를 거부하고, `allow_next_for_dry_run=true`는 drill/demo verifier 경로에서만 사용했다.
-- 검증: dependency 테스트로 write API의 `next` 거부를 확인하고, verifier 테스트로 dry-run 성공만 별도로 확인했다.
-
-## 남긴 한계
-
-PH7은 secret rotation의 운영 계약을 검증하는 단계다.
-
-아직 하지 않은 것:
-
-- Vault/KMS/Secret Manager 연동
-- 실제 partner secret 교체 승인 workflow
-- persistent nonce store
-- production key retirement 자동화
-
-이 경계가 중요하다.
-자동화는 검증과 evidence 생성까지 담당하고, 실제 금융 책임이 생기는 key retirement와 partner 공지는 사람이 승인한다.
+말하면 안 되는 것은 PH7이 Vault/KMS 연동, 실제 partner key retirement, persistent nonce store, production rotation approval workflow까지 완성했다는 주장이다.

@@ -204,3 +204,7 @@ Follow-up candidates include:
 - Solution: PH10 validator rejects PH11 completed-claim text and the Markdown report states the boundary explicitly.
 - Verification: `test_ph11_completed_claim_fails_validation` checks this boundary.
 - README exclusion: README references PH10 as an analyzer only and leaves PH11 execution details for `42-latency-drill-test-plan.md`.
+
+## 11. Interview Summary
+
+PH10의 핵심은 p95/p99가 올랐다는 결과가 아니라, 어느 계층의 evidence가 함께 상승했는지 보고 원인 후보를 좁히는 것이다.
