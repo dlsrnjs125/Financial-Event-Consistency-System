@@ -53,8 +53,8 @@ PH5는 다음 후보를 count-only로 집계한다.
 
 테스트는 stale detector가 fresh/terminal record를 제외하는지, stale 후보가 recovery case로 idempotent하게 연결되는지, stale processing event without ledger만 count하는지, report artifact가 민감 값을 포함하지 않는지 확인한다.
 
-## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
+## 찾았다와 고쳤다를 분리하기
 
-말할 수 있는 것은 PH5가 stale PROCESSING과 reconciliation mismatch 후보를 count-only evidence로 만들고 recovery case로 연결했다는 점이다.
+PH5는 stale PROCESSING과 reconciliation mismatch 후보를 count-only evidence로 만들고 recovery case로 연결한다.
 
-말하면 안 되는 것은 PH5가 오래 남은 PROCESSING을 자동 완료/실패 처리하거나, compensation ledger와 balance correction을 자동 실행한다는 주장이다.
+여기서 중요한 경계는 "찾았다"와 "고쳤다"를 분리하는 것이다. 오래 남은 PROCESSING을 자동 완료/실패 처리하거나, compensation ledger와 balance correction을 자동 실행하지 않는다.

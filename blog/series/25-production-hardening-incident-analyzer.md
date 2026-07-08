@@ -64,8 +64,8 @@ Analyzer가 raw ledger row나 raw request를 읽지 않게 했다. 대신 PH2/PH
 
 특히 analyzer output 자체도 `sensitive_data_included=false`여야 한다. 분석 결과가 다시 유출 경로가 되면 PH3의 의미가 사라진다.
 
-## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
+## 자동 판단과 수동 승인의 경계
 
-말할 수 있는 것은 PH3가 sanitized evidence를 기반으로 incident classification 후보를 deterministic하게 만든다는 점이다.
+PH3가 맡은 일은 sanitized evidence를 기반으로 incident classification 후보를 deterministic하게 만드는 것이다.
 
-말하면 안 되는 것은 PH3가 자동 복구를 실행하거나, AI가 장애 원인을 확정하거나, write resume을 승인한다는 주장이다. PH3는 복구 실행자가 아니라 분류기다.
+자동 복구 실행, AI 기반 원인 확정, write resume 승인은 PH3의 역할이 아니다. Analyzer는 복구 실행자가 아니라 운영자가 다음 판단을 빠르게 시작하도록 돕는 분류기다.

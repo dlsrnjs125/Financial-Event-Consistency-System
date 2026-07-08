@@ -60,8 +60,8 @@ make ph9-hardening-check
 
 validator는 destructive command, missing Makefile target, PH10/PH11 completed claim, AI recovery executor claim, queue completion guarantee claim을 막는다.
 
-## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
+## 자동화하지 않은 것도 설계다
 
-말할 수 있는 것은 PH9가 PH1~PH8 산출물을 운영 drill catalog로 묶고, safe auto-run과 manual approval boundary를 분리했다는 점이다.
+PH9는 PH1~PH8 산출물을 운영 drill catalog로 묶고, safe auto-run과 manual approval boundary를 분리했다.
 
-말하면 안 되는 것은 PH9가 DB down, failover promote, write resume, recovery execution, latency fault injection을 모두 자동 실행한다는 주장이다.
+DB down, failover promote, write resume, recovery execution, latency fault injection을 모두 자동 실행하지 않은 것도 설계의 일부다. 운영자가 먼저 봐야 할 순서와 사람이 승인해야 할 경계를 분리하는 것이 PH9의 목적이었다.

@@ -68,8 +68,8 @@ make ph11-latency-check
 
 unit test는 deterministic catalog, PH10 scenario classification, recomputed analyzer output validation, command boundary, consistency boundary, sensitive data policy를 확인한다.
 
-## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
+## 숫자보다 evidence 흐름이 중요했다
 
-말할 수 있는 것은 PH11이 LAT-001~LAT-006 latency drill을 safe evidence runner로 묶고, PH10 analyzer expected/actual classification과 consistency check를 함께 검증한다는 점이다.
+PH11은 LAT-001~LAT-006 latency drill을 safe evidence runner로 묶고, PH10 analyzer expected/actual classification과 consistency check를 함께 검증한다.
 
-말하면 안 되는 것은 PH11이 production fault injection, DB lock holder, Redis down, network delay, mock partner, Toxiproxy/netem, OpenTelemetry full tracing을 모두 구현했다는 주장이다.
+production fault injection, DB lock holder, Redis down, network delay, mock partner, Toxiproxy/netem, OpenTelemetry full tracing을 모두 구현한 것은 아니다. 이 단계의 핵심은 latency 숫자를 만드는 것이 아니라 PH10 analyzer가 다시 읽을 수 있는 evidence 흐름을 고정하는 것이다.

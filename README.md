@@ -119,38 +119,16 @@ make ready
 ## 9. Key Commands
 
 ```bash
-make test
 make final-check
 make k6-verify
 make deploy-smoke
-make deploy-rollback
 make ops4-demo
-make ops5-demo
-make ops6-demo
-make ops7-demo
-make ph1-db-down-drill
-make ph2-incident-artifact
-make ph2-incident-artifact-validate
-make ph3-incident-analyze
-make ph3-incident-analyze-validate
-make ph4-recovery-case-from-latest
-make ph4-recovery-cases
-make ph4-quarantines
-make ph5-reconciliation-run
-make ph5-reconciliation-validate
-make ph6-ai-context-demo
-make ph6-ai-context-validate
-make ph7-hmac-rotation-demo
-make ph7-hmac-rotation-validate
-make ph8-ha-queue-decision-demo
-make ph8-ha-queue-decision-validate
 make ph9-hardening-drill-demo
-make ph9-hardening-drill-validate
+make ph10-latency-attribution-demo
 make ph11-latency-drill-demo
-make ph11-latency-drill-validate
-make ph1-write-suspend-status
-make ph1-write-suspend-resume
 ```
+
+전체 개발/운영/Production Hardening 명령은 [docs/04-development-roadmap.md](docs/04-development-roadmap.md)와 [docs/35-production-hardening-roadmap.md](docs/35-production-hardening-roadmap.md)를 기준으로 확인한다.
 
 ## 10. 주요 문서
 
@@ -161,30 +139,14 @@ make ph1-write-suspend-resume
 | [docs/04-development-roadmap.md](docs/04-development-roadmap.md) | 개발/운영 Phase 요약 |
 | [docs/12-data-model-spec.md](docs/12-data-model-spec.md) | 데이터 모델 |
 | [docs/15-api-contract.md](docs/15-api-contract.md) | API 계약 |
-| [docs/16-performance-measurement-design.md](docs/16-performance-measurement-design.md) | 성능 측정 설계 |
-| [docs/19-infra-operations-extension.md](docs/19-infra-operations-extension.md) | Ops 확장 요약 |
 | [docs/26-incident-runbook-index.md](docs/26-incident-runbook-index.md) | Incident Runbook |
 | [docs/29-slo-sli-error-budget.md](docs/29-slo-sli-error-budget.md) | SLO/SLI와 장애 판단 기준 |
-| [docs/33-observability-evidence-plan.md](docs/33-observability-evidence-plan.md) | 증거 수집 계획 |
 | [docs/35-production-hardening-roadmap.md](docs/35-production-hardening-roadmap.md) | Production Hardening 후속 보완 로드맵 |
-| [docs/36-postgres-failure-and-write-suspend-policy.md](docs/36-postgres-failure-and-write-suspend-policy.md) | PostgreSQL 장애와 write suspend 정책 |
-| [docs/37-incident-diagnosis-automation-design.md](docs/37-incident-diagnosis-automation-design.md) | 장애 자동 진단 설계 |
-| [docs/38-recovery-case-quarantine-and-reconciliation-design.md](docs/38-recovery-case-quarantine-and-reconciliation-design.md) | Recovery case와 quarantine/reconciliation 설계 |
-| [docs/39-sensitive-data-ai-governance-and-encryption-tradeoff.md](docs/39-sensitive-data-ai-governance-and-encryption-tradeoff.md) | AI-safe 민감 데이터 보호와 암호화 trade-off |
-| [docs/40-postgres-ha-and-queue-tradeoff-adr.md](docs/40-postgres-ha-and-queue-tradeoff-adr.md) | PostgreSQL HA와 durable queue trade-off ADR |
-| [docs/41-latency-attribution-and-external-dependency-diagnosis.md](docs/41-latency-attribution-and-external-dependency-diagnosis.md) | 내부/외부 구간별 latency 원인 분리 설계 |
-| [docs/42-latency-drill-test-plan.md](docs/42-latency-drill-test-plan.md) | k6 기반 latency attribution drill 테스트 계획 |
-| [docs/43-ph1-write-suspend-db-down-drill.md](docs/43-ph1-write-suspend-db-down-drill.md) | PH1 write suspend 구현과 PostgreSQL down drill |
-| [docs/44-ph2-incident-artifact-sanitized-report.md](docs/44-ph2-incident-artifact-sanitized-report.md) | PH2 out-of-band incident artifact와 sanitized report |
-| [docs/45-ph3-incident-analyzer-mvp.md](docs/45-ph3-incident-analyzer-mvp.md) | PH3 deterministic incident analyzer MVP |
-| [docs/46-ph4-recovery-case-quarantine-manual-approval.md](docs/46-ph4-recovery-case-quarantine-manual-approval.md) | PH4 recovery case, quarantine, manual approval 구현 |
-| [docs/47-ph5-stale-processing-reconciliation.md](docs/47-ph5-stale-processing-reconciliation.md) | PH5 stale PROCESSING detector와 reconciliation 구현 |
-| [docs/48-ph6-ai-safe-context-sanitizer.md](docs/48-ph6-ai-safe-context-sanitizer.md) | PH6 AI-safe context sanitizer 구현 |
-| [docs/49-ph7-partner-secret-rotation-hmac-hardening.md](docs/49-ph7-partner-secret-rotation-hmac-hardening.md) | PH7 partner secret rotation과 HMAC hardening 구현 |
-| [docs/50-ph8-postgres-ha-queue-decision-evidence.md](docs/50-ph8-postgres-ha-queue-decision-evidence.md) | PH8 PostgreSQL HA / queue trade-off decision evidence |
 | [docs/51-ph9-production-hardening-drill-plan.md](docs/51-ph9-production-hardening-drill-plan.md) | PH9 production hardening drill catalog와 evidence runner |
 | [docs/52-ph10-latency-attribution-diagnosis.md](docs/52-ph10-latency-attribution-diagnosis.md) | PH10 latency attribution analyzer와 sanitized report |
 | [docs/53-ph11-latency-drill-evidence-runner.md](docs/53-ph11-latency-drill-evidence-runner.md) | PH11 latency drill safe evidence runner |
+
+전체 문서는 `docs/` 디렉터리에서 phase별로 관리한다.
 
 ## 11. Blog Series
 
@@ -202,35 +164,23 @@ make ph1-write-suspend-resume
 | Incident Runbook | [19. Incident Runbook & On-call Simulation](blog/19-incident-runbook-oncall-simulation.md) |
 | Postmortem | [22. Incident Timeline & Postmortem Drill](blog/22-incident-timeline-postmortem-drill.md) |
 | Production Hardening | [24. Incident Artifact](blog/series/24-production-hardening-incident-artifact.md) |
-| Production Hardening | [25. Incident Analyzer](blog/series/25-production-hardening-incident-analyzer.md) |
-| Production Hardening | [26. Recovery Case / Quarantine](blog/series/26-production-hardening-recovery-case-quarantine.md) |
-| Production Hardening | [27. Stale PROCESSING Reconciliation](blog/series/27-production-hardening-stale-processing-reconciliation.md) |
 | Production Hardening | [28. AI-safe Context Sanitizer](blog/series/28-ai-safe-incident-context-sanitizer.md) |
-| Production Hardening | [29. Partner Secret Rotation과 HMAC Hardening](blog/series/29-partner-secret-rotation-hmac-hardening.md) |
 | Production Hardening | [30. PostgreSQL HA와 Queue Trade-off ADR](blog/series/30-postgres-ha-queue-tradeoff-adr.md) |
 | Production Hardening | [31. Production Hardening Drill Plan](blog/series/31-production-hardening-drill-plan.md) |
 | Production Hardening | [32. Latency Attribution과 External Dependency Diagnosis](blog/series/32-latency-attribution-external-dependency-diagnosis.md) |
 | Production Hardening | [33. Latency Drill Evidence Runner](blog/series/33-latency-drill-evidence-runner.md) |
+
+Production Hardening 전체 blog 24~33편은 [blog/series](blog/series)를 기준으로 관리한다.
 
 ## 12. 한계와 향후 고도화
 
 이번 프로젝트의 고도화 후보는 구현 부족 목록이 아니라, 현재 프로젝트의 핵심 범위인 "정합성 보장과 운영 복구 가능성 검증" 밖에 있는 확장 항목으로 분리했다.
 
 - 실제 운영 트래픽 기반 alert threshold 조정이 필요하다.
-- Slack/PagerDuty 같은 외부 on-call 연동은 제외했다.
-- Kubernetes 기반 운영 전환은 제외했다.
-- Loki/OpenTelemetry 기반 trace query evidence는 향후 고도화로 남겼다.
-- Capacity Planning, Change Management, Ansible, PowerShell 문서는 supporting/optional docs로 관리한다.
-- Production Hardening PH1 write suspend는 단일 API 인스턴스 기준으로 구현했다.
-- PH4 recovery case/quarantine은 자동 보정 실행이 아니라 수동 승인 전 실행 차단과 evidence 연결까지 구현했다.
-- PH5 reconciliation은 탐지와 recovery case 연결까지만 수행하며 금전 상태를 자동 수정하지 않는다.
-- PH6 AI-safe context sanitizer는 외부 AI API를 호출하지 않고 allowlist 기반 context 생성과 검증까지만 수행한다.
-- PH7 partner HMAC rotation은 Vault/KMS 연동이나 실제 key retirement를 자동화하지 않고, rotation contract와 sanitized evidence 검증까지만 수행한다.
-- PH8 PostgreSQL HA/Queue decision evidence는 실제 HA cluster나 queue middleware를 구축하지 않고 API contract와 recovery responsibility 판단까지만 수행한다.
-- PH9 production hardening drill plan은 PH1~PH8 산출물을 안전한 catalog/report로 묶고, 실제 장애 주입과 승인 작업은 수동 경계로 남긴다.
-- PH10 latency attribution은 sanitized evidence analyzer/report까지만 수행한다.
-- PH11 latency drill evidence runner는 safe sample evidence와 PH10 analyzer 연동까지만 수행하며, Toxiproxy/netem/mock partner/production fault injection은 후속 구현 후보로 남긴다.
-- PostgreSQL HA/Queue PoC는 후속 구현 후보로 남겼다.
+- Slack/PagerDuty 같은 외부 on-call 연동과 Kubernetes 운영 전환은 제외했다.
+- PostgreSQL HA, durable queue, Vault/KMS, OpenTelemetry full tracing은 후속 후보로 남겼다.
+- Production Hardening drill은 local Docker Compose와 sample evidence 기준이며, destructive fault injection을 기본 실행하지 않는다.
+- Recovery, write resume, 원장 보정, partner key retirement는 자동 실행이 아니라 수동 승인 경계로 남긴다.
 
 ## 13. 최종 요약
 

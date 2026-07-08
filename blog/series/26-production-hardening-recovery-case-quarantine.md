@@ -49,8 +49,8 @@ PH4는 compensation ledger를 만들지 않고, account balance를 직접 수정
 
 테스트는 recovery case 생성 idempotency, approval/execution guard, reject 후 실행 차단, analyzer result 기반 case 생성, quarantine write guard, sensitive analyzer result 거부, unsupported classification 거부를 확인한다.
 
-## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
+## 복구 후보를 안전하게 보관하는 단계
 
-말할 수 있는 것은 PH4가 incident classification 후보를 recovery case와 quarantine으로 연결하고, 수동 승인 전 실행을 막는 경계를 만들었다는 점이다.
+PH4의 핵심은 incident classification 후보를 recovery case와 quarantine으로 연결하고, 수동 승인 전 실행을 막는 경계를 만든 것이다.
 
-말하면 안 되는 것은 PH4가 자동 원장 보정, 자동 quarantine release, 자동 write resume을 구현했다는 주장이다. PH4의 핵심은 복구 실행이 아니라 복구 후보의 안전한 보관이다.
+자동 원장 보정, 자동 quarantine release, 자동 write resume은 여기서 구현하지 않았다. 이 단계의 목적은 복구를 실행하는 것이 아니라, 복구 후보를 운영자가 판단할 수 있는 상태로 안전하게 보관하는 것이다.

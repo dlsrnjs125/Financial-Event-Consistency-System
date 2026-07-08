@@ -63,8 +63,8 @@ make ph7-security-check
 
 report validator는 raw secret/signature/body 후보를 검사하고, API dependency test는 next secret이 실제 write API에서 거부되는지 확인한다.
 
-## 이 글에서 말할 수 있는 것과 말하면 안 되는 것
+## Rotation contract까지만 고정했다
 
-말할 수 있는 것은 PH7이 current/previous/next/revoked/disabled secret 상태를 분리하고, sanitized rotation evidence로 HMAC rotation contract를 검증했다는 점이다.
+PH7에서 고정한 것은 current/previous/next/revoked/disabled secret 상태와 sanitized rotation evidence를 통한 HMAC rotation contract다.
 
-말하면 안 되는 것은 PH7이 Vault/KMS 연동, 실제 partner key retirement, persistent nonce store, production rotation approval workflow까지 완성했다는 주장이다.
+Vault/KMS 연동, 실제 partner key retirement, persistent nonce store, production rotation approval workflow는 아직 남아 있다. 이 경계를 분리해야 dry-run 성공이 곧 production 활성화라는 오해를 막을 수 있다.
