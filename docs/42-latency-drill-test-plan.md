@@ -9,6 +9,8 @@
 
 PH10에서는 이 문서의 실제 k6 drill과 fault injection을 실행하지 않고, sanitized evidence를 분류하는 analyzer와 sample report만 구현했다.
 PH10 구현 산출물과 실행 명령은 [52-ph10-latency-attribution-diagnosis.md](52-ph10-latency-attribution-diagnosis.md)를 기준으로 관리한다.
+PH11에서는 이 테스트 계획의 LAT-001~LAT-006을 safe evidence runner와 PH10 analyzer input generation으로 구현했다.
+PH11 기본 demo는 실제 fault injection을 실행하지 않고, manual/opt-in 후보는 [53-ph11-latency-drill-evidence-runner.md](53-ph11-latency-drill-evidence-runner.md)에 분리한다.
 
 목표:
 
@@ -378,20 +380,28 @@ internal_postgres_latency
 | blackbox probe도 증가 | 외부 endpoint 자체 지연 가능성 | `external_endpoint_slow` |
 | blackbox probe 정상 + app outbound만 증가 | app HTTP client/DNS/pool 문제 | `app_http_client_path_issue` |
 
-## 14. Makefile Target 후보
+## 14. PH11 구현 상태와 Makefile Target
 
-이번 PR에서는 실제 target을 구현하지 않는다.
+PH11은 실제 fault injection target을 구현하지 않고, safe evidence runner target을 구현한다.
 
 ```bash
-make k6-latency-baseline
-make latency-drill-db-pool
-make latency-drill-db-lock
-make latency-drill-redis-delay
-make latency-drill-external-slow
-make latency-drill-nginx-edge
-make latency-analyze
-make latency-report
+make ph11-latency-drill-demo
+make ph11-latency-drill-validate
+make ph11-latency-drill-list
+make ph11-latency-drill-generate-ph10-input
+make ph11-latency-check
 ```
+
+Manual/opt-in 후보:
+
+- `ph11-latency-db-pool-manual`
+- `ph11-latency-db-lock-manual`
+- `ph11-latency-redis-down-manual`
+- `ph11-latency-redis-delay-candidate`
+- `ph11-latency-external-slow-manual`
+- `ph11-latency-nginx-edge-candidate`
+
+위 후보는 PH11 default demo에서 실행되지 않는다.
 
 ## 15. Trade-off
 

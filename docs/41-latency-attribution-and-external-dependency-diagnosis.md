@@ -414,6 +414,9 @@ make ph10-latency-check
 PH10 analyzer는 k6 p95/p99를 증상 evidence로만 취급하고, Nginx timing, FastAPI phase timing, Redis/PostgreSQL phase timing, outbound HTTP, blackbox probe, consistency counter를 함께 비교한다.
 분석 결과는 최종 root cause가 아니라 operator가 다음 확인 지점을 좁히기 위한 candidate classification이다.
 
+PH11 latency drill evidence runner는 이 PH10 analyzer가 읽을 수 있는 input evidence를 생성하고, LAT-001~LAT-006 drill별 expected classification과 actual PH10 classification을 비교한다.
+따라서 PH11도 PH10 analyzer를 우회해 별도 root cause를 확정하지 않는다.
+
 ## 14. 후속 구현 후보
 
 PH10에서는 아래 항목을 구현하지 않는다.

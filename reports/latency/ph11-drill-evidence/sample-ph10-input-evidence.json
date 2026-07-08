@@ -1,0 +1,33 @@
+{
+  "baseline": {
+    "k6_p95_ms": 180,
+    "k6_p99_ms": 420,
+    "server_handler_p95_ms": 120,
+    "server_handler_p99_ms": 300
+  },
+  "consistency": {
+    "duplicate_external_event_count": 0,
+    "duplicate_ledger_count": 0,
+    "invalid_state_transition_count": 0,
+    "reconciliation_failure_count": 0
+  },
+  "generated_at": "2026-07-08T00:00:00+00:00",
+  "method": "POST",
+  "observed": {
+    "blackbox_probe_p95_ms": 0,
+    "db_lock_wait_p95_ms": 300,
+    "error_rate": 0.01,
+    "fastapi_handler_p95_ms": 650,
+    "k6_p95_ms": 760,
+    "k6_p99_ms": 1800,
+    "nginx_request_p95_ms": 730,
+    "nginx_upstream_p95_ms": 700,
+    "outbound_http_p95_ms": 0,
+    "postgres_phase_p95_ms": 260,
+    "redis_phase_p95_ms": 20
+  },
+  "route_group": "financial_event_write",
+  "run_id": "ph11-db_lock_contention-sample",
+  "scenario": "db_lock_contention",
+  "status_code_family": "2xx"
+}

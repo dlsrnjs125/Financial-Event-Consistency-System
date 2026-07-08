@@ -1,0 +1,408 @@
+{
+  "consistency_policy": {
+    "duplicate_external_event_count": 0,
+    "duplicate_ledger_count": 0,
+    "invalid_state_transition_count": 0,
+    "reconciliation_failure_count": 0,
+    "violation_priority": "Any non-zero consistency counter is treated as a consistency incident candidate before latency classification."
+  },
+  "current_status": "Implemented as a safe catalog, synthetic evidence generator, PH10 analyzer integration, and validator. Default demo does not execute DB lock holders, Redis down/delay, Nginx delay, mock partner, Toxiproxy, netem, or production fault injection.",
+  "drill_count": 6,
+  "drills": [
+    {
+      "actual_ph10_classification": "baseline_normal_latency",
+      "candidate_commands": [
+        "make ph11-latency-baseline-demo"
+      ],
+      "commands": [
+        "make ph11-latency-drill-generate-ph10-input",
+        "make ph11-latency-drill-validate"
+      ],
+      "drill_id": "LAT-001",
+      "expected_consistency_evidence": [
+        "duplicate ledger count 0",
+        "duplicate external event count 0",
+        "reconciliation failure count 0"
+      ],
+      "expected_k6_evidence": [
+        "baseline p95/p99",
+        "error rate"
+      ],
+      "expected_ph10_classification": "baseline_normal_latency",
+      "expected_server_evidence": [
+        "handler p95 near baseline"
+      ],
+      "failure_signals": [
+        "baseline p95/p99 is missing",
+        "consistency counter is non-zero"
+      ],
+      "goal": "Create normal/peak local latency baselines and keep consistency counters clean.",
+      "linked_docs": [
+        "docs/42-latency-drill-test-plan.md"
+      ],
+      "manual_approval_required_for": [],
+      "manual_commands": [
+        "make k6-normal",
+        "make k6-peak"
+      ],
+      "manual_run_required": false,
+      "name": "Baseline Latency Drill",
+      "ph10_input_scenario": "baseline",
+      "requires_database": false,
+      "requires_docker": false,
+      "requires_k6": false,
+      "requires_mock_partner": false,
+      "requires_nginx": false,
+      "requires_redis": false,
+      "safe_to_auto_run": true,
+      "safety_boundary": "Default command only generates sample evidence.",
+      "scenario_type": "safe_sample_baseline",
+      "status": "implemented_safe_evidence",
+      "success_criteria": [
+        "PH10 returns baseline_normal_latency",
+        "local baseline is not presented as production SLO"
+      ]
+    },
+    {
+      "actual_ph10_classification": "internal_postgres_pool_pressure",
+      "candidate_commands": [],
+      "commands": [
+        "make ph11-latency-drill-generate-ph10-input"
+      ],
+      "drill_id": "LAT-002",
+      "expected_consistency_evidence": [
+        "duplicate ledger count 0"
+      ],
+      "expected_k6_evidence": [
+        "p95/p99 increase"
+      ],
+      "expected_ph10_classification": "internal_postgres_pool_pressure",
+      "expected_server_evidence": [
+        "DB pool wait p95",
+        "FastAPI handler p95 increase"
+      ],
+      "failure_signals": [
+        "p99 alone is used as DB proof",
+        "manual pool change is in default command"
+      ],
+      "goal": "Represent DB pool wait or pressure evidence without changing pool size by default.",
+      "linked_docs": [
+        "docs/42-latency-drill-test-plan.md"
+      ],
+      "manual_approval_required_for": [
+        "DB pool pressure drill"
+      ],
+      "manual_commands": [
+        "make ph11-latency-db-pool-manual"
+      ],
+      "manual_run_required": true,
+      "name": "PostgreSQL Pool Pressure Drill",
+      "ph10_input_scenario": "db_pool_pressure",
+      "requires_database": true,
+      "requires_docker": true,
+      "requires_k6": true,
+      "requires_mock_partner": false,
+      "requires_nginx": false,
+      "requires_redis": false,
+      "safe_to_auto_run": false,
+      "safety_boundary": "Changing pool size is manual/opt-in only.",
+      "scenario_type": "manual_db_pool_candidate",
+      "status": "implemented_safe_evidence_manual_drill_candidate",
+      "success_criteria": [
+        "PH10 returns internal_postgres_pool_pressure",
+        "pool pressure remains candidate evidence without supporting DB timing"
+      ]
+    },
+    {
+      "actual_ph10_classification": "internal_postgres_lock_contention",
+      "candidate_commands": [],
+      "commands": [
+        "make ph11-latency-drill-demo"
+      ],
+      "drill_id": "LAT-003",
+      "expected_consistency_evidence": [
+        "invalid state transition count 0"
+      ],
+      "expected_k6_evidence": [
+        "p95/p99 increase",
+        "timeout candidate"
+      ],
+      "expected_ph10_classification": "internal_postgres_lock_contention",
+      "expected_server_evidence": [
+        "DB lock wait p95",
+        "FastAPI handler p95 increase"
+      ],
+      "failure_signals": [
+        "lock holder runs in default demo",
+        "write path can hang without timeout"
+      ],
+      "goal": "Represent row lock contention evidence without running a lock holder by default.",
+      "linked_docs": [
+        "docs/42-latency-drill-test-plan.md"
+      ],
+      "manual_approval_required_for": [
+        "DB lock holder"
+      ],
+      "manual_commands": [
+        "make ph11-latency-db-lock-manual"
+      ],
+      "manual_run_required": true,
+      "name": "PostgreSQL Lock Contention Drill",
+      "ph10_input_scenario": "db_lock_contention",
+      "requires_database": true,
+      "requires_docker": true,
+      "requires_k6": true,
+      "requires_mock_partner": false,
+      "requires_nginx": false,
+      "requires_redis": false,
+      "safe_to_auto_run": false,
+      "safety_boundary": "DB lock holder is manual/opt-in and must have timeout cleanup.",
+      "scenario_type": "manual_db_lock_candidate",
+      "status": "implemented_safe_evidence_manual_drill_candidate",
+      "success_criteria": [
+        "PH10 returns internal_postgres_lock_contention",
+        "lock holder remains manual with timeout and cleanup notes"
+      ]
+    },
+    {
+      "actual_ph10_classification": "redis_degraded_latency",
+      "candidate_commands": [
+        "make ph11-latency-redis-delay-candidate"
+      ],
+      "commands": [
+        "make ph11-latency-drill-generate-ph10-input"
+      ],
+      "drill_id": "LAT-004",
+      "expected_consistency_evidence": [
+        "duplicate external event count 0"
+      ],
+      "expected_k6_evidence": [
+        "p95/p99 increase",
+        "fallback availability candidate"
+      ],
+      "expected_ph10_classification": "redis_degraded_latency",
+      "expected_server_evidence": [
+        "Redis phase p95",
+        "Redis unavailable flag"
+      ],
+      "failure_signals": [
+        "test-only Redis delay is added to production code"
+      ],
+      "goal": "Separate Redis slow evidence from Redis unavailable fallback evidence.",
+      "linked_docs": [
+        "docs/42-latency-drill-test-plan.md"
+      ],
+      "manual_approval_required_for": [
+        "Redis down",
+        "Redis delay"
+      ],
+      "manual_commands": [
+        "make ph11-latency-redis-down-manual"
+      ],
+      "manual_run_required": true,
+      "name": "Redis Delay / Redis Down Drill",
+      "ph10_input_scenario": "redis_degraded",
+      "requires_database": true,
+      "requires_docker": true,
+      "requires_k6": true,
+      "requires_mock_partner": false,
+      "requires_nginx": false,
+      "requires_redis": true,
+      "safe_to_auto_run": false,
+      "safety_boundary": "Redis down/delay is manual or candidate only.",
+      "scenario_type": "manual_redis_candidate",
+      "status": "implemented_safe_evidence_manual_drill_candidate",
+      "success_criteria": [
+        "PH10 returns redis_degraded_latency for slow evidence",
+        "redis_unavailable scenario can generate redis_unavailable_fallback"
+      ]
+    },
+    {
+      "actual_ph10_classification": "external_endpoint_slow",
+      "candidate_commands": [],
+      "commands": [
+        "make ph11-latency-drill-generate-ph10-input"
+      ],
+      "drill_id": "LAT-005",
+      "expected_consistency_evidence": [
+        "reconciliation failure count 0"
+      ],
+      "expected_k6_evidence": [
+        "p95/p99 increase",
+        "timeout candidate"
+      ],
+      "expected_ph10_classification": "external_endpoint_slow",
+      "expected_server_evidence": [
+        "outbound HTTP p95",
+        "blackbox probe p95"
+      ],
+      "failure_signals": [
+        "mock partner is described as complete provider proof"
+      ],
+      "goal": "Separate provider endpoint slowness from local HTTP client path problems.",
+      "linked_docs": [
+        "docs/42-latency-drill-test-plan.md"
+      ],
+      "manual_approval_required_for": [
+        "mock partner"
+      ],
+      "manual_commands": [
+        "make ph11-latency-external-slow-manual"
+      ],
+      "manual_run_required": true,
+      "name": "External Dependency Slow Response Drill",
+      "ph10_input_scenario": "external_endpoint_slow",
+      "requires_database": false,
+      "requires_docker": true,
+      "requires_k6": true,
+      "requires_mock_partner": true,
+      "requires_nginx": false,
+      "requires_redis": false,
+      "safe_to_auto_run": false,
+      "safety_boundary": "Mock partner and slow endpoint behavior are manual/follow-up candidates.",
+      "scenario_type": "manual_external_candidate",
+      "status": "implemented_safe_evidence_manual_drill_candidate",
+      "success_criteria": [
+        "PH10 returns external_endpoint_slow",
+        "mock evidence is not claimed as full provider outage proof"
+      ]
+    },
+    {
+      "actual_ph10_classification": "edge_or_client_network_latency",
+      "candidate_commands": [
+        "make ph11-latency-nginx-edge-candidate"
+      ],
+      "commands": [
+        "make ph11-latency-drill-generate-ph10-input"
+      ],
+      "drill_id": "LAT-006",
+      "expected_consistency_evidence": [
+        "duplicate ledger count 0"
+      ],
+      "expected_k6_evidence": [
+        "client-side p95/p99 increase"
+      ],
+      "expected_ph10_classification": "edge_or_client_network_latency",
+      "expected_server_evidence": [
+        "Nginx request time high",
+        "upstream and handler normal"
+      ],
+      "failure_signals": [
+        "request_id is used as metric label",
+        "network delay runs by default"
+      ],
+      "goal": "Identify high Nginx request time with normal upstream/FastAPI handler evidence.",
+      "linked_docs": [
+        "docs/42-latency-drill-test-plan.md"
+      ],
+      "manual_approval_required_for": [
+        "network delay"
+      ],
+      "manual_commands": [],
+      "manual_run_required": true,
+      "name": "Nginx Edge / Client Network Latency Drill",
+      "ph10_input_scenario": "nginx_edge_latency",
+      "requires_database": false,
+      "requires_docker": true,
+      "requires_k6": true,
+      "requires_mock_partner": false,
+      "requires_nginx": true,
+      "requires_redis": false,
+      "safe_to_auto_run": false,
+      "safety_boundary": "Nginx edge/network delay remains candidate/manual only.",
+      "scenario_type": "manual_nginx_edge_candidate",
+      "status": "implemented_safe_evidence_manual_drill_candidate",
+      "success_criteria": [
+        "PH10 returns edge_or_client_network_latency",
+        "request_id remains log correlation only, not metric label"
+      ]
+    }
+  ],
+  "follow_up_candidates": [
+    "Toxiproxy or netem latency profiles",
+    "OpenTelemetry full tracing",
+    "Grafana latency attribution dashboard",
+    "mock partner service compose profile",
+    "controlled DB lock holder script"
+  ],
+  "generated_at": "2026-07-08T00:00:00+00:00",
+  "manual_drill_candidates": [
+    "DB pool pressure with altered pool size",
+    "controlled DB lock holder",
+    "Redis down or Redis delay with network tooling",
+    "mock partner slow endpoint",
+    "Nginx edge/client network latency profile"
+  ],
+  "metric_label_policy": {
+    "allowed": [
+      "route_group",
+      "endpoint_group",
+      "partner_alias",
+      "method",
+      "status_code_family",
+      "result",
+      "phase",
+      "operation"
+    ],
+    "forbidden": [
+      "account_id",
+      "account_no",
+      "customer_id",
+      "customer_identifier",
+      "event_id",
+      "external_event_id",
+      "idempotency_key",
+      "raw_url",
+      "request_id",
+      "trace_id"
+    ]
+  },
+  "ph10_analyzer_link": {
+    "expected_actual_policy": "Each drill records expected_ph10_classification, recomputes the PH10 analyzer output from ph10_input_scenario, and validates it against stored actual_ph10_classification.",
+    "input_contract": "reports/latency/ph11-drill-evidence/sample-ph10-input-evidence.json",
+    "script": "scripts/ph10_latency_attribution.py"
+  },
+  "phase": "PH11 Latency Drill Test Plan & Safe Evidence Runner",
+  "run_id": "ph11-latency-drill-evidence-runner-sample",
+  "safe_demo_scenarios": [
+    "baseline",
+    "db_pool_pressure",
+    "db_lock_contention",
+    "redis_degraded",
+    "redis_unavailable",
+    "external_endpoint_slow",
+    "app_http_client_path_issue",
+    "nginx_edge_latency",
+    "insufficient_evidence"
+  ],
+  "scope": [
+    "LAT-001~LAT-006 latency drill catalog",
+    "safe sample evidence generation",
+    "PH10 analyzer input generation and expected/actual comparison",
+    "consistency evidence boundary validation",
+    "manual/opt-in boundary for destructive or environment-changing drills"
+  ],
+  "sensitive_data_policy": {
+    "auth_material": "prohibited",
+    "endpoint_values": "prohibited",
+    "plain_financial_identifiers": "prohibited",
+    "plain_retry_identifiers": "prohibited",
+    "request_payload_contents": "prohibited",
+    "signing_material": "prohibited"
+  },
+  "validation_summary": {
+    "consistency_violation_downgraded_to_latency": false,
+    "k6_only_root_cause_claim_allowed": false,
+    "ph10_expected_actual_mismatch_allowed": false,
+    "required_drills": [
+      "LAT-001",
+      "LAT-002",
+      "LAT-003",
+      "LAT-004",
+      "LAT-005",
+      "LAT-006"
+    ],
+    "safe_demo_runs_fault_injection": false,
+    "sensitive_data_included": false
+  }
+}
