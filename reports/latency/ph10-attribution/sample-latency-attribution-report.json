@@ -1,0 +1,68 @@
+{
+  "classification": "internal_postgres_latency",
+  "confidence": "HIGH",
+  "consistency_status": "CLEAN",
+  "evidence": [
+    "FastAPI handler p95 increased",
+    "PostgreSQL phase is at least 60% of handler time",
+    "Redis and outbound phases are not dominant"
+  ],
+  "follow_up_candidates": [
+    "PH11 k6 latency scenarios and fault injection",
+    "mock partner service",
+    "Toxiproxy or netem latency profile",
+    "OpenTelemetry trace expansion",
+    "Grafana latency attribution dashboard"
+  ],
+  "generated_at": "2026-07-07T00:00:00+00:00",
+  "input_summary": {
+    "consistency": {
+      "duplicate_external_event_count": 0,
+      "duplicate_ledger_count": 0,
+      "invalid_state_transition_count": 0,
+      "reconciliation_failure_count": 0
+    },
+    "k6_is_symptom_only": true,
+    "method": "POST",
+    "raw_identifiers_included": false,
+    "route_group": "financial_event_write",
+    "status_code_family": "2xx"
+  },
+  "manual_confirmation_required": [
+    "operator must confirm with dashboard, logs, and runbook evidence",
+    "do not treat deterministic classification as final root cause",
+    "if consistency_status is VIOLATION_DETECTED, follow consistency incident flow first"
+  ],
+  "non_scope": [
+    "PH11 k6 latency drill execution",
+    "Toxiproxy or netem fault injection",
+    "mock partner service",
+    "OpenTelemetry full tracing",
+    "production network fault injection",
+    "AI root-cause confirmation or automatic recovery"
+  ],
+  "phase": "PH10 Latency Attribution / External Dependency Diagnosis",
+  "primary_suspect": "postgres",
+  "recommended_next_checks": [
+    "check DB pool, lock wait, slow query, and consistency SQL evidence"
+  ],
+  "run_id": "ph10-sample-latency-attribution",
+  "scenario": "db_phase_dominant",
+  "secondary_suspects": [
+    "db_query_or_transaction"
+  ],
+  "sensitive_data_policy": {
+    "auth_material_policy": "headers and signing material prohibited",
+    "endpoint_value_policy": "plain endpoint values prohibited",
+    "financial_identifier_policy": "plain values prohibited",
+    "metric_label_policy": "bounded route_group, endpoint_group, partner_alias, method, status_code, result, phase, operation only",
+    "request_payload_policy": "payload contents prohibited",
+    "retry_identifier_policy": "plain values prohibited"
+  },
+  "validation_summary": {
+    "classification_is_candidate": true,
+    "k6_only_root_cause_claim_allowed": false,
+    "ph11_drill_completed": false,
+    "sensitive_data_included": false
+  }
+}
