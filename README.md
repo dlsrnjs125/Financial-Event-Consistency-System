@@ -75,13 +75,13 @@ Production Hardening Track은 기존 정합성 구현 위에 PostgreSQL 장애, 
 
 | 검증 항목 | 방법 | 결과 요약 | 근거 문서 |
 | --- | --- | --- | --- |
-| 중복 이벤트 방지 | Idempotency Key + unique constraint + duplicate storm | duplicate ledger 0건 목표 검증 | [Consistency Rules](docs/03-consistency-rules.md), [Data Model](docs/12-data-model-spec.md), [Blog 03](blog/03-idempotency-key-design.md), [Blog 04](blog/04-postgresql-transaction-unique-constraint.md) |
-| Redis 장애 대응 | Redis down/degraded drill + fallback | PostgreSQL 기준 정합성 유지 | [Failure Recovery Drill](docs/23-failure-recovery-runbook-drill.md), [Blog 05](blog/05-redis-lock-cache-fallback.md), [Blog 20](blog/20-failure-recovery-runbook-drill.md) |
-| 상태 전이 검증 | State machine test | invalid transition 차단 | [State Transition Table](docs/13-state-transition-table.md), [Blog 06](blog/06-state-transition-test-strategy.md) |
-| 성능 측정 | k6 load/stress/duplicate storm | p95/p99, 5xx, retry 지표 측정 구조 수립 | [Performance Design](docs/16-performance-measurement-design.md), [Blog 07](blog/07-k6-duplicate-storm-performance-test.md) |
-| 배포 복구 | Blue-Green rollback + smoke + consistency gate | rollback 후 health/ready/smoke와 중복 ledger/event 0건 확인 | [Deployment Strategy](docs/09-deployment-strategy.md), [Phase 12](docs/phase-12-blue-green-rollback.md), [Blog 11](blog/11-blue-green-rollback-simulation.md) |
-| DR Drill | PostgreSQL dump restore + consistency SQL | restore 후 정합성 검증 | [PostgreSQL DR Drill](docs/22-postgres-backup-restore-drill.md), [DR Report](reports/dr/ops4-postgres-restore-drill.md), [Blog 15](blog/15-postgresql-backup-restore-drill.md) |
-| 장애 대응 | Incident Runbook + Grafana evidence + rollback verification | 장애별 탐지/대응/복구 기준 문서화 | [Incident Runbook](docs/26-incident-runbook-index.md), [SLO/SLI](docs/29-slo-sli-error-budget.md), [Blog 19](blog/19-incident-runbook-oncall-simulation.md), [Blog 22](blog/22-incident-timeline-postmortem-drill.md) |
+| 중복 이벤트 방지 | Idempotency Key + unique constraint + duplicate storm | duplicate ledger 0건 목표 검증 | [Consistency Rules](docs/03-consistency-rules.md), [Data Model](docs/12-data-model-spec.md), [Blog 03](blog/series/03-idempotency-key-request-hash.md), [Blog 04](blog/series/04-postgres-unique-constraint-redis-fallback.md) |
+| Redis 장애 대응 | Redis down/degraded drill + fallback | PostgreSQL 기준 정합성 유지 | [Failure Recovery Drill](docs/23-failure-recovery-runbook-drill.md), [Blog 04](blog/series/04-postgres-unique-constraint-redis-fallback.md), [Blog 07](blog/series/07-docker-compose-failure-dependency-policy.md) |
+| 상태 전이 검증 | State machine test | invalid transition 차단 | [State Transition Table](docs/13-state-transition-table.md), [Blog 02](blog/series/02-state-machine-domain-rules.md) |
+| 성능 측정 | k6 load/stress/duplicate storm | p95/p99, 5xx, retry 지표 측정 구조 수립 | [Performance Design](docs/16-performance-measurement-design.md), [Blog 05](blog/series/05-k6-duplicate-storm-ledger-consistency.md) |
+| 배포 복구 | Blue-Green rollback + smoke + consistency gate | rollback 후 health/ready/smoke와 중복 ledger/event 0건 확인 | [Deployment Strategy](docs/09-deployment-strategy.md), [Phase 12](docs/phase-12-blue-green-rollback.md), [Blog 09](blog/series/09-blue-green-traffic-rollback.md) |
+| DR Drill | PostgreSQL dump restore + consistency SQL | restore 후 정합성 검증 | [PostgreSQL DR Drill](docs/22-postgres-backup-restore-drill.md), [DR Report](reports/dr/ops4-postgres-restore-drill.md), [Blog 10](blog/series/10-postgres-backup-restore-drill.md) |
+| 장애 대응 | Incident Runbook + Grafana evidence + rollback verification | 장애별 탐지/대응/복구 기준 문서화 | [Incident Runbook](docs/26-incident-runbook-index.md), [SLO/SLI](docs/29-slo-sli-error-budget.md), [Blog 12](blog/series/12-runbook-alert-postmortem-evidence.md) |
 
 ## 7. Architecture
 
@@ -155,12 +155,12 @@ README에는 대표 글만 남기고, 전체 공개/비공개 기준은 [blog/RE
 
 | 주제 | 글 |
 | --- | --- |
-| 문제 정의 | [금융 이벤트 시스템에서 가장 무서운 장애는 500이 아니라 중복 반영이었다](blog/01-why-financial-event-consistency.md) |
-| 정합성 설계 | [Redis Lock을 믿지 않고 PostgreSQL Unique Constraint를 마지막 방어선으로 둔 이유](blog/04-postgresql-transaction-unique-constraint.md) |
-| 성능 검증 | [p99가 느려져도 원장이 두 번 반영되면 안 된다](blog/07-k6-duplicate-storm-performance-test.md) |
-| 배포 안정성 | [배포 실패 시 DB를 되돌리지 않고 트래픽만 Blue로 되돌린 이유](blog/11-blue-green-rollback-simulation.md) |
-| 장애 대응 | [장애를 복구했다는 말만으로는 부족했다](blog/19-incident-runbook-oncall-simulation.md) |
-| Production Hardening | [PostgreSQL이 죽었을 때 성공 응답도, 장애 기록 유실도 막고 싶었다](blog/23-postgresql-down-write-suspend-drill.md) |
+| 문제 정의 | [금융 이벤트 시스템에서 가장 무서운 장애는 500이 아니라 중복 반영이었다](blog/series/01-duplicate-financial-event-problem.md) |
+| 정합성 설계 | [Redis Lock을 믿지 않고 PostgreSQL Unique Constraint를 마지막 방어선으로 둔 이유](blog/series/04-postgres-unique-constraint-redis-fallback.md) |
+| 성능 검증 | [p99가 느려져도 원장이 두 번 반영되면 안 된다](blog/series/05-k6-duplicate-storm-ledger-consistency.md) |
+| 배포 안정성 | [배포 실패 시 DB를 되돌리지 않고 트래픽만 Blue로 되돌린 이유](blog/series/09-blue-green-traffic-rollback.md) |
+| 장애 대응 | [장애를 복구했다는 말만으로는 부족했다](blog/series/12-runbook-alert-postmortem-evidence.md) |
+| Production Hardening | [PostgreSQL이 죽었을 때 성공 응답도, 장애 기록 유실도 막고 싶었다](blog/series/13-postgres-down-write-suspend-incident-artifact.md) |
 
 ## 12. 한계와 향후 고도화
 

@@ -1,47 +1,47 @@
 # Financial Event Consistency Blog Series
 
-이 디렉터리는 프로젝트 구현 일지 전체를 공개 블로그 순서로 그대로 나열하기보다, 면접이나 포트폴리오에서 설명력이 높은 글을 중심으로 재정리한다.
+이 디렉터리는 프로젝트 구현 일지를 그대로 33편으로 공개하지 않고, 면접과 포트폴리오에서 설명력이 높은 흐름만 남긴 공개용 시리즈를 관리한다.
 
-공개 글의 기준은 기능 목록이 아니라 다음 네 가지다.
+공개 기준은 기능 개수보다 다음 네 가지다.
 
 - 금융 이벤트 정합성 문제를 어떻게 정의했는가
 - 중복 요청, 장애, 재시도, 배포, 복구 상황에서 어떤 설계 판단을 했는가
 - 실제로 막힌 지점과 트러블슈팅이 무엇이었는가
 - 어떤 evidence로 검증했는가
 
-## 공개 권장 시리즈
+## 공개 시리즈
 
-| No. | 공개 제목 | 현재 원문 / 통합 대상 | 공개 판단 |
-| --- | --- | --- | --- |
-| 01 | 금융 이벤트 시스템에서 가장 무서운 장애는 500이 아니라 중복 반영이었다 | [01](01-why-financial-event-consistency.md) | 공개 |
-| 02 | 거래 상태를 코드가 아니라 규칙으로 막은 이유 | [02](02-domain-model-and-state-machine.md), [06](06-state-transition-test-strategy.md) | 통합 공개 |
-| 03 | Idempotency Key만 같다고 같은 거래라고 볼 수 있을까? | [03](03-idempotency-key-design.md) | 공개 |
-| 04 | Redis Lock을 믿지 않고 PostgreSQL Unique Constraint를 마지막 방어선으로 둔 이유 | [04](04-postgresql-transaction-unique-constraint.md), [05](05-redis-lock-cache-fallback.md) | 통합 공개 |
-| 05 | p99가 느려져도 원장이 두 번 반영되면 안 된다 | [07](07-k6-duplicate-storm-performance-test.md) | 공개 |
-| 06 | API p99가 느려졌을 때 코드 문제인지 DB 문제인지 어떻게 구분할까? | [08](08-prometheus-grafana-observability.md), [13](13-why-infra-metrics-matter.md) | 통합 공개 |
-| 07 | Redis 장애는 버티고, PostgreSQL 장애는 막는다 | [09](09-docker-compose-failure-simulation.md), [20](20-failure-recovery-runbook-drill.md) 일부 | 통합 공개 |
-| 08 | 배포 Gate는 코드를 고치는 명령이 아니라 실패를 알려주는 명령이어야 했다 | [10](10-ci-cd-consistency-deployment-gate.md) | 공개 |
-| 09 | 배포 실패 시 DB를 되돌리지 않고 트래픽만 Blue로 되돌린 이유 | [11](11-blue-green-rollback-simulation.md) | 공개 |
-| 10 | PostgreSQL 백업은 만들어지는 것보다 복구되는 것이 중요하다 | [15](15-postgresql-backup-restore-drill.md) | 공개 |
-| 11 | `/metrics`와 `/ready`를 public API에서 숨긴 이유 | [14](14-nginx-as-financial-ops-gateway.md), [18](18-internal-network-access-control.md) | 통합 공개 |
-| 12 | 장애를 복구했다는 말만으로는 부족했다 | [19](19-incident-runbook-oncall-simulation.md), [20](20-failure-recovery-runbook-drill.md), [21](21-alerting-incident-response-runbook.md), [22](22-incident-timeline-postmortem-drill.md) | 통합 공개 |
-| 13 | PostgreSQL이 죽었을 때 성공 응답도, 장애 기록 유실도 막고 싶었다 | [23](23-postgresql-down-write-suspend-drill.md), [24](series/24-production-hardening-incident-artifact.md) | 통합 공개 |
-| 14 | 장애를 찾았다고 바로 고치면 더 위험했다 | [25](series/25-production-hardening-incident-analyzer.md), [26](series/26-production-hardening-recovery-case-quarantine.md), [27](series/27-production-hardening-stale-processing-reconciliation.md) | 통합 공개 |
-| 15 | AI 요약과 HMAC Rotation을 붙이기 전에 먼저 막아야 했던 것들 | [28](series/28-ai-safe-incident-context-sanitizer.md), [29](series/29-partner-secret-rotation-hmac-hardening.md) | 통합 공개 |
-| 16 | k6 p99가 튀었을 때 바로 DB 탓을 하면 안 되는 이유 | [32](series/32-latency-attribution-external-dependency-diagnosis.md), [33](series/33-latency-drill-evidence-runner.md) | 선택 공개 |
-
-## 공개 목록에서 제외하거나 흡수할 글
-
-| 글 | 처리 | 이유 |
+| No. | 글 | 핵심 주제 |
 | --- | --- | --- |
-| [12. Project Retrospective](12-project-retrospective.md) | 공개 시리즈 제외 | 전체 회고 성격이라 README와 중복된다. |
-| [16. Ansible Operation Automation](16-ansible-operation-automation.md) | 공개 시리즈 제외 | optional enhancement 초안이며 구현 evidence가 약하다. |
-| [17. Windows PowerShell Ops Check](17-windows-powershell-ops-check.md) | 공개 시리즈 제외 | 운영자 단말 지원 후보로, core consistency/evidence 흐름과 거리가 있다. |
-| [18. Internal Network Access Control](18-internal-network-access-control.md) | 11편에 흡수 | public/internal endpoint 접근 제어는 14편과 함께 읽는 편이 자연스럽다. |
-| [31. Production Hardening Drill Plan](series/31-production-hardening-drill-plan.md) | 공개 시리즈 단독 제외 | docs/report 성격이 강하며 PH9 상세는 docs/51에서 관리한다. |
-| [33. Latency Drill Evidence Runner](series/33-latency-drill-evidence-runner.md) | 16편에 흡수 | PH10 latency attribution과 함께 읽을 때 설명력이 높다. |
+| 01 | [금융 이벤트 시스템에서 가장 무서운 장애는 500이 아니라 중복 반영이었다](series/01-duplicate-financial-event-problem.md) | 문제 정의, 중복 반영, Source of Truth |
+| 02 | [거래 상태를 코드가 아니라 규칙으로 막은 이유](series/02-state-machine-domain-rules.md) | 상태 머신, invalid transition, 테스트 전략 |
+| 03 | [Idempotency Key만 같다고 같은 거래라고 볼 수 있을까?](series/03-idempotency-key-request-hash.md) | request hash, replay, conflict |
+| 04 | [Redis Lock을 믿지 않고 PostgreSQL Unique Constraint를 마지막 방어선으로 둔 이유](series/04-postgres-unique-constraint-redis-fallback.md) | unique constraint, Redis fallback, 최종 정합성 |
+| 05 | [p99가 느려져도 원장이 두 번 반영되면 안 된다](series/05-k6-duplicate-storm-ledger-consistency.md) | duplicate storm, k6, ledger consistency |
+| 06 | [API p99가 느려졌을 때 코드 문제인지 DB 문제인지 어떻게 구분할까?](series/06-observability-api-infra-metrics.md) | app metrics, infra metrics, 관측성 |
+| 07 | [Redis 장애는 버티고, PostgreSQL 장애는 막는다](series/07-docker-compose-failure-dependency-policy.md) | dependency policy, Redis degraded, PostgreSQL hard dependency |
+| 08 | [배포 Gate는 코드를 고치는 명령이 아니라 실패를 알려주는 명령이어야 했다](series/08-ci-cd-gate-non-mutating-final-check.md) | CI gate, final-check, non-mutating validation |
+| 09 | [배포 실패 시 DB를 되돌리지 않고 트래픽만 Blue로 되돌린 이유](series/09-blue-green-traffic-rollback.md) | Blue-Green, traffic rollback, consistency gate |
+| 10 | [PostgreSQL 백업은 만들어지는 것보다 복구되는 것이 중요하다](series/10-postgres-backup-restore-drill.md) | pg_dump, restore DB, DR drill |
+| 11 | [`/metrics`와 `/ready`를 public API에서 숨긴 이유](series/11-nginx-public-internal-endpoint-boundary.md) | Nginx, public/internal boundary, endpoint exposure |
+| 12 | [장애를 복구했다는 말만으로는 부족했다](series/12-runbook-alert-postmortem-evidence.md) | runbook, alert, postmortem, recovery evidence |
+| 13 | [PostgreSQL이 죽었을 때 성공 응답도, 장애 기록 유실도 막고 싶었다](series/13-postgres-down-write-suspend-incident-artifact.md) | write suspend, fail-closed, out-of-band artifact |
+| 14 | [장애를 찾았다고 바로 고치면 더 위험했다](series/14-analyzer-recovery-case-stale-reconciliation.md) | analyzer, recovery case, stale reconciliation |
+| 15 | [AI 요약과 HMAC Rotation을 붙이기 전에 먼저 막아야 했던 것들](series/15-ai-safe-context-hmac-rotation-boundary.md) | AI-safe context, redaction, HMAC rotation |
+| 16 | [k6 p99가 튀었을 때 바로 DB 탓을 하면 안 되는 이유](series/16-latency-attribution-drill-evidence.md) | latency attribution, drill evidence, consistency counters |
 
-## 공개 글에서 반드시 살릴 트러블슈팅
+## 통합 및 제외 기준
+
+| 기존 주제 | 처리 | 이유 |
+| --- | --- | --- |
+| Project Retrospective | 공개 시리즈 제외 | 전체 회고 성격이라 README와 중복된다. |
+| Ansible Operation Automation | 공개 시리즈 제외 | optional enhancement 초안이며 핵심 정합성/evidence 흐름과 거리가 있다. |
+| Windows PowerShell Ops Check | 공개 시리즈 제외 | 운영자 단말 지원 후보로, public portfolio narrative에서는 우선순위가 낮다. |
+| Internal Network Access Control | 11편에 흡수 | public/internal endpoint 접근 제어는 Nginx gateway 글과 함께 읽는 편이 자연스럽다. |
+| Production Hardening Drill Plan | 문서 산출물로 유지 | PH9 상세는 [docs/51](../docs/51-ph9-production-hardening-drill-plan.md)에서 관리하고, 블로그 흐름은 13~16편에 흡수한다. |
+| Latency Drill Evidence Runner | 16편에 흡수 | PH10 latency attribution과 함께 읽을 때 문제-진단-evidence 흐름이 선명하다. |
+
+## 공개 글에서 반드시 살린 트러블슈팅
 
 - 같은 `Idempotency-Key` + 다른 body를 `409 Conflict`로 처리한 이유
 - Redis degraded 정책과 Docker Compose hard dependency 설정이 충돌했던 문제

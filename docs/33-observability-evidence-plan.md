@@ -35,9 +35,9 @@ placeholder는 실제 evidence가 아니라 수집 계획이라는 점을 명확
 
 | Status | Evidence | Path | Used In |
 | --- | --- | --- | --- |
-| Done | Ops Phase 8 Runbook Index | `docs/images/ops8-01-incident-runbook-index.png` | blog/19 |
-| Done | Grafana Request/Latency Overview | `docs/images/ops8-02-grafana-request-latency-overview.png` | blog/19, linked from blog/21 |
-| Done | Rollback Smoke and Consistency PASS | `docs/images/ops8-03-rollback-smoke-consistency-pass.png` | blog/11, blog/19 |
+| Done | Ops Phase 8 Runbook Index | `docs/images/ops8-01-incident-runbook-index.png` | blog/series/12 |
+| Done | Grafana Request/Latency Overview | `docs/images/ops8-02-grafana-request-latency-overview.png` | blog/series/12 |
+| Done | Rollback Smoke and Consistency PASS | `docs/images/ops8-03-rollback-smoke-consistency-pass.png` | blog/series/09, blog/series/12 |
 
 ## 4. 측정 대상
 

@@ -49,8 +49,8 @@
 | 프로젝트 문제 정의 문서 | 완료 | [01-problem-definition.md](01-problem-definition.md) |
 | 도메인 범위 | 완료 | [02-domain-scope.md](02-domain-scope.md) |
 | 정합성 규칙 문서 | 완료 | [03-consistency-rules.md](03-consistency-rules.md) |
-| ERD 초안 | 완료 | [02-domain-scope.md](02-domain-scope.md), [../blog/02-domain-model-and-state-machine.md](../blog/02-domain-model-and-state-machine.md) |
-| 상태 머신 초안 | 완료 | [03-consistency-rules.md](03-consistency-rules.md), [../blog/02-domain-model-and-state-machine.md](../blog/02-domain-model-and-state-machine.md) |
+| ERD 초안 | 완료 | [02-domain-scope.md](02-domain-scope.md), [../blog/series/02-state-machine-domain-rules.md](../blog/series/02-state-machine-domain-rules.md) |
+| 상태 머신 초안 | 완료 | [03-consistency-rules.md](03-consistency-rules.md), [../blog/series/02-state-machine-domain-rules.md](../blog/series/02-state-machine-domain-rules.md) |
 | 개발 Phase 정리 | 완료 | [04-development-roadmap.md](04-development-roadmap.md) |
 | 블로그 12편 목적/산출물 매핑 | 완료 | [04-development-roadmap.md](04-development-roadmap.md) |
 | Architecture Decision Record | 완료 | [05-architecture-decision-record.md](05-architecture-decision-record.md) |
