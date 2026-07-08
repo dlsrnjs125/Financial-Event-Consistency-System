@@ -7,6 +7,9 @@
 
 이 문서는 k6 부하 테스트와 장애 주입을 통해 latency 증가를 재현하고, 관측 evidence를 비교해 지연 원인 구간을 분류하는 테스트 계획을 정의한다.
 
+PH10에서는 이 문서의 실제 k6 drill과 fault injection을 실행하지 않고, sanitized evidence를 분류하는 analyzer와 sample report만 구현했다.
+PH10 구현 산출물과 실행 명령은 [52-ph10-latency-attribution-diagnosis.md](52-ph10-latency-attribution-diagnosis.md)를 기준으로 관리한다.
+
 목표:
 
 - 기존 k6 normal/peak/duplicate/redis-down 시나리오를 Latency Attribution Drill의 baseline으로 재사용한다.

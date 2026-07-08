@@ -390,11 +390,34 @@ Nginx proxy timeout이 먼저 발생해 client가 실패로 인식하더라도, 
 - 보완 전략: request_hash, masked/tokenized identifier, schema validation error code, trace_id로 대체한다.
 - 면접 답변용 한 문장: 장애 분석보다 민감정보 보호가 우선이므로 raw payload 대신 구조화된 sanitized evidence만 남기도록 설계했습니다.
 
-## 13. 후속 구현 후보
+## 13. PH10 구현 산출물
 
-이번 PR에서는 구현하지 않는다.
-PH9 production hardening drill catalog는 latency attribution으로 넘어가기 전에 PH1~PH8 장애 drill의 자동화 가능 범위와 수동 승인 경계를 정리했다.
-따라서 이 문서의 latency attribution 항목은 PH9에서 완료된 기능이 아니라 후속 구현 후보로 남는다.
+PH10에서는 이 설계를 바탕으로 실제 장애 주입이나 k6 latency drill 실행이 아니라, sanitized evidence를 deterministic하게 분류하는 analyzer와 report validator를 구현했다.
+
+구현 산출물:
+
+- `scripts/ph10_latency_attribution.py`
+- `reports/latency/ph10-attribution/sample-input-evidence.json`
+- `reports/latency/ph10-attribution/sample-latency-attribution-report.json`
+- `reports/latency/ph10-attribution/sample-latency-attribution-report.md`
+- `docs/52-ph10-latency-attribution-diagnosis.md`
+
+실행 명령:
+
+```bash
+make ph10-latency-attribution-demo
+make ph10-latency-attribution-validate
+make ph10-latency-attribution-list-rules
+make ph10-latency-check
+```
+
+PH10 analyzer는 k6 p95/p99를 증상 evidence로만 취급하고, Nginx timing, FastAPI phase timing, Redis/PostgreSQL phase timing, outbound HTTP, blackbox probe, consistency counter를 함께 비교한다.
+분석 결과는 최종 root cause가 아니라 operator가 다음 확인 지점을 좁히기 위한 candidate classification이다.
+
+## 14. 후속 구현 후보
+
+PH10에서는 아래 항목을 구현하지 않는다.
+PH10은 analyzer/report 단계이며, 실제 latency drill 실행과 fault injection은 PH11 이후 후보로 남는다.
 
 후속 구현 후보:
 
@@ -404,13 +427,12 @@ PH9 production hardening drill catalog는 latency attribution으로 넘어가기
 - outbound HTTP client wrapper
 - Nginx log format 확장
 - blackbox exporter 기반 external endpoint probe
-- latency incident analyzer
 - Grafana latency attribution dashboard
 - k6 latency drill scenario
 
 구현하지 않은 항목은 완료된 것처럼 쓰지 않는다.
 구체적인 k6 latency drill 시나리오와 evidence 저장 구조는 [42-latency-drill-test-plan.md](42-latency-drill-test-plan.md)에서 관리한다.
 
-## 14. 면접 답변용 요약
+## 15. 면접 답변용 요약
 
 단순히 p95/p99가 높다고 내부 장애로 단정하지 않고, Nginx request time, upstream response time, FastAPI phase duration, DB/Redis duration, outbound external call duration, blackbox probe를 함께 비교해 내부 병목인지 외부 dependency 문제인지 구간별로 분리하도록 설계했습니다.
