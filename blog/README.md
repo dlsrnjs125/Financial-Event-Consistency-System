@@ -57,3 +57,24 @@
 - AI-safe context redaction summary에도 raw value를 남기지 않은 이유
 - HMAC next secret을 실제 write API가 아니라 dry-run에서만 허용한 이유
 - k6 p99 상승을 바로 DB root cause로 단정하지 않은 이유
+
+## Evidence 관리 표
+
+| No. | Evidence / troubleshooting | 이미지 |
+| --- | --- | --- |
+| 01 | timeout retry, duplicate ledger 0건 기준 | 없음 |
+| 02 | invalid transition, CANCEL은 삭제가 아니라 보정 | 없음 |
+| 03 | request hash, same key different body conflict | 없음 |
+| 04 | Redis down fallback, PostgreSQL unique constraint | 없음 |
+| 05 | k6 normal/peak/duplicate storm/Redis Down 수치, `amount=0` 테스트 버그 | 없음 |
+| 06 | Prometheus metric 이름, p99 원인 좁히는 순서 | 없음 |
+| 07 | Redis degraded vs PostgreSQL hard dependency, destructive volume 삭제 제외 | 없음 |
+| 08 | non-mutating final-check, format/fix 분리 | 없음 |
+| 09 | Blue-Green routed identity, rollback consistency gate | `ops-phase-2` 4장 포함 |
+| 10 | pg_dump/restore/checksum/consistency SQL, sequence lag | Ops4 이미지 파일 없음, TODO |
+| 11 | public/internal Nginx endpoint boundary | `ops-phase-3` 4장 포함 |
+| 12 | incident timeline, count-only postmortem evidence | Ops7 이미지 파일 없음, TODO |
+| 13 | PostgreSQL down `503 + Retry-After`, out-of-band artifact, `invalid_state_json` | 없음 |
+| 14 | analyzer -> recovery case -> quarantine, stale reconciliation 오탐 방지 | 없음 |
+| 15 | AI-safe redaction summary, HMAC next secret dry-run boundary | 없음 |
+| 16 | LAT classification, PH10 analyzer 재실행 validator | 없음 |

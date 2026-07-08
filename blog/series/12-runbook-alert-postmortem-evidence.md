@@ -1,26 +1,97 @@
 # 장애를 복구했다는 말만으로는 부족했다
 
-장애 대응은 "복구했다"는 말로 끝나지 않는다. 언제 감지했고, 어떤 기준으로 severity를 정했고, 어떤 조치를 했고, 어떤 evidence로 종료했는지가 남아야 한다.
+장애 대응에서 "복구했습니다"라는 말만으로는 충분하지 않다. 언제 감지했고, 어떤 영향이 있었고, 어떤 조치를 했고, 복구 후 정합성이 유지됐는지를 evidence로 남겨야 한다.
 
-## Runbook은 명령 목록이 아니라 판단 순서다
+이 글은 runbook, alert rule, incident timeline, postmortem을 하나의 운영 흐름으로 묶은 과정이다.
 
-Runbook에는 어떤 metric을 먼저 보고, 어떤 상태면 escalate하고, 어떤 작업은 사람이 승인해야 하는지 들어가야 한다.
+## 문제 상황
 
-Redis degraded와 PostgreSQL down은 대응이 다르다. consistency violation은 latency warning보다 먼저 다뤄야 한다. 이런 판단 순서가 없으면 장애 중 명령만 많아진다.
+Redis degraded, PostgreSQL down, Nginx route issue, latency spike는 모두 다른 장애다. 그런데 대응 기록이 사람마다 다르면 나중에 같은 장애를 재현하거나 개선하기 어렵다.
 
-## Alert와 Postmortem을 연결했다
-
-Alert rule은 runbook으로 연결되고, incident timeline은 postmortem으로 이어진다. 장애 대응의 핵심은 "어떤 증거를 보고 어떤 결정을 했는가"를 나중에 재현할 수 있게 하는 것이다.
-
-## CI와 로컬 drill을 분리한 이유
-
-처음에는 CI에서도 Redis stop/start 기반 incident drill을 실행하고 싶었다. 하지만 GitHub Actions 환경에서 Docker Compose stop/start는 flaky할 수 있다.
-
-그래서 CI는 script 실행 가능성, report 형식, 필수 문구를 검증하고, 실제 Redis stop/start drill은 로컬 Docker Compose evidence로 남겼다.
+그래서 장애 대응을 다음 흐름으로 고정했다.
 
 ```text
-CI: deterministic validation
-Local Docker Compose: failure drill evidence
+Detect
+  -> Triage
+  -> Mitigate
+  -> Recover
+  -> Verify consistency
+  -> Postmortem action item
 ```
 
-장애 대응도 테스트처럼 재현 가능해야 하지만, 모든 재현을 CI에서 무리하게 실행할 필요는 없었다.
+## Incident Timeline을 어떻게 나눴나
+
+Redis degraded incident drill에서는 timeline을 단계별로 나눴다.
+
+| 단계 | 의미 |
+| --- | --- |
+| STARTED | controlled drill 시작 |
+| DETECTED | `/ready`에서 Redis degraded 확인 |
+| IMPACT_CHECK | Redis down 상태에서 duplicate smoke 요청 |
+| MITIGATED | Redis restart 요청 |
+| RECOVERED | readiness PASS |
+| VERIFIED | duplicate ledger count 0, consistency check PASS |
+
+이렇게 나누면 "언제 알았는가"와 "언제 복구됐는가"를 분리해서 볼 수 있다.
+
+## latency를 네 가지로 나눈 이유
+
+postmortem에는 시간을 하나만 남기지 않았다.
+
+| 항목 | 의미 |
+| --- | --- |
+| Detection latency | 장애 시작부터 감지까지 걸린 시간 |
+| Mitigation latency | 감지 후 완화 조치까지 걸린 시간 |
+| Recovery duration | 완화 조치 후 readiness PASS까지 걸린 시간 |
+| Total incident duration | 시작부터 검증 완료까지 전체 시간 |
+
+전체 시간이 길어도 감지가 느린 것인지, 조치가 느린 것인지, 복구 검증이 오래 걸린 것인지에 따라 개선 방향이 다르다.
+
+## count-only evidence를 남긴 이유
+
+incident report에 실제 row data나 account number 원문을 남기지 않았다. 대신 다음처럼 count-only evidence를 남긴다.
+
+- duplicate external event count
+- duplicate ledger count
+- idempotency conflict count
+- readiness dependency status
+- synthetic external event id prefix
+- idempotency key prefix
+
+장애 기록은 분석에 충분해야 하지만, 민감정보 저장소가 되면 안 된다.
+
+## CI와 local drill을 분리한 이유
+
+CI에서 Redis stop/start 같은 destructive drill을 직접 실행하면 test runner 환경에 따라 flaky해질 수 있다.
+
+그래서 CI에서는 다음을 검증했다.
+
+- script가 실행 가능한지
+- report schema가 맞는지
+- postmortem 필수 필드가 있는지
+- consistency check command가 wiring되어 있는지
+
+실제 Redis degraded incident drill은 local Docker Compose evidence로 남긴다.
+
+```bash
+make ops7-incident-timeline-drill
+make ops7-incident-timeline-check
+```
+
+## 트러블슈팅: 복구와 검증은 다르다
+
+Redis를 다시 올리고 `/ready`가 PASS가 됐다고 해서 장애 대응이 끝난 것은 아니다.
+
+duplicate smoke 요청 이후 ledger가 중복 생성되지 않았는지, idempotency replay가 같은 결과를 반환하는지, consistency SQL이 PASS인지 확인해야 한다.
+
+그래서 timeline의 마지막 단계를 `RECOVERED`가 아니라 `VERIFIED`로 뒀다.
+
+## 이미지 상태
+
+이전 초안에는 Ops7/Postmortem 이미지 참조가 있었지만 현재 repository에는 ops-phase-2/3 이미지만 남아 있다. 깨진 이미지 링크를 넣는 대신, `blog/README.md`에 Ops7 이미지 보강 TODO를 남긴다.
+
+## 남은 한계
+
+이 runbook은 local Docker Compose와 sample evidence 기준이다. 실제 운영 on-call에서는 Slack/PagerDuty 연동, alert threshold tuning, dashboard snapshot 보존, 권한 승인 절차가 추가되어야 한다.
+
+그래도 장애 대응을 감지, 영향 확인, 완화, 복구, 정합성 검증, 사후 액션으로 분리한 점이 핵심이다.
