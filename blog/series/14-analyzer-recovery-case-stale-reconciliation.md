@@ -2,7 +2,7 @@
 
 장애 분석기가 "문제가 있어 보인다"고 말해도, 금융 이벤트 시스템에서 바로 복구를 실행하면 더 큰 사고가 될 수 있다.
 
-이 글은 PH3 analyzer, PH4 recovery case, PH5 stale reconciliation을 하나의 운영 판단 흐름으로 묶은 과정이다.
+이 글은 장애 artifact를 분석하고, 복구 후보를 격리하고, 오래 남은 `PROCESSING` 상태를 자동 수정하지 않도록 분리한 운영 판단 흐름을 정리한다.
 
 ## 운영 판단 흐름
 
@@ -80,14 +80,38 @@ case created
 
 이 경계를 둔 이유는 analyzer가 틀릴 수 있기 때문이다. analyzer가 원인을 좁히는 데 도움을 줄 수는 있지만, 원장 보정이나 상태 변경을 자동으로 결정하면 안 된다.
 
+## 복구 후보도 idempotent해야 한다
+
+장애 분석 결과는 사람이 여러 번 실행할 수 있다. 같은 incident artifact를 여러 번 ingest하면 같은 복구 후보가 중복 생성될 수 있다.
+
+그래서 `source_key`를 유일하게 만들고, repeated create-from-analysis는 기존 case를 반환하도록 했다.
+
+복구 후보도 idempotent하지 않으면 운영자가 같은 사고를 두 번 처리할 수 있다.
+
+## active quarantine은 target별로 하나만 존재해야 한다
+
+동시에 두 운영자가 같은 account나 event를 quarantine하면 active record가 두 개 생길 수 있다.
+
+그래서 service-level lookup과 PostgreSQL partial unique index로 중복 active quarantine을 막았다.
+
+운영 도구에도 동시성 방어가 필요했다.
+
 ## stale reconciliation의 역할
 
-PH5 stale reconciliation은 "오래된 PROCESSING을 찾아 자동으로 고친다"가 아니라, count-only evidence를 만들어 recovery 판단으로 넘기는 역할이다.
+stale reconciliation은 "오래된 PROCESSING을 찾아 자동으로 고친다"가 아니라, count-only evidence를 만들어 recovery 판단으로 넘기는 역할이다.
 
 fresh event를 오탐하지 않기 위해 threshold를 두고, 실제 row 원문 대신 집계와 tokenized identifier 중심으로 report를 만든다.
 
+모든 event without ledger를 같은 mismatch로 세지 않았다.
+
+| 상태 | ledger 없음 판단 |
+| --- | --- |
+| `COMPLETED`, `CANCELLED`, `SETTLED` | 즉시 정합성 후보 |
+| `RECEIVED`, `VALIDATED`, `PROCESSING` | stale threshold 이후 후보 |
+| `FAILED` | 정상 실패일 수 있어 제외 |
+
 ## 남은 한계
 
-PH3~PH5는 실제 원장 보정 자동화를 제공하지 않는다. 보정 실행은 별도 승인, audit trail, compensation ledger 정책이 필요하다.
+이 흐름은 실제 원장 보정 자동화를 제공하지 않는다. 보정 실행은 별도 승인, audit trail, compensation ledger 정책이 필요하다.
 
 현재 단계의 목적은 장애 후보를 분류하고, 복구 판단에 필요한 evidence를 안전한 형태로 격리하는 것이다.

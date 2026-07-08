@@ -38,8 +38,8 @@
 | Ansible Operation Automation | 공개 시리즈 제외 | optional enhancement 초안이며 핵심 정합성/evidence 흐름과 거리가 있다. |
 | Windows PowerShell Ops Check | 공개 시리즈 제외 | 운영자 단말 지원 후보로, public portfolio narrative에서는 우선순위가 낮다. |
 | Internal Network Access Control | 11편에 흡수 | public/internal endpoint 접근 제어는 Nginx gateway 글과 함께 읽는 편이 자연스럽다. |
-| Production Hardening Drill Plan | 문서 산출물로 유지 | PH9 상세는 [docs/51](../docs/51-ph9-production-hardening-drill-plan.md)에서 관리하고, 블로그 흐름은 13~16편에 흡수한다. |
-| Latency Drill Evidence Runner | 16편에 흡수 | PH10 latency attribution과 함께 읽을 때 문제-진단-evidence 흐름이 선명하다. |
+| Production Hardening Drill Plan | 문서 산출물로 유지 | 상세는 [docs/51](../docs/51-ph9-production-hardening-drill-plan.md)에서 관리하고, 블로그 흐름은 13~16편에 흡수한다. |
+| Latency Drill Evidence Runner | 16편에 흡수 | latency attribution과 함께 읽을 때 문제-진단-evidence 흐름이 선명하다. |
 
 ## 공개 글에서 반드시 살린 트러블슈팅
 
@@ -71,10 +71,10 @@
 | 07 | Redis degraded vs PostgreSQL hard dependency, destructive volume 삭제 제외 | 없음 |
 | 08 | non-mutating final-check, format/fix 분리 | 없음 |
 | 09 | Blue-Green routed identity, rollback consistency gate | `ops-phase-2` 4장 포함 |
-| 10 | pg_dump/restore/checksum/consistency SQL, sequence lag | Ops4 이미지 파일 없음, TODO |
+| 10 | pg_dump/restore/checksum/consistency SQL, sequence lag | 없음 |
 | 11 | public/internal Nginx endpoint boundary | `ops-phase-3` 4장 포함 |
-| 12 | incident timeline, count-only postmortem evidence | Ops7 이미지 파일 없음, TODO |
+| 12 | incident timeline, count-only postmortem evidence | 없음 |
 | 13 | PostgreSQL down `503 + Retry-After`, out-of-band artifact, `invalid_state_json` | 없음 |
 | 14 | analyzer -> recovery case -> quarantine, stale reconciliation 오탐 방지 | 없음 |
 | 15 | AI-safe redaction summary, HMAC next secret dry-run boundary | 없음 |
-| 16 | LAT classification, PH10 analyzer 재실행 validator | 없음 |
+| 16 | LAT classification, attribution analyzer 재실행 validator | 없음 |

@@ -87,10 +87,6 @@ dump 파일과 checksum은 runtime artifact다. 계좌/거래 데이터가 synth
 
 원본 dump는 local artifact로만 관리한다.
 
-## 이미지 상태
-
-이전 초안에는 Ops4/DR 이미지 참조가 있었지만, 현재 repository에는 `blog/images/ops-phase-2`와 `blog/images/ops-phase-3`만 남아 있다. 따라서 이 글에는 깨진 이미지를 연결하지 않고, `blog/README.md`에 Ops4 이미지 보강 TODO를 남긴다.
-
 ## 남은 한계
 
 이 drill은 local Docker Compose 기준이다. 운영 PostgreSQL HA, point-in-time recovery, object storage backup retention, 암호화된 backup vault는 별도 운영 설계가 필요하다.

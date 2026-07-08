@@ -4,7 +4,7 @@
 
 이 글의 목표는 "빠른 API"를 증명하는 것이 아니라, 같은 이벤트가 동시에 몰렸을 때 PostgreSQL 기준으로 원장과 이벤트가 한 번만 남는지 확인하는 것이다.
 
-## 문제 상황
+## 부하 테스트에서 정말 보고 싶었던 것은 RPS가 아니었다
 
 외부 금융 시스템은 네트워크 지연이나 timeout이 발생하면 같은 요청을 다시 보낼 수 있다. 이때 API가 한 번은 성공했고, 클라이언트는 응답을 받지 못했고, 같은 `external_event_id`와 `Idempotency-Key`가 다시 들어오는 상황이 생긴다.
 
@@ -16,7 +16,7 @@
 - duplicate storm: 같은 이벤트가 몰려도 중복 반영이 없는가
 - Redis Down: 보조 계층이 죽어도 PostgreSQL 방어선이 유지되는가
 
-## 처음 가정
+## p99만 보면 정합성 실패를 놓칠 수 있다
 
 처음에는 p95/p99가 threshold 안에 들어오면 좋은 결과라고 생각하기 쉽다. 하지만 이 프로젝트에서는 순서를 반대로 잡았다.
 
@@ -60,7 +60,7 @@ export default function () {
 
 여기서 중요한 것은 HTTP 응답 하나하나가 아니라, 실행 후 PostgreSQL에 중복 원장이 남지 않는지다.
 
-## 결과를 어떻게 해석했나
+## Redis Down은 성능 실패였지만 정합성 실패는 아니었다
 
 실제 로컬 Docker Compose 환경에서 기록한 주요 결과는 다음과 같다. 이 수치는 운영 benchmark가 아니라 설계 검증과 회귀 확인을 위한 sample evidence다.
 
@@ -104,7 +104,7 @@ make failure-redis-up
 
 `make k6-verify`는 HTTP 결과가 아니라 PostgreSQL 검증 SQL을 실행한다. 동일 `external_event_id` 중복 row, 동일 `transaction_event_id`의 ledger 중복 row가 있는지 확인한다.
 
-## 트러블슈팅 1: p95보다 먼저 중복 반영을 봤다
+## 트러블슈팅 1: p95가 나빠도 ledger 중복 0건이면 다른 실패다
 
 peak load에서는 p95가 1369.66ms까지 올라갔다. 숫자만 보면 성능 목표를 만족하지 못한다.
 
@@ -112,7 +112,7 @@ peak load에서는 p95가 1369.66ms까지 올라갔다. 숫자만 보면 성능 
 
 반대로 duplicate storm은 p99가 낮아도 핵심은 latency가 아니다. 같은 이벤트가 동시에 몰렸을 때 DB에 한 번만 남았는지가 핵심이다.
 
-## 트러블슈팅 2: 테스트 코드도 검증 대상이었다
+## 트러블슈팅 2: 0원 테스트를 깨뜨린 JavaScript falsy 처리
 
 부하 테스트를 작성하면서 테스트 코드 자체의 버그도 발견했다.
 

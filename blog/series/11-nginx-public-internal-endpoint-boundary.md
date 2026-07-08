@@ -4,7 +4,7 @@
 
 이 글은 Nginx를 단순 reverse proxy가 아니라 public/internal endpoint boundary로 사용한 과정이다.
 
-## 문제 상황
+## health는 공개해도 되지만 readiness는 다르다
 
 FastAPI는 기본적으로 `/docs`, `/redoc`, `/openapi.json`을 제공한다. Prometheus metric과 readiness endpoint도 운영에는 필요하다.
 

@@ -4,7 +4,7 @@ Idempotency Key는 재시도 요청을 같은 요청으로 묶는 계약이다. 
 
 같은 key로 다른 body가 들어오는 순간, 그것은 재시도가 아니라 충돌일 수 있다.
 
-## 문제 상황
+## 같은 Key로 금액이 바뀌면 replay하면 안 된다
 
 가장 위험한 예시는 금액이 바뀐 요청이다.
 
@@ -18,7 +18,7 @@ Idempotency-Key: idem-001
 
 반대로 새 거래로 처리하면 중복 반영이 된다.
 
-## 처음 가정
+## Idempotency-Key만 저장하면 충분할 줄 알았다
 
 처음에는 `Idempotency-Key`가 같으면 같은 요청이라고 단순히 볼 수 있을 것 같았다.
 
@@ -26,7 +26,7 @@ Idempotency-Key: idem-001
 
 그래서 key만 저장하지 않고 canonical request hash를 함께 저장했다.
 
-## request hash를 저장한 이유
+## JSON 문자열이 아니라 요청 의미를 비교해야 했다
 
 request hash는 body의 의미가 같은지 비교하기 위한 값이다.
 
@@ -44,7 +44,7 @@ JSON key 순서가 달라도 의미가 같으면 같은 hash가 나와야 한다
 
 은 같은 요청으로 봐야 한다.
 
-## 판단 규칙
+## Replay, Processing, Conflict를 나눈 기준
 
 판단은 단순하게 고정했다.
 

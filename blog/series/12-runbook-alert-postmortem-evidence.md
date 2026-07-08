@@ -4,7 +4,7 @@
 
 이 글은 runbook, alert rule, incident timeline, postmortem을 하나의 운영 흐름으로 묶은 과정이다.
 
-## 문제 상황
+## 복구했다는 말만으로는 나중에 아무것도 설명할 수 없었다
 
 Redis degraded, PostgreSQL down, Nginx route issue, latency spike는 모두 다른 장애다. 그런데 대응 기록이 사람마다 다르면 나중에 같은 장애를 재현하거나 개선하기 어렵다.
 
@@ -78,6 +78,14 @@ make ops7-incident-timeline-drill
 make ops7-incident-timeline-check
 ```
 
+## 모든 운영 명령을 자동 실행 대상으로 보지 않았다
+
+운영 drill을 한 곳에 모을 때도 모든 명령을 자동 실행 대상으로 넣지는 않았다.
+
+DB down, write resume, recovery approval, failover, queue replay, partner key retirement는 위험도가 다르다. 그래서 safe report generation과 validation은 자동화하고, write resume, recovery execution, partner key retirement, failover promotion, queue replay는 manual approval boundary로 남겼다.
+
+운영 자동화의 목표는 사람을 완전히 빼는 것이 아니라, 자동으로 실행해도 되는 검증과 사람이 승인해야 하는 조치를 분리하는 것이다.
+
 ## 트러블슈팅: 복구와 검증은 다르다
 
 Redis를 다시 올리고 `/ready`가 PASS가 됐다고 해서 장애 대응이 끝난 것은 아니다.
@@ -85,10 +93,6 @@ Redis를 다시 올리고 `/ready`가 PASS가 됐다고 해서 장애 대응이 
 duplicate smoke 요청 이후 ledger가 중복 생성되지 않았는지, idempotency replay가 같은 결과를 반환하는지, consistency SQL이 PASS인지 확인해야 한다.
 
 그래서 timeline의 마지막 단계를 `RECOVERED`가 아니라 `VERIFIED`로 뒀다.
-
-## 이미지 상태
-
-이전 초안에는 Ops7/Postmortem 이미지 참조가 있었지만 현재 repository에는 ops-phase-2/3 이미지만 남아 있다. 깨진 이미지 링크를 넣는 대신, `blog/README.md`에 Ops7 이미지 보강 TODO를 남긴다.
 
 ## 남은 한계
 

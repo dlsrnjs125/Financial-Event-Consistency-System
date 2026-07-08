@@ -4,7 +4,7 @@
 
 이 프로젝트의 Blue-Green 배포는 DB rollback이 아니라 traffic rollback을 목표로 했다. schema 변경은 backward-compatible migration으로 관리하고, 장애가 발생하면 Nginx upstream을 Blue로 되돌린다.
 
-## 문제 상황
+## 새 버전을 띄우는 것보다 되돌릴 수 있는지가 더 중요했다
 
 CI Gate를 통과한 코드라도 운영 트래픽에 바로 노출하면 위험하다. 특히 거래 이벤트 처리 시스템에서는 새 버전이 잘못된 상태 전이를 만들거나 idempotency 판단을 깨뜨리면 중복 원장 반영으로 이어질 수 있다.
 

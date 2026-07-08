@@ -4,7 +4,7 @@ p99가 튀었다는 말만으로는 아무것도 고칠 수 없다. FastAPI hand
 
 이 글은 "모니터링을 붙였다"가 아니라, 금융 이벤트 정합성 시스템에서 latency와 consistency evidence를 어떻게 함께 보게 만들었는지를 정리한다.
 
-## 문제 상황
+## p99가 높다는 말만으로는 아무것도 고칠 수 없었다
 
 k6 결과에서 p99가 상승하면 가장 쉬운 결론은 "DB가 느리다"다. 하지만 실제로는 다음 후보가 모두 가능하다.
 
@@ -17,7 +17,7 @@ k6 결과에서 p99가 상승하면 가장 쉬운 결론은 "DB가 느리다"다
 
 그래서 application metric과 infrastructure metric을 같은 방향으로 읽을 수 있어야 했다.
 
-## 실제로 노출한 애플리케이션 메트릭
+## HTTP latency와 정합성 counter를 같이 남긴 이유
 
 처음부터 OpenTelemetry full tracing이나 Loki 로그 파이프라인을 붙이지 않았다. 범위를 FastAPI custom Prometheus metric과 request id 기반 로그 상관관계로 제한했다.
 
@@ -45,7 +45,7 @@ financial_readiness_dependency_status{dependency}
 | `financial_redis_fallback_total` | Redis 장애나 timeout으로 DB fallback이 증가했는지 |
 | `financial_readiness_dependency_status` | PostgreSQL/Redis dependency 상태 |
 
-## p99 상승 시 확인 순서
+## Nginx, FastAPI, PostgreSQL, Redis를 차례로 좁히는 법
 
 p99가 튀면 다음 순서로 좁힌다.
 
@@ -60,7 +60,7 @@ p99가 튀면 다음 순서로 좁힌다.
 
 반대로 `upstream_time`, FastAPI handler, PostgreSQL phase가 함께 상승하면 DB transaction이나 pool 후보가 된다.
 
-## 처음 가정과 수정한 판단
+## HTTP latency만으로는 금융 장애를 설명할 수 없었다
 
 처음에는 `/metrics`에 HTTP latency만 있으면 충분하다고 생각했다. 하지만 금융 이벤트 시스템에서는 "느린 요청"과 "정합성 위험"을 같이 봐야 했다.
 
@@ -81,7 +81,7 @@ duplicate ledger > 0
 => 성능 문제가 아니라 consistency incident
 ```
 
-## 로그 상관관계
+## trace_id는 남기고 raw identifier는 남기지 않았다
 
 metric만으로 개별 요청을 따라가기는 어렵다. 그래서 API 응답과 구조화 로그에는 `trace_id`, `request_id`, masked identifier를 남기되 raw account number나 full idempotency key는 남기지 않았다.
 

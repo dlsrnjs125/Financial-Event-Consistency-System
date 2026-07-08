@@ -9,7 +9,7 @@
 
 따라서 Redis down은 degraded로 버티고, PostgreSQL write path down은 fail-closed로 막는다.
 
-## 처음 가정
+## Redis를 hard dependency로 두면 오히려 설계가 깨졌다
 
 처음에는 Docker Compose `depends_on`과 application readiness를 비슷하게 생각했다. Redis가 unhealthy면 API 컨테이너도 시작하지 않는 편이 안전해 보였다.
 
@@ -52,7 +52,7 @@ make failure-api-restart
 
 이 명령들은 장애를 "데이터 삭제"가 아니라 "dependency 상태 변화"로 다룬다.
 
-## 하지 않은 것
+## DB volume 삭제는 장애 재현이 아니라 데이터 파괴다
 
 반대로 다음 명령은 장애 drill entrypoint로 만들지 않았다.
 
