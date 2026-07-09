@@ -53,12 +53,14 @@ export default function () {
 
   check(res, {
     "no 500 errors": (r) => r.status !== 500,
-    "accepted or replayed": (r) => [200, 202, 409].includes(r.status),
+    "accepted or replayed": (r) => [200, 202].includes(r.status),
   });
 }
 ```
 
 여기서 중요한 것은 HTTP 응답 하나하나가 아니라, 실행 후 PostgreSQL에 중복 원장이 남지 않는지다.
+
+같은 Idempotency-Key와 같은 body를 보내는 duplicate storm에서 `409 Conflict`는 기대 응답이 아니다. `409`는 같은 key에 다른 body가 붙었을 때 기대하는 conflict 응답이다. 그래서 duplicate storm과 conflict mutation test는 분리해서 봐야 한다.
 
 ## Redis Down은 성능 실패였지만 정합성 실패는 아니었다
 
@@ -71,6 +73,12 @@ export default function () {
 | peak load | 50 VU, 25s | 793.88ms | 1369.66ms | 1490ms | 55.11 req/s | 0.00% | 0건 | 성능 개선 필요, 정합성은 유지 |
 | duplicate storm | 50 VU, 15s | 32.17ms | 70.57ms | 96.81ms | - | 0.00% | 0건 | 중복 방어 성공 |
 | Redis Down | 30 VU, 15s | 614.89ms | 722.21ms | 3490ms | 38.21 req/s | 6.86% | 0건 | 가용성 저하, 정합성 방어선 유지 |
+
+## 이 수치를 운영 성능 목표로 보지 않은 이유
+
+이 표는 local Docker Compose에서 얻은 sample evidence다. 운영 환경의 p95/p99 목표는 worker 수, DB pool size, network, managed PostgreSQL 성능, Redis 구성에 따라 달라진다.
+
+그래서 이 글의 수치는 "운영 트래픽을 견딘다"는 증명이 아니라, 같은 조건에서 변경 전후를 비교하고 정합성 회귀를 잡기 위한 기준선이다.
 
 Redis Down에서는 p99가 3490ms까지 튀고 error rate도 6.86%가 나왔다. 이것은 좋은 성능 결과가 아니다. 하지만 ledger 중복은 0건이었다.
 

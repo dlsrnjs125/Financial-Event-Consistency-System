@@ -45,6 +45,16 @@ financial_readiness_dependency_status{dependency}
 | `financial_redis_fallback_total` | Redis 장애나 timeout으로 DB fallback이 증가했는지 |
 | `financial_readiness_dependency_status` | PostgreSQL/Redis dependency 상태 |
 
+## 애플리케이션 metric에서 인프라 metric으로 확장한 이유
+
+HTTP p99만으로는 API, DB, Redis, host, container, Nginx 중 어디가 병목인지 구분하기 어렵다.
+
+초기 구현은 FastAPI custom metric에 집중했다. 이후 운영 검증에서는 node-exporter, cAdvisor, postgres-exporter, redis-exporter, Grafana dashboard를 붙여 host, container, DB, Redis, gateway 계층까지 관측 범위를 넓혔다.
+
+app metric은 도메인 판단을 보여준다. 예를 들어 idempotency decision, duplicate event, Redis fallback, readiness dependency status는 금융 이벤트 처리 의미를 설명한다. infra exporter는 CPU, memory, connection, lock, command latency처럼 병목 후보를 좁히는 데 필요하다.
+
+다만 Prometheus label에는 `external_event_id`, `account_no`, `idempotency_key`, `trace_id` 같은 high-cardinality 또는 민감 식별자를 넣지 않는다. 관측성을 높인다는 이유로 metric storage를 민감정보 저장소로 만들면 안 된다.
+
 ## Nginx, FastAPI, PostgreSQL, Redis를 차례로 좁히는 법
 
 p99가 튀면 다음 순서로 좁힌다.
@@ -87,17 +97,24 @@ metric만으로 개별 요청을 따라가기는 어렵다. 그래서 API 응답
 
 관측성은 더 많이 기록하는 것이 아니라, 장애 분석에 필요한 단서를 민감정보 없이 남기는 작업이었다.
 
-## 후속 범위로 남긴 것
+## 이후 운영 관측으로 확장한 것
 
-이번 범위에서 의도적으로 제외한 것도 있다.
+초기 범위에서는 FastAPI custom metric에 집중했다. 이후 운영 검증에서는 다음 계층을 추가로 관측 대상으로 확장했다.
 
-- PostgreSQL exporter 기반 connection/lock metric
-- Redis exporter 기반 memory/connection metric
+- node-exporter: host CPU, memory, disk
+- cAdvisor: container CPU, memory
+- postgres-exporter: connection, lock, transaction
+- redis-exporter: memory, clients, command latency
+- Grafana dashboard: API, Infra, PostgreSQL, Redis, Nginx 관측
+
+다만 여전히 후속 범위로 남긴 것도 있다.
+
 - OpenTelemetry full distributed tracing
 - Loki 기반 log query pipeline
+- 장기 metric retention
 - 운영 traffic 기준 alert threshold tuning
 
-이들은 구현 부족이 아니라 범위 경계다. 현재 단계에서는 FastAPI custom metric과 Docker Compose evidence로 정합성/장애 판단 흐름을 먼저 고정했다.
+이들은 구현 부족이 아니라 범위 경계다. 현재 단계에서는 p99 상승을 HTTP metric 하나로 단정하지 않고, 계층별 evidence로 좁히는 기준을 먼저 고정했다.
 
 ## 남은 한계
 
