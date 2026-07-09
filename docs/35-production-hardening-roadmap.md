@@ -105,7 +105,9 @@ PH-Impl 9 production hardening drill catalog와 evidence runner 실행 방법은
 PH-Impl 10 latency attribution analyzer와 sample evidence 실행 방법은 [52-ph10-latency-attribution-diagnosis.md](52-ph10-latency-attribution-diagnosis.md)를 기준으로 관리한다.
 PH-Impl 11 latency drill evidence runner와 PH10 analyzer 연동은 [53-ph11-latency-drill-evidence-runner.md](53-ph11-latency-drill-evidence-runner.md)를 기준으로 관리한다.
 PH-Impl 11은 destructive production fault injection 자동화가 아니라 safe evidence runner 구현 단계다.
-PH Phase 0~11의 production hardening evidence 흐름은 완료됐으며, Toxiproxy/netem/full OpenTelemetry/production fault injection은 후속 후보로 남는다.
+PH Phase 0~11의 production hardening evidence 흐름은 local evidence 기준으로 완료했다.
+
+다만 이 상태는 production-ready 완성 선언이 아니다. 실제 managed DB HA, queue-first architecture, Toxiproxy/netem fault injection, OpenTelemetry full tracing, real partner integration은 후속 후보로 남긴다.
 
 ## 7. 자동화 가능한 부분과 사람이 해야 하는 부분
 
@@ -151,6 +153,5 @@ README에는 다음 수준만 기록한다.
 - PostgreSQL write 불가 시 신규 금융 거래는 성공으로 응답하지 않는다.
 - 자동화는 탐지, 차단, 증거 수집, 복구 후보 생성까지 담당한다.
 - 원장 보정, write 재개, 고객 영향 판단은 사람이 승인한다.
-- 자세한 설계는 `docs/35-*` ~ `docs/40-*` 문서에서 관리한다.
-- latency attribution과 외부 dependency 진단은 `docs/41-*` 문서에서 관리한다.
-- latency attribution drill 테스트 계획은 `docs/42-*` 문서에서 관리한다.
+- 자세한 Production Hardening 설계와 구현 기록은 `docs/35-*` ~ `docs/53-*` 문서에서 관리한다.
+- 대표 트러블슈팅 서사는 [blog/README.md](../blog/README.md)의 공개 시리즈 기준으로 관리한다.

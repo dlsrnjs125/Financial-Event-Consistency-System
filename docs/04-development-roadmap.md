@@ -1091,7 +1091,7 @@ Prometheus Alert Rule과 Incident Response Runbook을 구성하고, API/Redis/Po
 - `scripts/ops6_alert_rule_validation.sh`
 - `reports/ops/ops6-alerting-incident-runbook.md`
 - `docs/24-alerting-incident-response-runbook.md`
-- `blog/21-alerting-incident-response-runbook.md`
+- `blog/series/12-runbook-alert-postmortem-evidence.md`
 - Makefile `ops6-*` 명령
 
 완료 기준:
@@ -1109,7 +1109,7 @@ Redis degraded incident를 재현하고, 장애 발생부터 탐지, 영향 확�
 - `scripts/ops7_incident_timeline_drill.sh`
 - `reports/ops/ops7-incident-timeline-postmortem.md`
 - `docs/25-incident-timeline-postmortem-drill.md`
-- `blog/22-incident-timeline-postmortem-drill.md`
+- `blog/series/12-runbook-alert-postmortem-evidence.md`
 - Makefile `ops7-*` 명령
 
 완료 기준:
@@ -1130,7 +1130,7 @@ Ops Extension Track의 마지막 필수 단계로 장애 탐지, 대응, 복구 
 - `docs/29-slo-sli-error-budget.md`
 - `docs/33-observability-evidence-plan.md`
 - `docs/34-measurement-result-template.md`
-- `blog/19-incident-runbook-oncall-simulation.md`
+- `blog/series/12-runbook-alert-postmortem-evidence.md`
 
 완료 기준:
 - Ops Phase가 1~8까지만 유지됨

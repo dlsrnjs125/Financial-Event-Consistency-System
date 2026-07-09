@@ -252,3 +252,7 @@ Next candidates:
 - Nginx timing parser
 - OpenTelemetry trace expansion
 - Grafana latency attribution dashboard
+
+Interview summary:
+
+PH11에서 중요한 것은 latency 숫자를 만드는 것이 아니라, 그 숫자를 PH10 analyzer가 해석할 수 있는 evidence 흐름으로 연결하는 것이다.

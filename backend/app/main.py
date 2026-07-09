@@ -10,9 +10,11 @@ from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
 from app.metrics.prometheus import router as metrics_router
+from app.models import import_all_models
 from app.observability.middleware import request_context_middleware
 
 setup_logging()
+import_all_models()
 
 
 @asynccontextmanager
