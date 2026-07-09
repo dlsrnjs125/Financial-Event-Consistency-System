@@ -52,6 +52,12 @@ pg_dump -Fc
 
 checksum은 "파일이 만들어졌다"가 아니라 "검증 시점의 파일이 같은 파일이다"를 확인하기 위해 남긴다.
 
+![PostgreSQL DR Drill PASS and RTO Evidence](../images/ops-phase-4/01-postgres-dr-drill-pass-rto.png)
+
+이 캡처는 `make ops4-demo` 실행 결과로, backup 생성, checksum 생성/검증, restore DB 복원, schema 확인, 정합성 SQL 검증이 모두 PASS된 상태를 보여준다.
+
+이 프로젝트에서 DR Drill의 기준은 dump 파일 생성이 아니라, 별도 restore DB에 복원한 뒤 duplicated event, orphan ledger, balance mismatch, sequence position lag가 모두 0인지 확인하는 것이다.
+
 ## restore-only와 DR Drill은 checksum 기준이 달랐다
 
 기존 dump를 수동으로 복원하는 restore-only 경로에서는 checksum이 없으면 `SKIPPED`로 기록하고 진행할 수 있다.

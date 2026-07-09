@@ -34,6 +34,12 @@ Redis degraded incident drill에서는 timeline을 단계별로 나눴다.
 
 이렇게 나누면 "언제 알았는가"와 "언제 복구됐는가"를 분리해서 볼 수 있다.
 
+![Incident Postmortem and Recovery Verification](../images/ops-phase-7/01-incident-postmortem-recovery-verification.png)
+
+이 캡처는 `make ops7-demo` 실행 결과로, Redis degraded 상황에서 API fallback, duplicate smoke, PostgreSQL 정합성 유지 여부, 복구 후 health/ready/smoke/consistency 검증까지 하나의 incident evidence로 남긴 결과다.
+
+장애 대응을 "Redis를 다시 올렸다"에서 끝내지 않고, 사용자 영향과 데이터 정합성 영향, 복구 후 검증까지 분리해 기록했다.
+
 ## Alert severity는 정합성 기준으로 나눴다
 
 Redis down은 성능과 가용성 저하를 만들 수 있다. 하지만 PostgreSQL 기준 정합성이 유지된다면 warning으로 시작한다.

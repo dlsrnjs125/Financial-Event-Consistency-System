@@ -71,9 +71,9 @@
 | 07 | Redis degraded vs PostgreSQL hard dependency, destructive volume 삭제 제외 | 없음 |
 | 08 | non-mutating final-check, format/fix 분리 | 없음 |
 | 09 | Blue-Green routed identity, rollback consistency gate | `ops-phase-2` 4장 포함 |
-| 10 | pg_dump/restore/checksum/consistency SQL, sequence lag | 없음 |
+| 10 | pg_dump/restore/checksum/consistency SQL, sequence lag | `ops-phase-4` 1장 포함 |
 | 11 | public/internal Nginx endpoint boundary | `ops-phase-3` 4장 포함 |
-| 12 | incident timeline, count-only postmortem evidence | 없음 |
+| 12 | incident timeline, count-only postmortem evidence | `ops-phase-7` 1장 포함 |
 | 13 | PostgreSQL down `503 + Retry-After`, out-of-band artifact, `invalid_state_json` | 없음 |
 | 14 | analyzer -> recovery case -> quarantine, stale reconciliation 오탐 방지 | 없음 |
 | 15 | AI-safe redaction summary, HMAC next secret dry-run boundary | 없음 |
