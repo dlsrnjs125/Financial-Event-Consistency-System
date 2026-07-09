@@ -20,6 +20,12 @@ Sanitized Artifact
 
 Analyzer는 장애 후보를 분류할 뿐이다. Recovery case는 "고쳤다"가 아니라 "운영자가 판단할 후보를 안전하게 격리했다"는 의미다.
 
+## Analyzer는 AI 판단기가 아니라 deterministic classifier다
+
+Analyzer는 ML 모델이나 AI 판단기가 아니다. 정해진 artifact와 count-only evidence를 보고 deterministic rule로 분류한다.
+
+이 제한을 둔 이유는 복구 판단이 설명 가능해야 하고, 같은 입력에 대해 같은 결과가 나와야 하기 때문이다. 운영자가 검토할 수 없는 추론 결과가 원장 보정이나 상태 변경으로 이어지면 안 된다.
+
 ## 왜 자동 복구하지 않았나
 
 금융 이벤트 시스템에서 잘못된 자동 복구는 누락보다 더 위험할 수 있다. 이미 원장이 반영된 이벤트를 다시 보정하거나, 처리 중인 이벤트를 실패로 확정하면 새로운 정합성 사고가 된다.
@@ -95,6 +101,24 @@ case created
 그래서 service-level lookup과 PostgreSQL partial unique index로 중복 active quarantine을 막았다.
 
 운영 도구에도 동시성 방어가 필요했다.
+
+## quarantine은 사용자 데이터를 바로 바꾸는 기능이 아니다
+
+이 글에서 말하는 quarantine은 운영 판단을 위한 격리 기록이다. 즉, 특정 account나 event가 위험 후보라는 사실을 남기고, recovery case와 연결해 운영자가 검토할 수 있게 만드는 장치다.
+
+이번 프로젝트의 quarantine은 실제 계좌를 동결하거나, 고객 거래를 차단하거나, ledger를 자동 수정하지 않는다. 그런 기능은 훨씬 강한 권한 모델과 승인 절차가 필요하다.
+
+실제 운영에서 quarantine이 user-facing action이 되려면 다음이 추가되어야 한다.
+
+- 어떤 대상이 격리되는지에 대한 명확한 정책
+- 운영자 권한과 승인 단계
+- 고객 영향 범위 계산
+- release 조건
+- 감사 로그
+- compensation 또는 correction ledger 정책
+- 잘못 격리했을 때의 복구 절차
+
+따라서 이번 글의 quarantine은 자동 보정이 아니라, 복구 후보를 중복 없이 안전하게 묶어두는 운영 evidence layer에 가깝다.
 
 ## stale reconciliation의 역할
 

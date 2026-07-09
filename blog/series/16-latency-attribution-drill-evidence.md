@@ -41,11 +41,25 @@ LAT drill은 숫자 하나가 아니라 evidence 조합을 만든다.
 
 이 표의 목적은 root cause를 단정하는 것이 아니라, 어떤 계층을 다음으로 조사해야 하는지 좁히는 것이다.
 
+## attribution은 root cause 확정이 아니라 조사 순서 정리다
+
+latency attribution 결과가 `DB 후보`라고 해서 DB가 원인이라고 단정할 수는 없다. 이 결과는 운영자가 다음에 무엇을 봐야 하는지 우선순위를 정하는 데 사용한다.
+
+예를 들어 PostgreSQL 후보로 분류되면 다음 단계에서는 실제 DB lock view, slow query log, connection pool usage, transaction wait, index usage를 확인해야 한다. Redis fallback 후보라면 fallback count, timeout, cache miss, Redis network latency를 봐야 한다.
+
+이번 프로젝트의 analyzer는 local sample evidence를 기준으로 candidate를 분류한다. root cause 확정은 더 많은 telemetry와 운영 context가 필요하다.
+
 ## latency drill은 숫자가 아니라 evidence를 만든다
 
 LAT-001~LAT-006 시나리오는 안전한 evidence runner로 묶었다. 기본 demo는 DB lock holder, Redis down, network delay 같은 destructive action을 실행하지 않는다.
 
 대신 attribution analyzer가 읽을 수 있는 input evidence를 만들고 expected classification과 actual classification을 비교한다.
+
+## synthetic drill과 실제 장애는 다르다
+
+LAT-001~LAT-006은 안전한 sample evidence를 만들기 위한 drill이다. 실제 운영 장애처럼 DB lock holder를 오래 잡거나, network delay를 주입하거나, Redis를 강제로 내리는 destructive action을 기본 demo에 넣지 않았다.
+
+이 선택은 안전하지만 한계도 있다. 실제 장애의 복잡한 상호작용은 완전히 재현하지 못한다. 대신 기본 demo는 analyzer 계약과 evidence schema가 깨지지 않는지 확인하는 회귀 검증으로 사용한다.
 
 ```bash
 make ph10-latency-attribution-demo

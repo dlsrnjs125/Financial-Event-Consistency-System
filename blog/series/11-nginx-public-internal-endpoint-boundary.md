@@ -48,6 +48,26 @@ internal port는 `127.0.0.1:8081`에 bind해 외부 노출을 줄였다.
 
 public 사용자는 서비스가 살아 있는지만 알면 된다. dependency가 Redis degraded인지, PostgreSQL이 어떤 상태인지는 내부 운영자가 봐야 한다.
 
+`/health`는 public에서 허용했지만, 이 endpoint도 최소 정보만 반환해야 한다. dependency 상태, DB 연결 정보, Redis degraded 여부는 `/ready`나 internal metric에서만 확인해야 한다.
+
+## Nginx allowlist는 인증/인가를 대체하지 않는다
+
+이 설정은 운영 endpoint 보안의 완성형이 아니다. public Nginx에서 `/metrics`, `/ready`, `/docs`, `/openapi.json`을 숨기는 것은 공격 표면을 줄이는 1차 방어선이다.
+
+실제 운영에서는 여기에 추가로 다음 경계가 필요할 수 있다.
+
+- private subnet 또는 VPC 내부망
+- security group / firewall
+- VPN 또는 identity-aware proxy
+- 운영자 인증/인가
+- mTLS 또는 service-to-service 인증
+- WAF와 rate limit
+- audit log
+
+이번 프로젝트에서는 클라우드 네트워크와 조직 IAM을 구현하지 않았다. 대신 local Docker Compose 환경에서 "외부에 열어도 되는 endpoint와 내부 운영자만 봐야 하는 endpoint를 분리한다"는 기준을 먼저 검증했다.
+
+즉 11편의 목적은 인증 시스템 완성이 아니라, public API와 ops endpoint를 같은 문으로 열지 않는 구조를 만드는 것이다.
+
 ## Access Control 검증 결과
 
 검증은 public과 internal을 모두 확인했다.
