@@ -19,7 +19,7 @@
 | Redis 장애가 발생해도 정합성이 유지되는가? | Redis down/degraded drill, fallback, DB retry | PostgreSQL 기준 정합성 유지 |
 | 잘못된 상태 전이를 막을 수 있는가? | State machine test, invalid transition metric | invalid transition 차단 |
 | 배포 전후 정합성을 검증할 수 있는가? | CI/CD Gate, deploy smoke, deploy verify | 배포 Gate에서 검증 |
-| 장애를 탐지하고 복구 기준을 설명할 수 있는가? | Prometheus/Grafana, Alert Rule, Incident Runbook | Ops Phase 8 Runbook으로 정리 |
+| 장애를 탐지하고 복구 기준을 설명할 수 있는가? | Prometheus/Grafana, Alert Rule, Incident Runbook | incident timeline과 postmortem evidence로 정리 |
 
 ## 3. 구현 범위
 
@@ -39,15 +39,15 @@
 
 | Track | Scope | Status | Evidence |
 | --- | --- | --- | --- |
-| Development Track | Phase 1~12 | Done | consistency, idempotency, Redis fallback, k6, CI/CD, Blue-Green |
-| Ops Extension Track | Phase 1~8 | Done | monitoring, DR drill, security, incident runbook |
+| Core Consistency Track | 금융 이벤트 수신, idempotency, 상태 전이, PostgreSQL 정합성 | Done | duplicate storm, unique constraint, state transition test |
+| Operations Evidence Track | 모니터링, Blue-Green, DR Drill, Runbook/Postmortem | Done | Grafana, rollback smoke, DR report, incident timeline |
+| Production Hardening Track | DB down fail-closed, recovery case, AI-safe context, HMAC rotation, latency attribution | Local Evidence Complete | sanitized artifact, recovery case, latency drill evidence |
 | Supporting Docs | docs/27~34 | Supporting | threat model, SLO/SLI, evidence template, capacity appendix |
-| Production Hardening Track | PH Phase 0~11 | Local Evidence Complete | PostgreSQL failure policy, incident diagnosis, recovery case, AI-safe governance, HMAC rotation, HA/Queue ADR, latency attribution/drill evidence |
 
-Ops Extension Track은 Phase 8 Incident Runbook에서 종료한다.
+Operations Evidence Track은 Incident Runbook 정리까지 완료된 운영 검증 흐름이다.
 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 증거를 보완하기 위한 supporting documents로 관리한다.
 
-Ops Phase 8에서는 장애 대응 Runbook을 최종 정리하고, Grafana p95/p99 지표와 rollback smoke/consistency gate 결과를 evidence로 남겼다.
+운영 evidence에서는 장애 대응 Runbook을 정리하고, Grafana p95/p99 지표와 rollback smoke/consistency gate 결과를 evidence로 남겼다.
 
 Production Hardening Track은 기존 정합성 구현 위에 PostgreSQL 장애, incident artifact, recovery case, stale reconciliation, AI-safe context, HMAC rotation, HA/Queue ADR, latency attribution, latency drill evidence runner를 추가한 후속 검증 트랙이다.
 
@@ -56,20 +56,23 @@ Production Hardening Track은 기존 정합성 구현 위에 PostgreSQL 장애, 
 
 ## 5. 대표 트러블슈팅
 
-1. PostgreSQL 장애 중 성공 응답 금지
-   - DB write path가 불가능할 때 신규 금융 write를 `200 OK`로 처리하지 않고 `503 + Retry-After`로 fail-closed 처리했다.
+1. 같은 Idempotency-Key + 다른 body를 replay하지 않고 분리
+   - 동일 key라도 request hash가 다르면 기존 성공 응답을 replay하지 않고 `409 Conflict`로 처리했다.
 
-2. Stale PROCESSING 자동 보정 금지
-   - 처리 중 멈춘 이벤트를 자동 완료/실패 처리하지 않고 count-only reconciliation과 recovery case로 연결했다.
+2. Redis 장애 시 PostgreSQL unique constraint로 duplicate ledger 방어
+   - Redis down/degraded 상태에서는 성능이 떨어질 수 있지만, 최종 중복 방지는 PostgreSQL constraint와 transaction 경계로 검증했다.
 
-3. AI-safe Incident Context
-   - incident/recovery/reconciliation evidence를 AI에 넘기기 전에 allowlist 기반 sanitizer로 민감 데이터를 제거했다.
+3. k6 duplicate storm에서 p99보다 ledger 중복 여부를 우선 확인
+   - 응답 지연보다 금융 정합성 위반이 더 치명적이므로 duplicate ledger count 0건을 핵심 기준으로 두었다.
 
-4. Partner HMAC Rotation
-   - current/previous/next/revoked/disabled secret 상태를 분리하고, 실제 write API에서는 next secret을 허용하지 않도록 했다.
+4. Blue-Green 전환을 설정 파일이 아니라 routed identity로 확인
+   - Nginx 설정 변경만 믿지 않고 실제 public route가 Blue/Green 중 어디로 향하는지 smoke evidence로 확인했다.
 
-5. Latency Attribution
-   - k6 p95/p99만으로 DB 문제를 단정하지 않고 Nginx/FastAPI/Redis/PostgreSQL/outbound/blackbox evidence를 함께 분석했다.
+5. PostgreSQL DR Drill에서 restore DB + consistency SQL + checksum을 evidence 기준으로 사용
+   - backup 생성 여부가 아니라 별도 restore DB 복원과 정합성 SQL 통과를 DR evidence 기준으로 삼았다.
+
+6. PostgreSQL down 중 성공 응답과 장애 기록 유실을 함께 방지
+   - 신규 write는 `503 + Retry-After`로 fail-closed 처리하고, out-of-band incident artifact와 수동 승인 경계를 분리했다.
 
 ## 6. Final Verification Summary
 
@@ -82,6 +85,9 @@ Production Hardening Track은 기존 정합성 구현 위에 PostgreSQL 장애, 
 | 배포 복구 | Blue-Green rollback + smoke + consistency gate | rollback 후 health/ready/smoke와 중복 ledger/event 0건 확인 | [Deployment Strategy](docs/09-deployment-strategy.md), [Phase 12](docs/phase-12-blue-green-rollback.md), [Blog 09](blog/series/09-blue-green-traffic-rollback.md) |
 | DR Drill | PostgreSQL dump restore + consistency SQL | restore 후 정합성 검증 | [PostgreSQL DR Drill](docs/22-postgres-backup-restore-drill.md), [DR Report](reports/dr/ops4-postgres-restore-drill.md), [Blog 10](blog/series/10-postgres-backup-restore-drill.md) |
 | 장애 대응 | Incident Runbook + Grafana evidence + rollback verification | 장애별 탐지/대응/복구 기준 문서화 | [Incident Runbook](docs/26-incident-runbook-index.md), [SLO/SLI](docs/29-slo-sli-error-budget.md), [Blog 12](blog/series/12-runbook-alert-postmortem-evidence.md) |
+| PostgreSQL write suspend | DB down drill + `503`/`Retry-After` + retry contract | DB commit 근거 없는 성공 응답 금지 | [PostgreSQL Failure Policy](docs/36-postgres-failure-and-write-suspend-policy.md), [Blog 13](blog/series/13-postgres-down-write-suspend-incident-artifact.md) |
+| AI-safe / HMAC boundary | sanitizer demo + HMAC rotation evidence | raw value/signature 미저장, next secret write API 미허용 | [AI-safe Context](docs/48-ph6-ai-safe-context-sanitizer.md), [Blog 15](blog/series/15-ai-safe-context-hmac-rotation-boundary.md) |
+| Latency attribution | LAT-001~LAT-006 evidence runner | p99 상승을 계층별 후보로 분류, consistency counter 우선 | [Latency Attribution](docs/52-ph10-latency-attribution-diagnosis.md), [Blog 16](blog/series/16-latency-attribution-drill-evidence.md) |
 
 ## 7. Architecture
 
@@ -120,11 +126,12 @@ make ready
 
 ```bash
 make final-check
+make k6-duplicate
 make k6-verify
-make deploy-smoke
+make ops2-demo
 make ops4-demo
-make ph9-hardening-drill-demo
-make ph10-latency-attribution-demo
+make ops7-demo
+make ph1-db-down-drill
 make ph11-latency-drill-demo
 ```
 
@@ -174,6 +181,6 @@ README에는 대표 글만 남기고, 전체 공개/비공개 기준은 [blog/RE
 
 ## 13. 최종 요약
 
-Development Track에서는 금융 이벤트 정합성 처리 시스템을 구현했고, Ops Extension Track에서는 모니터링, DR Drill, 보안 통제, 장애 대응 Runbook까지 정리했다.
-Ops Phase 8 Incident Runbook을 마지막으로 운영 확장 트랙을 종료했으며, 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 evidence를 보완하는 supporting documents로 관리한다.
+Core Consistency Track에서는 금융 이벤트 정합성 처리 시스템을 구현했고, Operations Evidence Track에서는 모니터링, DR Drill, 보안 통제, 장애 대응 Runbook까지 정리했다.
+운영 확장 흐름은 Incident Runbook 정리까지 완료했으며, 추가 문서는 새로운 Phase가 아니라 운영 판단과 포트폴리오 evidence를 보완하는 supporting documents로 관리한다.
 Production Hardening Track은 운영 확장 종료 이후의 후속 보완 트랙으로, PostgreSQL 장애 중 성공 응답 금지, 자동 진단과 수동 승인 경계, 민감 데이터의 AI-safe 처리 원칙을 문서화하고 일부 안전장치를 구현한다.

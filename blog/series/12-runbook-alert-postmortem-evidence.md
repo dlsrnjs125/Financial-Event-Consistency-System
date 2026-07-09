@@ -114,6 +114,14 @@ duplicate smoke 요청 이후 ledger가 중복 생성되지 않았는지, idempo
 
 그래서 timeline의 마지막 단계를 `RECOVERED`가 아니라 `VERIFIED`로 뒀다.
 
+## 트러블슈팅: 컨테이너가 떠도 startup 경로가 깨질 수 있다
+
+운영 drill은 컨테이너가 뜨는 것만으로 충분하지 않았다. SQLAlchemy model module이 일부만 import되면 relationship mapper 구성이 실제 API startup 경로에서 늦게 실패할 수 있다.
+
+그래서 app startup 시점에 모든 ORM model module을 import하도록 `import_all_models()`를 호출하고, `configure_mappers()` 테스트로 relationship 구성이 깨지지 않는지 확인했다.
+
+장애 drill evidence를 신뢰하려면 Redis stop/start나 report schema뿐 아니라, API startup 경로 자체도 검증 대상이어야 한다.
+
 ## 남은 한계
 
 이 runbook은 local Docker Compose와 sample evidence 기준이다. 실제 운영 on-call에서는 Slack/PagerDuty 연동, alert threshold tuning, dashboard snapshot 보존, 권한 승인 절차가 추가되어야 한다.
