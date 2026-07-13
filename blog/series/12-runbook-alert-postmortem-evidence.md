@@ -48,6 +48,14 @@ Redis down은 성능과 가용성 저하를 만들 수 있다. 하지만 Postgre
 
 Alert는 단순 threshold가 아니라 운영자가 어떤 순서로 움직일지 알려주는 action signal이어야 한다.
 
+## alert threshold는 운영 SLO가 아니라 sample 기준이다
+
+이 프로젝트의 alert rule은 local Docker Compose와 sample traffic을 기준으로 만든다. 따라서 p95 latency나 5xx threshold를 실제 운영 수치로 그대로 사용할 수는 없다.
+
+실제 운영에서는 traffic pattern, partner timeout, DB 성능, peak hour, batch window, 배포 시간대를 기준으로 threshold를 다시 잡아야 한다. 또한 warning이 너무 자주 울리면 alert fatigue가 생기므로, burn rate나 지속 시간 조건을 함께 봐야 할 수 있다.
+
+이번 글에서 중요한 것은 특정 숫자 자체가 아니라, Redis degraded, PostgreSQL down, reconciliation failure, duplicate ledger를 서로 다른 severity와 runbook으로 나눴다는 점이다.
+
 ## latency를 네 가지로 나눈 이유
 
 postmortem에는 시간을 하나만 남기지 않았다.

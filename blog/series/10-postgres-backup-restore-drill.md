@@ -58,6 +58,25 @@ checksum은 "파일이 만들어졌다"가 아니라 "검증 시점의 파일이
 
 이 프로젝트에서 DR Drill의 기준은 dump 파일 생성이 아니라, 별도 restore DB에 복원한 뒤 duplicated event, orphan ledger, balance mismatch, sequence position lag가 모두 0인지 확인하는 것이다.
 
+## 왜 PITR이나 WAL archiving까지 구현하지 않았나
+
+실제 운영 PostgreSQL 복구는 `pg_dump`만으로 끝나지 않는다. 장애 시점 직전까지 복구하려면 WAL archiving, Point-In-Time Recovery, replica promotion, managed backup, retention policy, backup encryption까지 함께 고려해야 한다.
+
+하지만 이번 글의 목표는 운영용 백업 시스템을 완성하는 것이 아니었다. 목표는 "백업 파일이 존재한다"와 "복구 가능한 백업이다"를 분리하는 것이었다.
+
+그래서 local Docker Compose 환경에서 다음 질문을 먼저 검증했다.
+
+- dump 파일이 생성되는가
+- checksum으로 손상 여부를 확인하는가
+- 운영 DB가 아닌 별도 restore DB에 복원되는가
+- 복원 후 schema와 constraint가 살아 있는가
+- duplicated external event, orphan ledger, account balance mismatch가 모두 0인가
+- restore duration을 RTO sample evidence로 남기는가
+
+`pg_dump` 기반 DR Drill은 구현과 재현이 쉽고 포트폴리오 evidence로 적합하지만, 운영 RPO를 보장하지는 않는다. 실제 운영에서는 WAL archiving과 PITR, replica, backup retention, 접근 제어가 함께 필요하다.
+
+즉 이 글의 DR Drill은 운영 PITR 완성이 아니라, "복구 검증을 하지 않은 백업은 증거가 아니다"라는 기준을 세운 것이다.
+
 ## restore-only와 DR Drill은 checksum 기준이 달랐다
 
 기존 dump를 수동으로 복원하는 restore-only 경로에서는 checksum이 없으면 `SKIPPED`로 기록하고 진행할 수 있다.

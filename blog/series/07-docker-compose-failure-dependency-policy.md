@@ -92,6 +92,38 @@ Redis Down duplicate storm에서는 p99와 error rate가 나빠졌지만 ledger 
 
 PostgreSQL down에서는 신규 금융 write를 성공으로 처리하지 않는다. `/ready` 실패와 `503 + Retry-After`를 통해 외부 시스템이 같은 idempotency key로 나중에 재시도할 수 있게 한다.
 
+## 왜 Kubernetes가 아니라 Docker Compose로 장애를 재현했나
+
+실제 운영에서는 Kubernetes readiness probe, liveness probe, Pod restart policy, service mesh retry, managed PostgreSQL failover, Redis Sentinel/Cluster까지 함께 고려해야 한다. Docker Compose는 이런 운영 제어면을 그대로 재현하지 못한다.
+
+그럼에도 Compose drill을 사용한 이유는 이 프로젝트의 목표가 orchestrator 운영이 아니라 dependency policy를 코드와 실행 명령으로 반복 검증하는 것이었기 때문이다.
+
+Compose로도 다음은 확인할 수 있다.
+
+- Redis가 down이어도 API container가 시작되고 DB fallback 경로가 동작하는가
+- PostgreSQL이 down이면 신규 금융 write를 성공으로 처리하지 않는가
+- `/health`와 `/ready`가 서로 다른 의미를 갖는가
+- 장애 재현 명령이 DB volume 삭제처럼 destructive action으로 흐르지 않는가
+- 장애 후 `make k6-verify`로 PostgreSQL 기준 중복 원장을 확인하는가
+
+반대로 Compose로 검증하지 못하는 것도 있다.
+
+- Kubernetes rolling update 중 readiness gate 동작
+- Pod 재시작과 connection draining
+- managed DB failover 후 stale connection 처리
+- Redis Sentinel/Cluster failover
+- service mesh retry가 idempotency와 충돌하는 문제
+
+따라서 이 글의 Compose drill은 운영 환경의 완전한 대체가 아니라, 장애 정책을 로컬에서 재현 가능한 회귀 테스트로 고정한 것이다.
+
+## PostgreSQL 장애도 하나로 보지 않았다
+
+PostgreSQL이 완전히 down인 경우와 connection pool이 고갈된 경우는 다르다. 완전 down이면 신규 금융 write는 fail-closed 되어야 한다. 반면 pool pressure는 일부 요청이 `503`이 될 수 있지만, 이미 commit된 거래는 재시도 시 기존 결과를 반환해야 한다.
+
+API restart도 마찬가지다. commit 전 종료라면 DB transaction rollback으로 끝나야 하고, commit 후 응답 전 종료라면 재시도 시 IdempotencyRecord를 통해 기존 결과를 반환해야 한다.
+
+이번 7편의 Compose drill은 이 모든 운영 상황을 완전히 구현한 것이 아니라, Redis와 PostgreSQL의 dependency 의미를 먼저 분리해 고정한 것이다.
+
 ## 남은 한계
 
 Docker Compose는 운영 orchestrator가 아니다. Kubernetes readiness probe, restart policy, service mesh retry, managed Redis/PostgreSQL failover와는 차이가 있다.

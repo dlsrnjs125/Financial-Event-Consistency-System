@@ -66,6 +66,16 @@ SETTLED -> CANCELLED
 
 CANCEL은 compensation transaction으로 다뤄야 한다. SETTLED 상태를 직접 CANCELLED로 바꾸는 것이 아니라, 반대 방향의 ledger 근거를 남겨야 한다.
 
+## COMPLETED 취소와 SETTLED 이후 정정은 다르다
+
+취소도 하나로 보면 안 된다.
+
+`COMPLETED` 상태는 내부 원장 반영은 끝났지만, 외부 정산이나 회계 확정 전일 수 있다. 이 경우에는 도메인 정책에 따라 `CANCELLED`로 전이하고 반대 방향의 ledger를 남길 수 있다.
+
+반면 `SETTLED`는 외부 정산까지 완료된 상태다. 이 상태를 단순히 `CANCELLED`로 바꾸면 외부 정산 시스템과 내부 원장이 서로 다른 이야기를 하게 된다. 그래서 `SETTLED -> CANCELLED` 직접 전이는 막고, 필요한 경우 `REVERSAL` 또는 보상 거래를 별도 이벤트로 기록해야 한다.
+
+이번 프로젝트에서는 부분 취소, 수수료, 다중 계좌 이체, 외부 정산 확정 이후 reversal까지 모두 구현하지는 않았다. 대신 완료된 기록을 삭제하지 않고, 반대 원장으로 설명한다는 원칙을 상태 머신과 테스트로 고정하는 데 집중했다.
+
 ## evidence
 
 상태 전이 검증은 unit test로 고정한다.

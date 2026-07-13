@@ -4,6 +4,77 @@
 
 이 프로젝트의 Blue-Green 배포는 DB rollback이 아니라 traffic rollback을 목표로 했다. schema 변경은 backward-compatible migration으로 관리하고, 장애가 발생하면 Nginx upstream을 Blue로 되돌린다.
 
+## rollback이라는 말을 먼저 나눠야 했다
+
+처음에는 Blue-Green 배포에서 "rollback"이라고 하면 단순히 이전 버전으로 되돌리는 것이라고 생각했다.
+
+하지만 금융 이벤트 시스템에서는 rollback이라는 단어를 최소 세 가지로 나눠야 한다.
+
+| 구분 | 의미 | 이 프로젝트 9편의 대상 여부 |
+| --- | --- | --- |
+| Transaction rollback | 아직 commit되지 않은 DB transaction을 취소한다 | 대상 아님 |
+| Traffic rollback | 새 버전으로 향하던 API traffic을 이전 버전으로 되돌린다 | 이번 글의 대상 |
+| Data correction / compensation | 이미 commit된 금융 데이터를 정정 거래, 보상 거래, 재처리로 바로잡는다 | 별도 복구 영역 |
+
+DB transaction rollback은 commit 전에는 안전하다. 예를 들어 하나의 transaction 안에서 `transaction_event`, `ledger_entry`, `account_balance`, `idempotency_record`를 쓰다가 중간에 실패하면 전체 transaction을 rollback하면 된다.
+
+하지만 이미 commit된 금융 데이터는 다르다. 외부 시스템이 응답을 받았거나, 고객 화면에 잔액이 보였거나, 후속 정산/회계 처리의 입력이 되었다면 단순히 DB snapshot을 과거로 되돌리는 방식은 위험하다. 그 사이에 들어온 정상 거래까지 함께 사라질 수 있고, 감사 추적도 깨질 수 있다.
+
+그래서 금융성 시스템에서는 이미 반영된 데이터를 "삭제해서 없던 일로 만드는 방식"보다, 새로운 정정/취소/보상 이벤트를 앞으로 기록하는 방식이 더 안전한 접근에 가깝다.
+
+예를 들면 다음과 같다.
+
+```text
+원래 거래:
+DEPOSIT 10,000원 -> ledger +10,000
+
+잘못된 중복 반영:
+DEPOSIT 10,000원 -> ledger +10,000
+DEPOSIT 10,000원 -> ledger +10,000  # 잘못된 중복
+
+정정 방식:
+REVERSAL / COMPENSATION -10,000원 -> ledger -10,000
+정정 사유, 원 거래 ID, 운영 승인자, 처리 시각을 함께 기록
+```
+
+이 방식은 데이터를 물리적으로 지우는 것이 아니라, 잘못된 결과를 설명 가능한 새 거래로 상쇄한다. 그래서 이후 감사, reconciliation, 고객 응대, 운영 postmortem에서 "무슨 일이 있었고 어떻게 정정했는지"를 추적할 수 있다.
+
+이 글에서 구현한 rollback은 이 data correction이 아니다. 이 글의 범위는 새 API 버전이 잘못 동작한다고 판단되었을 때, 더 많은 요청이 Green으로 들어가지 않도록 Nginx upstream을 Blue로 되돌리는 traffic rollback이다.
+
+## 왜 이번 프로젝트에서는 traffic rollback만 구현했나
+
+이번 프로젝트의 Blue-Green 시뮬레이션은 "이미 잘못 반영된 금융 데이터를 자동으로 고치는 시스템"이 아니라, "잘못된 새 버전으로 더 이상 트래픽이 들어가지 않게 막는 배포 안전장치"를 검증하는 것이 목표였다.
+
+DB correction까지 자동화하려면 별도의 조건이 필요하다.
+
+1. 어떤 ledger entry가 잘못된 것인지 식별해야 한다.
+2. 원 거래와 정정 거래를 연결해야 한다.
+3. 정정이 가능한 거래와 불가능한 거래를 구분해야 한다.
+4. 이미 정산되었거나 외부 기관에 전송된 거래는 별도 승인 절차가 필요하다.
+5. 정정 거래도 idempotent해야 한다.
+6. 정정 결과가 account balance, ledger, reconciliation report에 모두 반영되어야 한다.
+7. 모든 과정은 audit log와 operator approval을 남겨야 한다.
+
+이 범위는 단순 배포 rollback보다 훨씬 크다. 그래서 이번 9편에서는 DB correction을 구현하지 않고, Blue-Green 배포의 안전 기준을 아래로 제한했다.
+
+- Green은 트래픽을 받기 전에 health, readiness, smoke test를 통과해야 한다.
+- Green으로 전환한 뒤 실제 Nginx 경유 응답이 Green인지 routed identity로 확인해야 한다.
+- 전환 후 smoke나 consistency gate가 실패하면 Nginx upstream을 Blue로 되돌린다.
+- rollback 후에도 PostgreSQL 기준 duplicate ledger, account mismatch, invalid transition이 없는지 확인한다.
+- 이미 commit된 데이터 정정은 traffic rollback이 아니라 recovery case / compensation 영역으로 분리한다.
+
+즉 traffic rollback은 "이미 발생한 데이터 오류를 고친다"가 아니라, "장애가 의심되는 새 버전으로 추가 피해가 계속 들어가는 것을 멈춘다"에 가깝다.
+
+## DB rollback과 traffic rollback은 실패 지점이 다르다
+
+| 상황 | 적절한 대응 | 이유 |
+| --- | --- | --- |
+| transaction 내부에서 아직 commit 전 오류 발생 | DB transaction rollback | 외부에 노출되지 않은 변경이므로 폐기 가능 |
+| Green 배포 후 health/smoke 실패 | traffic rollback | 새 버전으로 들어가는 요청을 막는 것이 우선 |
+| Green이 잘못된 응답을 만들지만 DB commit 전 차단됨 | traffic rollback + fail-closed | 데이터 반영 전이면 Blue로 되돌려 추가 피해 차단 |
+| 잘못된 ledger가 이미 commit됨 | compensation / reversal / recovery case | commit된 금융 이력은 삭제보다 정정 거래로 추적해야 함 |
+| DB 자체 손상 또는 복구 필요 | restore drill / PITR / 별도 복구 절차 | 서비스 배포 rollback과 다른 재해 복구 영역 |
+
 ## 새 버전을 띄우는 것보다 되돌릴 수 있는지가 더 중요했다
 
 CI Gate를 통과한 코드라도 운영 트래픽에 바로 노출하면 위험하다. 특히 거래 이벤트 처리 시스템에서는 새 버전이 잘못된 상태 전이를 만들거나 idempotency 판단을 깨뜨리면 중복 원장 반영으로 이어질 수 있다.
@@ -165,3 +236,7 @@ Redis는 최종 Source of Truth가 아니므로 degraded 상태에서도 Postgre
 Docker Compose 기반 Blue-Green은 운영 Kubernetes rollout과 같지 않다. progressive traffic shifting, autoscaling, service mesh retry는 별도 환경에서 다뤄야 한다.
 
 그래도 이 시뮬레이션은 Green 검증, Nginx 전환, reload 실패 복구, rollback 후 정합성 검증이라는 핵심 절차를 로컬에서 반복 실행할 수 있게 만든다.
+
+이 글의 rollback은 데이터 정정 시스템이 아니다. 잘못된 새 버전으로 추가 요청이 들어가는 것을 멈추고, 안정적인 Blue 경로로 traffic을 되돌리는 배포 안전장치다.
+
+이미 commit된 금융 데이터가 잘못되었다면 그때의 대응은 DB rollback이 아니라 compensation, recovery case, reconciliation, operator approval의 영역이다. 그래서 이 프로젝트에서는 배포 rollback과 데이터 정정을 의도적으로 분리했다.

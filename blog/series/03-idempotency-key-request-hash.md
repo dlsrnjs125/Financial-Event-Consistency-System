@@ -58,6 +58,22 @@ JSON key 순서가 달라도 의미가 같으면 같은 hash가 나와야 한다
 
 중요한 것은 중복 요청을 편하게 처리하는 것이 아니라, 같은 요청과 다른 요청을 명확히 구분하는 것이다.
 
+## Idempotency record를 무한히 보관하지 않은 이유
+
+실제 운영에서는 Idempotency-Key를 영원히 보관할 수 없다. 저장 공간도 문제지만, 더 중요한 것은 "같은 key를 언제까지 같은 요청으로 볼 것인가"라는 계약이다.
+
+예를 들어 어떤 partner는 24시간 안의 retry만 같은 요청으로 볼 수 있고, 어떤 partner는 정산 지연 때문에 며칠 뒤 재전송이 발생할 수 있다. 이 replay window는 시스템 내부 구현만으로 정할 수 없고, 외부 시스템의 retry policy와 함께 계약되어야 한다.
+
+이번 프로젝트에서는 TTL 삭제 배치나 partner별 replay window까지 구현하지 않았다. 대신 같은 key와 같은 request hash가 들어왔을 때 어떤 결과를 반환해야 하는지, 같은 key와 다른 body가 들어왔을 때 왜 `409 Conflict`로 거부해야 하는지를 먼저 고정했다.
+
+즉 운영 보관 정책보다 먼저, 같은 요청과 다른 요청을 구분하는 기준을 검증한 것이다.
+
+## 실패 응답을 replay할 것인가도 정책이다
+
+실패한 요청을 같은 key로 다시 보냈을 때 무조건 재처리하면 같은 요청이 여러 번 실행될 수 있다. 반대로 실패 응답을 계속 replay하면 일시 장애가 복구된 뒤에도 client가 성공할 기회를 얻지 못할 수 있다.
+
+이번 프로젝트에서는 저장된 실패 응답을 재사용하는 방향으로 기준을 고정했다. 실패 재처리 허용 여부는 partner retry contract, 실패 유형, 보상 거래 정책과 함께 별도 ADR로 분리해야 한다.
+
 ## 트러블슈팅: body 비교를 문자열로 하면 흔들린다
 
 raw JSON 문자열을 그대로 비교하면 key 순서, 공백, formatting 차이 때문에 같은 의미의 요청도 다르게 보일 수 있다.
@@ -80,6 +96,6 @@ make test-consistency
 
 ## 남은 한계
 
-Idempotency-Key는 무한히 보관할 수 없다. TTL, storage size, replay window, partner별 key policy는 운영 정책으로 추가 정의해야 한다.
+TTL, storage size, replay window, partner별 key policy는 운영 정책으로 추가 정의해야 한다.
 
 현재 단계에서는 같은 key와 body를 기준으로 중복 처리 의미를 명확히 고정하는 데 집중했다.

@@ -24,6 +24,18 @@ lock은 잡았지만 DB commit 전에 API가 죽으면?
 
 이 질문에 답하려면 Redis가 아니라 PostgreSQL을 마지막 방어선으로 둬야 했다.
 
+## 왜 Redis 고가용성이나 Redlock을 핵심으로 두지 않았나
+
+실제 운영에서는 Redis Sentinel, Redis Cluster, managed Redis, timeout tuning, circuit breaker를 함께 고려해야 한다. Redis 자체의 가용성을 높이는 것은 중요하다.
+
+하지만 이 프로젝트에서 Redis HA를 먼저 풀지 않은 이유는 명확하다. Redis를 아무리 안정화해도 금융 원장의 최종 정합성 기준이 Redis가 되면 안 되기 때문이다.
+
+Redis lock은 같은 Idempotency-Key 요청이 동시에 DB transaction에 진입하는 수를 줄이고, 완료 응답 cache로 DB 조회를 줄이며, duplicate storm 중 DB 부하를 완화할 수 있다.
+
+하지만 Redis lock이 있다고 해서 원장이 한 번만 반영되었다는 증거가 생기는 것은 아니다. lock TTL이 만료될 수 있고, API가 lock 획득 후 DB commit 전에 죽을 수 있으며, Redis 장애 중에는 lock 자체가 없다.
+
+그래서 이번 프로젝트에서는 Redis HA보다 먼저 "Redis가 없어도 PostgreSQL 기준 정합성이 유지되는가"를 검증했다. Redis의 고가용성은 성능과 가용성 개선 과제이고, PostgreSQL unique constraint는 정합성 방어선이다.
+
 ## Redis가 내려가도 남아 있어야 하는 제약조건
 
 PostgreSQL에는 다음 unique constraint가 필요하다.
@@ -65,6 +77,14 @@ commit
 ```
 
 중간에 실패하면 전체가 rollback되어야 한다.
+
+## Lock 획득 실패는 거래 실패가 아니다
+
+Redis lock을 얻지 못했다는 것은 반드시 장애가 아니다. 같은 Idempotency-Key 요청이 이미 처리 중이라는 신호일 수 있다.
+
+그래서 lock rejected를 `500`으로 보지 않고, 처리 중 재요청으로 해석해 `202 Accepted`를 반환하는 정책을 선택했다. 완료 응답 replay는 lock이 풀린 뒤 DB IdempotencyRecord 또는 cache 경로에서 확인한다.
+
+이 선택은 일부 구간에서 즉시 완료 응답을 주지 못하고 `202`를 반환할 수 있다는 trade-off가 있다. 대신 중복 DB transaction 진입을 줄이고, 처리 중인 같은 요청을 신규 거래로 오해하지 않게 만든다.
 
 ## 트러블슈팅: Redis failure를 consistency failure로 만들지 않기
 
